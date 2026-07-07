@@ -1,0 +1,46 @@
+# Normalize line endings to LF on commit (matches .editorconfig end_of_line = lf).
+# On checkout: LF on Linux/macOS, CRLF on Windows for text files unless overridden below.
+* text=auto eol=lf
+
+# Batch scripts must use CRLF on all platforms (cmd.exe requires it)
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Shell and just recipes always LF
+*.sh  text eol=lf
+justfile text eol=lf
+
+# .NET source and project files — LF everywhere
+*.cs       text diff=csharp
+*.csx      text diff=csharp
+*.csproj   text
+*.props    text
+*.targets  text
+*.sln      text
+*.slnx     text
+
+# Config and data
+*.json     text
+*.yml      text
+*.yaml     text
+*.xml      text
+*.config   text
+*.editorconfig text
+*.gitattributes text
+*.gitignore text
+
+# Docs
+*.md       text diff=markdown
+*.txt      text
+
+# Binary — never diff or merge
+*.dll      binary
+*.exe      binary
+*.nupkg    binary
+*.snupkg   binary
+*.zip      binary
+*.png      binary
+*.jpg      binary
+*.jpeg     binary
+*.gif      binary
+*.ico      binary
