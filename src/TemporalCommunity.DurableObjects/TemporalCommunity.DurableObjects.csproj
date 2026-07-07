@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>TemporalCommunity.DurableObjects</PackageId>
+    <PackageTags>temporal;workflow;durable;actors;grains;stateful;distributed</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Description>An object-based programming model built on top of the Temporal .NET SDK. Requires Temporal Server v1.28.0 or later.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <!-- MinVer owns Version — do NOT set <Version> here -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- README must be explicitly included from repo root -->
+    <None Include="..\..\README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Allow test projects to access internal types (DurableObjectNaming, DurableObjectProxy<T>) -->
+    <InternalsVisibleTo Include="TemporalCommunity.DurableObjects.Tests" />
+    <InternalsVisibleTo Include="TemporalCommunity.DurableObjects.IntegrationTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Temporalio" Version="1.16.0" />
+    <PackageReference Include="Temporalio.Extensions.Hosting" Version="1.16.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
+    <PackageReference Include="MinVer" Version="6.*" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.*" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

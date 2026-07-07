@@ -1,0 +1,43 @@
+name: Publish to NuGet
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  id-token: write   # required for OIDC Trusted Publishing
+  contents: read
+
+jobs:
+  publish:
+    name: Pack and publish to NuGet.org
+    runs-on: ubuntu-latest
+    environment: nuget-publish   # configure this environment in GitHub repo settings
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # MinVer needs full history
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore tools
+        run: dotnet tool restore
+
+      - name: Restore packages
+        run: dotnet restore TemporalDurableObjects.slnx
+
+      - name: Build
+        run: dotnet build src/TemporalCommunity.DurableObjects --configuration Release --no-restore --nologo
+
+      - name: Pack
+        run: dotnet pack src/TemporalCommunity.DurableObjects --configuration Release --no-build --nologo --output artifacts/packages
+
+      - name: Publish to NuGet.org (OIDC Trusted Publishing)
+        run: dotnet nuget push "artifacts/packages/*.nupkg" --source https://api.nuget.org/v3/index.json --skip-duplicate
+        # No --api-key needed: OIDC Trusted Publishing via id-token: write permission above
+        # Configure Trusted Publishing on NuGet.org under package settings before first release

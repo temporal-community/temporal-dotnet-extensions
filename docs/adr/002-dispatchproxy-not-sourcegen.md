@@ -1,0 +1,89 @@
+# ADR 002 — DispatchProxy for v1; Source Generator Deferred to v1.1
+
+**Status:** ACCEPTED
+
+> **NativeAOT is NOT supported in v1.** `DispatchProxy` uses `Reflection.Emit`, which the AOT
+> compiler trims. Publishing a DurableObject worker with `PublishAot=true` will fail at runtime
+> with no compile-time warning. A source-generator-based proxy that eliminates this limitation
+> is planned for v1.1.
+
+---
+
+## Context
+
+`DurableObjectProxy<T>` is the internal mechanism that maps typed interface method calls (e.g.,
+`counter.IncrementAsync()`) to Temporal RPC calls (`ExecuteUpdateWithStartWorkflowAsync`,
+`QueryAsync`). Two implementation strategies were considered:
+
+**`DispatchProxy` (reflection-based):** `DispatchProxy.Create<T, DurableObjectProxy<T>>()`
+generates a class at runtime that implements `T` and overrides `Invoke(MethodInfo, object[]?)`.
+The implementation boxes arguments, dispatches through `MethodInfo`, and routes to the
+appropriate Temporal RPC. This is straightforward to implement correctly and has no build-time
+tooling dependency.
+
+**Source generator:** An incremental Roslyn source generator reads `[WorkflowUpdate]` and
+`[WorkflowQuery]` attributes at compile time and emits a concrete implementing class per
+interface. The generated class calls the RPC methods directly with typed arguments — no boxing,
+no `MethodInfo`, no runtime code generation.
+
+---
+
+## Decision
+
+Use `DispatchProxy` for v1. The source generator is deferred to v1.1 as a separate package
+(`TemporalCommunity.DurableObjects.Generator`).
+
+---
+
+## Rationale
+
+### Performance difference is not the reason
+
+The `DispatchProxy` reflection overhead is roughly 100–500 ns per dispatch (argument boxing,
+`MethodInfo` dispatch, `MakeGenericMethod` for `Task<T>`). A source-generated concrete class
+costs roughly 1–5 ns — a virtual method call. This difference is **irrelevant in practice**: the
+cheapest Temporal operation (a local query) costs approximately 1 ms; a real-cluster round-trip
+costs 10–100 ms. Reflection overhead is 3–5 orders of magnitude below the RPC cost. Choosing
+`DispatchProxy` for v1 does not produce a measurably slower library.
+
+### Why source generators are still the right long-term answer
+
+Three reasons — none of them performance:
+
+1. **NativeAOT compatibility.** `DispatchProxy` uses `Reflection.Emit`, which the .NET AOT
+   compiler trims. Any consumer publishing with `PublishAot=true` gets a runtime
+   `PlatformNotSupportedException` with no compile-time warning. This is a hard ceiling.
+
+2. **Compile-time rename safety.** `DispatchProxy` resolves RPC wire names at runtime from
+   `MethodInfo`. A rename without a corresponding handler update produces a different wire name
+   that fails at first integration test — not silently in production — but only if integration
+   tests are run. A generator reads attributes at compile time and emits string literals; a
+   rename produces a different literal that fails deterministically in tests.
+
+3. **Static analysis.** A generated concrete class gives IDEs a full call graph,
+   Go-to-Definition, and correct nullability flow. `DispatchProxy` is opaque to all static
+   analysis tooling.
+
+### Why `DispatchProxy` is acceptable for v1
+
+- `DurableObjectProxy<T>` is `internal` — no external caller depends on it directly.
+- The `MethodInfo` cache (static `ConcurrentDictionary<Type, MethodInfo>`) amortizes
+  `MakeGenericMethod` cost across calls.
+- `ValidateInterface<T>()` at `Get<T>()` time catches attribute mismatches at proxy creation,
+  not at first RPC call, giving an earlier and clearer failure.
+- The source generator requires Roslyn incremental generator infrastructure, parity tests, and
+  AOT validation — non-trivial work that would delay v1 without user-visible benefit at current
+  usage scale.
+
+---
+
+## Consequences
+
+- **NativeAOT is not supported in v1.** This is documented prominently in the README and
+  NuGet package description. Callers using `PublishAot=true` must wait for v1.1.
+- v1.1 scope: `TemporalCommunity.DurableObjects.Generator` — an incremental Roslyn source
+  generator that emits a typed proxy class per DurableObject interface. It will include parity
+  tests asserting behavioral equivalence with the `DispatchProxy` implementation, and an AOT
+  validation step in CI.
+- The transition from `DispatchProxy` to generated proxies is internal to the library.
+  The public `IDurableObjectFactory.Get<T>()` API surface does not change.

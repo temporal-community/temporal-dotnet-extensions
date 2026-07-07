@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/TemporalCommunity.DurableObjects.Benchmarks/TemporalCommunity.DurableObjects.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/TemporalCommunity.DurableObjects.Sample/TemporalCommunity.DurableObjects.Sample.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/TemporalCommunity.DurableObjects/TemporalCommunity.DurableObjects.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TemporalCommunity.DurableObjects.IntegrationTests/TemporalCommunity.DurableObjects.IntegrationTests.csproj" />
+    <Project Path="tests/TemporalCommunity.DurableObjects.Tests/TemporalCommunity.DurableObjects.Tests.csproj" />
+  </Folder>
+</Solution>
