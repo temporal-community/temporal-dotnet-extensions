@@ -13,7 +13,7 @@ unit_tests_dir        := "tests/TemporalCommunity.DurableObjects.Tests"
 integration_tests_dir := "tests/TemporalCommunity.DurableObjects.IntegrationTests"
 benchmarks_dir        := "benchmarks/TemporalCommunity.DurableObjects.Benchmarks"
 sample_dir            := "samples/TemporalCommunity.DurableObjects.Sample"
-version               := `dotnet tool run minver --default-pre-release-identifiers $(sed -n 's/.*<MinVerDefaultPreReleaseIdentifiers>\(.*\)<\/MinVerDefaultPreReleaseIdentifiers>.*/\1/p' Directory.Build.props | tr -d ' ')`
+version               := `dotnet tool run minver --tag-prefix "" --default-pre-release-identifiers $(sed -n 's/.*<MinVerDefaultPreReleaseIdentifiers>\(.*\)<\/MinVerDefaultPreReleaseIdentifiers>.*/\1/p' Directory.Build.props | tr -d ' ')`
 
 # ── Meta ──────────────────────────────────────────────────
 

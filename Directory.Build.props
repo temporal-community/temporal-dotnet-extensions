@@ -1,5 +1,6 @@
 <Project>
   <PropertyGroup>
+    <MinVerTagPrefix></MinVerTagPrefix>
     <MinVerDefaultPreReleaseIdentifiers>preview</MinVerDefaultPreReleaseIdentifiers>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
