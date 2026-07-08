@@ -14,12 +14,12 @@ jobs:
     environment: nuget-publish   # configure this environment in GitHub repo settings
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0   # MinVer needs full history
 
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
 
@@ -37,7 +37,7 @@ jobs:
 
       - name: Fetch OIDC token for NuGet Trusted Publishing
         id: oidc
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: return await core.getIDToken('api.nuget.org')
           result-encoding: string
