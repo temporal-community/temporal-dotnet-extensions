@@ -15,9 +15,13 @@ bld/
 [Ll]ogs/
 
 # OS System files
-.DS_Store # macOS system file
-Thumbs.db # Windows system file
+.DS_Store
+Thumbs.db
 
-# Coding agent files
+# Build artifacts
+artifacts/
+
+# Coding agent / project-local tooling
+skills-lock.json
 .clans/
 .claude
