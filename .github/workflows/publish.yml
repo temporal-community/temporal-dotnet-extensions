@@ -28,7 +28,7 @@ jobs:
       - name: Restore tools
         run: dotnet tool restore
 
-      - name: Verify version is not a fallback (requires a v* git tag on this commit)
+      - name: Verify version is not a fallback (requires a release tag on this commit)
         run: |
           version=$(dotnet tool run minver --tag-prefix "" --default-pre-release-identifiers preview)
           echo "MinVer resolved version: $version"
