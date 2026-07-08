@@ -30,11 +30,11 @@ jobs:
 
       - name: Verify version is not a fallback (requires a v* git tag on this commit)
         run: |
-          version=$(dotnet tool run minver --default-pre-release-identifiers preview)
+          version=$(dotnet tool run minver --tag-prefix "" --default-pre-release-identifiers preview)
           echo "MinVer resolved version: $version"
           if [[ "$version" == 0.0.0-* ]]; then
-            echo "::error::Version resolved to '$version' — this means no v* tag exists on this commit."
-            echo "::error::Tag the commit first: git tag v<major>.<minor>.<patch> && git push origin <tag>"
+            echo "::error::Version resolved to '$version' — this means no release tag exists on this commit."
+            echo "::error::Tag the commit first: git tag <major>.<minor>.<patch> && git push origin <tag>"
             exit 1
           fi
 
