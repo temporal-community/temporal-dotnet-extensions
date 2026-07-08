@@ -1,9 +1,7 @@
 name: Publish to NuGet
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
 
 permissions:
   id-token: write   # required for OIDC Trusted Publishing
@@ -37,7 +35,12 @@ jobs:
       - name: Pack
         run: dotnet pack src/TemporalCommunity.DurableObjects --configuration Release --no-build --nologo --output artifacts/packages
 
-      - name: Publish to NuGet.org (OIDC Trusted Publishing)
-        run: dotnet nuget push "artifacts/packages/*.nupkg" --source https://api.nuget.org/v3/index.json --skip-duplicate
-        # No --api-key needed: OIDC Trusted Publishing via id-token: write permission above
-        # Configure Trusted Publishing on NuGet.org under package settings before first release
+      - name: Fetch OIDC token for NuGet Trusted Publishing
+        id: oidc
+        uses: actions/github-script@v7
+        with:
+          script: return await core.getIDToken('api.nuget.org')
+          result-encoding: string
+
+      - name: Publish to NuGet.org (Trusted Publishing)
+        run: dotnet nuget push "artifacts/packages/*.nupkg" --source https://api.nuget.org/v3/index.json --api-key "${{ steps.oidc.outputs.result }}" --skip-duplicate
