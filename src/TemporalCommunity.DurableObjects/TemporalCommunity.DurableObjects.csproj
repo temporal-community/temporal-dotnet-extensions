@@ -3,6 +3,7 @@
     <PackageId>TemporalCommunity.DurableObjects</PackageId>
     <PackageTags>temporal;workflow;durable;actors;grains;stateful;distributed</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
     <Description>An object-based programming model built on top of the Temporal .NET SDK. Requires Temporal Server v1.28.0 or later.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <!-- MinVer owns Version — do NOT set <Version> here -->
@@ -11,6 +12,8 @@
   <ItemGroup>
     <!-- README must be explicitly included from repo root -->
     <None Include="..\..\README.md" Pack="true" PackagePath="/" />
+    <!-- Package icon -->
+    <None Include="icon.png" Pack="true" PackagePath="/" />
   </ItemGroup>
 
   <ItemGroup>
