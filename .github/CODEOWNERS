@@ -1,0 +1,9 @@
+﻿# Default owner for everything
+* @cecilphillip
+
+# Library source
+/src/ @cecilphillip
+
+# CI/CD workflows
+/.github/workflows/ @cecilphillip
+
