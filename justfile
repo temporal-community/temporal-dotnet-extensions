@@ -190,13 +190,6 @@ pack: build
         --nologo \
         --output "{{artifacts_dir}}"
 
-# Push to GitHub Packages (GITHUB_TOKEN required)
-publish-github: pack
-    dotnet nuget push "{{artifacts_dir}}/*.nupkg" \
-        --source "https://nuget.pkg.github.com/$GITHUB_REPOSITORY_OWNER/index.json" \
-        --api-key "$GITHUB_TOKEN" \
-        --skip-duplicate
-
 # Push to NuGet.org (NUGET_API_KEY required; CI uses OIDC Trusted Publishing instead)
 publish-nuget: pack
     dotnet nuget push "{{artifacts_dir}}/*.nupkg" \
