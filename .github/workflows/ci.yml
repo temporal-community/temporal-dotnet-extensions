@@ -1,4 +1,4 @@
-name: CI
+name: Build & Unit Tests
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-and-test:
-    name: Build + Unit Tests (${{ matrix.os }})
+    name: build (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
