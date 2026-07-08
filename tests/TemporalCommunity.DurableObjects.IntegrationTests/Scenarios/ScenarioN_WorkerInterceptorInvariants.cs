@@ -80,35 +80,50 @@ public sealed class ScenarioN_WorkerInterceptorInvariants : DurableObjectTestBas
             Assert.Equal(9, countAfterThrow);
 
             // --- (c) Drain-window gate ---
-            // Issue DeactivateAsync — the interceptor/run loop will start draining.
-            await obj.DeactivateAsync();
+            // Strategy: use a slow update to hold the serialization gate, then queue
+            // DeactivateAsync and a subsequent Increment behind it.
+            //
+            // Timeline with serialize=true:
+            //   SlowIncrementAsync holds gate (Workflow.DelayAsync 1s)
+            //   ↓ DeactivateAsync queues at gate
+            //   ↓ test IncrementAsync queues at gate
+            //   SlowIncrementAsync finishes → gate released
+            //   DeactivateAsync gets gate → _deactivating = true → releases gate
+            //   IncrementAsync gets gate → drain-window check → ObjectDeactivating ✓
+            //
+            // This avoids the race where DeactivateAsync completes the workflow before the
+            // test update arrives — if we await DeactivateAsync first, the workflow finishes
+            // and the proxy's update-with-start starts a NEW execution (no rejection).
+            var slowTask = factory.Get<IGuardedCounter>("scenario-n-obj").SlowIncrementAsync(1);
 
-            // Immediately after deactivation is accepted, new updates must be rejected.
-            // (The object may complete very quickly; the race window is narrow but real.)
-            // We verify this by attempting an update and expecting either ObjectDeactivating or
-            // the workflow has already closed (DurableObjectNotActiveException or similar).
-            // In practice the workflow terminates quickly after drain completes.
-            // We accept either outcome as valid — the important thing is no update sneaks through.
+            // Wait for the slow update to reach Workflow.DelayAsync inside the workflow
+            // (i.e., be registered as an in-progress handler and holding the serialization gate).
+            await Task.Delay(TimeSpan.FromMilliseconds(400));
+
+            // Queue DeactivateAsync while the slow update holds the gate.
+            var deactivateTask = obj.DeactivateAsync();
+
+            // Let DeactivateAsync arrive at the workflow before the test update.
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+
+            // Queue the test Increment — arrives after DeactivateAsync in the gate queue.
+            var drainUpdateTask = factory.Get<IGuardedCounter>("scenario-n-obj").IncrementAsync(1);
+
+            // Expect the test Increment to be rejected with ObjectDeactivating.
             var drainRejected = false;
-            try { await factory.Get<IGuardedCounter>("scenario-n-obj").IncrementAsync(1); }
+            try { await drainUpdateTask; }
             catch (WorkflowUpdateFailedException ex)
                 when (ex.InnerException is ApplicationFailureException afe
                       && afe.ErrorType == "ObjectDeactivating")
             {
                 drainRejected = true;
             }
-            catch (DurableObjectNotActiveException)
-            {
-                // Object already closed — acceptable; deactivation completed successfully.
-                drainRejected = true;
-            }
-            catch (Temporalio.Exceptions.RpcException)
-            {
-                // Workflow may have already completed — acceptable.
-                drainRejected = true;
-            }
 
-            Assert.True(drainRejected, "Expected post-deactivation update to be rejected");
+            // Allow slow update and deactivation to complete normally.
+            try { await slowTask; } catch { /* may throw if object deactivated underneath */ }
+            try { await deactivateTask; } catch { /* may already be processed */ }
+
+            Assert.True(drainRejected, "Expected post-deactivation update to be rejected with ObjectDeactivating");
         }
         finally
         {

@@ -54,11 +54,15 @@ public static class ScenarioWorkerBuilder
         workerOptions.AddDurableObjectWorkflows(libraryAssembly, options);
 
         // Register activity instances.
+        // Must pass the runtime type explicitly — the parameter is IEnumerable<object>, so
+        // generic inference gives T=object for AddAllActivities<T>(T), and System.Object has
+        // no [Activity] methods. The non-generic overload AddAllActivities(Type, object) resolves
+        // to the concrete activity class and discovers its [Activity]-decorated methods correctly.
         if (activityInstances is not null)
         {
             foreach (var instance in activityInstances)
             {
-                workerOptions.AddAllActivities(instance);
+                workerOptions.AddAllActivities(instance.GetType(), instance);
             }
         }
 
