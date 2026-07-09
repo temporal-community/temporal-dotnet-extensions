@@ -3,6 +3,12 @@
 This document covers the recurring patterns that every DurableObject implementation must follow,
 explains why each exists, and shows the common mistakes and how to avoid them.
 
+**See also:**
+- [FAILURE_HANDLING.md](FAILURE_HANDLING.md) — exception chains, update handler failure taxonomy,
+  lifecycle hook failure behavior, and authorization patterns.
+- [TIER_MODEL.md](TIER_MODEL.md) — lifecycle tiers (Tier 1 Resident, Tier 3 Explicit Deactivation,
+  Tier 2 deferred) and how objects transition between them.
+
 ---
 
 ## `[WorkflowRun]` Is Required on Every Concrete Class
@@ -120,6 +126,13 @@ public class DailyReport : DurableObjectBase, IDailyReport
 Without `Deactivate()`, subsequent scheduled ticks are silently dropped. This is the most
 common mistake when using schedule-based activation.
 
+> **Debugging tip:** If you forget `Deactivate()` in a scheduled object, the execution stays
+> open and accumulates workflow history on every trigger. Over time this hits `MaxHistoryLength`,
+> causing workflow task timeouts or ContinueAsNew loops that are difficult to diagnose. Symptom
+> to watch for: the Temporal Web UI shows the scheduled object's execution with an unusually high
+> event count, or you see repeated ContinueAsNew entries. Fix: always call `Deactivate()` before
+> returning from `OnActivateAsync()` in any object used with `CreateDurableObjectScheduleAsync`.
+
 ---
 
 ## Every Interface Method Needs a Matching Handler
@@ -167,9 +180,18 @@ scheduled on a different scheduler.
 
 `ConfigureAwait(false)` posts continuations to `TaskScheduler.Default` (the thread pool) —
 off the workflow scheduler. This produces either:
-- **Immediate failure:** the tracing listener detects the off-scheduler task.
-- **Silent replay divergence:** the continuation runs after the SDK has already snapshotted
-  commands, causing non-determinism on replay.
+
+- **Silent replay divergence (worse):** the continuation runs after the SDK has already
+  snapshotted commands, causing a non-determinism error on replay. This failure is harder to
+  detect because it surfaces only when replaying history — for example, during a worker restart
+  or workflow task retry — not necessarily at the point where the code ran.
+- **Immediate failure:** the tracing listener detects the off-scheduler task and throws
+  `SynchronizationContextMissingException`. This is easier to catch but may not trigger
+  consistently under all schedulers or test environments.
+
+Prioritize eliminating `ConfigureAwait(false)` in update handlers and lifecycle hooks above all
+other `ConfigureAwait` concerns — the silent divergence case can corrupt long-lived workflow
+history in ways that are difficult to recover from.
 
 `ConfigureAwait(true)` (or no call at all, since `true` is the C# default) captures
 `TaskScheduler.Current`, which inside a workflow is `WorkflowInstance`. The continuation queues

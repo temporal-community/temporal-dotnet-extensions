@@ -14,6 +14,8 @@ bld/
 [Ll]og/
 [Ll]ogs/
 
+TestResults/
+
 # OS System files
 .DS_Store
 Thumbs.db

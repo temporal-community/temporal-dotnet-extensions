@@ -38,8 +38,9 @@ the last row — see the note following the table.
 | Any other exception | Fails the **workflow task**, retried indefinitely. Update stays pending. **Object permanently wedged.** |
 
 **Framework safety net:** `DurableObjectWorkerInterceptor.HandleUpdateAsync` catches anything
-that is not `FailureException` or `OperationCanceledException` and rethrows it as
-`ApplicationFailureException(errorType: "UnhandledUpdateException", nonRetryable: true)`.
+that is not `Temporalio.Exceptions.FailureException` (the SDK base type, of which
+`ApplicationFailureException` is the primary subclass) or `OperationCanceledException` and
+rethrows it as `ApplicationFailureException(errorType: "UnhandledUpdateException", nonRetryable: true)`.
 This converts the "permanently wedged" outcome into a clean caller-visible update failure. The
 caller sees `WorkflowUpdateFailedException`; the object stays alive.
 
@@ -61,10 +62,18 @@ Lifecycle hooks (`OnActivateAsync`, `OnTimerAsync`, `OnBeforeContinueAsNewAsync`
   `update-with-start`) fail with the workflow termination rather than receiving a clean
   `UpdateResponse.Rejected`. Callers see the workflow terminated, not a friendly exception.
 
+**`OnBeforeContinueAsNewAsync` behavior:** if this hook throws, the framework wraps the exception
+as `ApplicationFailureException(errorType: "ContinueAsNewFailure", nonRetryable: true)`. This
+terminates the workflow execution — ContinueAsNew does **not** proceed. Any updates that were
+pending at the time (waiting in the run loop) fail with the workflow termination and do not
+receive a clean rejection. This is identical to the `OnActivateAsync` and `OnTimerAsync` failure
+path. The implication: any state preparation in `OnBeforeContinueAsNewAsync` must be complete
+before the hook returns; partial work should be validated up-front.
+
 **`OnDeactivateAsync` is different:** exceptions are swallowed and logged. Deactivation must
 complete regardless of cleanup failures.
 
-### Activation failure and recovery (Scenario O)
+### Activation failure and recovery
 
 After a workflow terminates due to an `OnActivateAsync` failure, the same object ID is usable
 again. A new `update-with-start` (or `GetOrCreateAsync`) on the same ID starts a fresh execution
@@ -108,6 +117,11 @@ any client with valid namespace credentials can invoke `"OnReminder"` and skip y
 
 ### Multi-tenant authorization
 
+> **Illustrative pseudo-code.** The code below shows the structural approach. A production
+> implementation requires a custom outbound interceptor on the `ITemporalClient` used by
+> `ReminderDeliveryActivities`. The exact header encoding and secret provisioning are
+> application-specific; no built-in helper exists in v1.
+
 For multi-tenant deployments, use a shared-secret header approach instead:
 
 1. Configure `ReminderDeliveryActivities` with an `ITemporalClient` whose outbound interceptor
@@ -135,6 +149,11 @@ helper is planned for v1.1. The manual approach above is the supported path in v
 ---
 
 ## Reminders and Idempotency
+
+> **Registration note:** `ReminderDeliveryActivities` is automatically registered when you call
+> `AddDurableObjectWorkflows(...)`. You do **not** need to register it manually on the worker
+> builder. Adding a duplicate registration will cause an `InvalidOperationException` at worker
+> startup.
 
 Reminders are delivered at-least-once. The `ReminderDeliveryActivities.DeliverReminderAsync`
 activity derives a stable `UpdateId` from `ActivityExecutionContext.Current.Info.WorkflowId`
@@ -209,3 +228,10 @@ See [ADR 004](adr/004-versioning-strategy.md) for the full versioning strategy.
 | Adding / removing / renaming a `[WorkflowUpdate]` handler reachable by live objects | **No — use `Workflow.Patched`** |
 | Changing `OnBeforeContinueAsNewAsync` return shape | **No — use `Workflow.Patched`** |
 | Removing a handler that may be targeted by in-flight updates | **Forbidden without migration** |
+
+---
+
+## See Also
+
+For common startup mistakes, exception chain patterns, and environment setup issues, see
+[TROUBLESHOOTING.md](TROUBLESHOOTING.md).

@@ -2,6 +2,12 @@
 
 **Status:** ACCEPTED
 
+> **Note (2026):** Nexus is now available in Temporal Server v1.27+. When this ADR was written,
+> Nexus was under active investigation and not yet stable. The decision to defer DO→DO messaging
+> stands, but the Nexus row in the candidate-designs table should be revisited once the .NET SDK
+> has stable Nexus client support. Track `temporalio/sdk-dotnet` for Nexus client API
+> availability before the v1.1 design decision is finalized.
+
 ---
 
 ## Context
@@ -67,6 +73,32 @@ public async Task SyncCountAsync(string remoteId)
         (DurableObjectCallActivity a) => a.GetRemoteCountAsync(remoteId),
         new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) })
         .ConfigureAwait(true);
+}
+```
+
+**Error handling — target object does not exist:** `IDurableObjectFactory.Get<T>()` itself does
+not throw; it creates a proxy. The exception surfaces when a method is invoked on the proxy and
+the underlying Temporal call fails. If the target workflow has been purged or never started,
+`DurableObjectNotFoundException` is thrown. Activities should catch this and either fail cleanly
+or retry based on application policy:
+
+```csharp
+public async Task<int> GetRemoteCountAsync(string targetObjectId)
+{
+    var counter = factory.Get<ICounter>(targetObjectId);
+    try
+    {
+        return await counter.GetCountAsync();
+    }
+    catch (DurableObjectNotFoundException)
+    {
+        // Target object does not exist — treat as a non-retryable failure
+        // so the calling workflow's activity does not retry indefinitely.
+        throw new ApplicationFailureException(
+            $"Target object '{targetObjectId}' not found.",
+            errorType: "TargetObjectNotFound",
+            nonRetryable: true);
+    }
 }
 ```
 

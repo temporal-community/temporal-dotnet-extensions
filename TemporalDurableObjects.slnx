@@ -3,7 +3,12 @@
     <Project Path="benchmarks/TemporalCommunity.DurableObjects.Benchmarks/TemporalCommunity.DurableObjects.Benchmarks.csproj" />
   </Folder>
   <Folder Name="/samples/">
-    <Project Path="samples/TemporalCommunity.DurableObjects.Sample/TemporalCommunity.DurableObjects.Sample.csproj" />
+    <Project Path="samples/01-getting-started/TemporalCommunity.DurableObjects.GettingStarted.csproj" />
+    <Project Path="samples/02-input-validation/TemporalCommunity.DurableObjects.InputValidation.csproj" />
+    <Project Path="samples/03-scheduling/TemporalCommunity.DurableObjects.Scheduling.csproj" />
+    <Project Path="samples/04-object-to-object/TemporalCommunity.DurableObjects.ObjectToObject.csproj" />
+    <Project Path="samples/05-observability/TemporalCommunity.DurableObjects.Observability.csproj" />
+    <Project Path="samples/06-testing/TemporalCommunity.DurableObjects.Testing.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/TemporalCommunity.DurableObjects/TemporalCommunity.DurableObjects.csproj" />

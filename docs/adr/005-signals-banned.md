@@ -65,7 +65,9 @@ knows the deactivation request was accepted. A timeout is trivially set via `Upd
 Signal handlers run to completion or fail. There is no rollback mechanism for in-memory state
 mutations made before a throw. For `[WorkflowSignal]` specifically:
 
-- If the handler throws a `FailureException` subclass (including `ApplicationFailureException`),
+- If the handler throws an `ApplicationFailureException` (or any other
+  `Temporalio.Exceptions.FailureException` subclass — `ApplicationFailureException` is the one
+  callers typically construct directly),
   the SDK calls `FailWorkflowExecution` — the **workflow terminates**. Any state mutations made
   before the throw are lost; the object is gone.
 - If the handler throws any other exception, the SDK retries the workflow task indefinitely.
@@ -109,6 +111,15 @@ drain implementation for a signal-based deactivation.
 **High-throughput fire-and-forget patterns** that previously used signals now require updates.
 Each update has a round-trip to the caller. For use cases where the caller does not need
 confirmation and the latency of an extra round-trip is unacceptable, this is a real cost.
+
+**Update round-trip latency:** a `[WorkflowUpdate]` round-trip is typically **10–100 ms** on a
+local Temporal server (loopback, no load). On a remote cluster the range is wider, driven by
+network latency and worker polling interval. A `[WorkflowSignal]` delivers faster because it
+does not wait for the handler to run — but provides no confirmation. For the vast majority of
+DurableObject use cases, 10–100 ms per call is acceptable and the confirmation semantics are
+worth the cost. If profiling shows update latency as a genuine bottleneck on a specific hot
+path, that is the evidence needed to revisit this decision in v1.1 (see reconsideration criteria
+below).
 
 For v1, the correct response is: if you need fire-and-forget without confirmation, model the
 operation as an activity that calls the object and discards the result rather than using a

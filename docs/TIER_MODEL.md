@@ -18,6 +18,14 @@ waits. History compaction (ContinueAsNew) is triggered only by the `MaxHistoryLe
 in `DurableObjectOptions` (default 10,000 events) or when `Workflow.ContinueAsNewSuggested`
 is true.
 
+> **Tuning `MaxHistoryLength`:** The default of 10,000 events matches the Temporal SDK default
+> and is appropriate for most objects. For objects with very high update frequency (hundreds of
+> updates per minute), consider reducing `MaxHistoryLength` to compact history more aggressively
+> and keep individual executions shorter. Pass the value via the `DurableObjectBase` constructor
+> parameter (forwarded to `WorkflowRunOptions`) or set it in your workflow options at worker
+> registration time. Lowering this value increases the frequency of ContinueAsNew transitions,
+> which have a small latency cost but reduce per-execution memory on the worker.
+
 **This is the default.** Every DurableObject that does not call `Deactivate()` or
 `DeactivateAsync()` is Tier 1.
 
@@ -64,6 +72,12 @@ protected override Task OnActivateAsync()
 
 ## Tier 2 — Cold Passivation (Deferred to v1.1)
 
+> **Plain-language summary:** Tier 2 objects are stored in workflow history between activations —
+> they save state but incur a cold-start latency cost on each reactivation (the workflow must
+> replay history or restore from an external snapshot before handling its first update). Tier 2
+> is marked `[Experimental]` and is **not recommended for v1 production use** — it is excluded
+> entirely from this release.
+
 Cold passivation serializes an object's state to an external store on deactivation and restores
 it on re-activation, allowing the Temporal workflow execution to be closed when the object is
 idle and started fresh when needed. This would enable large populations of objects that do not
@@ -101,10 +115,23 @@ executions whose workflow type matches `T`. Temporal visibility is eventually co
 just-created object may not appear immediately.
 
 **Scheduled-object executions appear in results.** `CreateDurableObjectScheduleAsync<T>` spawns
-fresh executions per tick; these have the same workflow type as canonical objects but different
-ID patterns (time-suffixed). There is no reliable in-library filter to distinguish canonical
-objects from scheduled one-shots without a Search Attribute.
+fresh executions per tick; these have the same workflow type as canonical objects but carry a
+time-suffixed workflow ID pattern (e.g. `<base-id>-<ISO8601-timestamp>`). This suffix is
+predictable and can be used to filter them out of listing results:
 
-Callers who need to distinguish canonical objects from scheduled executions in v1 should attach a
-custom Search Attribute at object creation time and filter on it when listing. A built-in
+```csharp
+await foreach (var id in factory.ListDurableObjectsAsync<IMyObject>())
+{
+    // Scheduled one-shots have a time-suffix; canonical objects do not.
+    // Adjust the pattern to match your base ID naming convention.
+    if (!IsTimeSuffixed(id))
+        yield return id;
+}
+
+static bool IsTimeSuffixed(string id) =>
+    System.Text.RegularExpressions.Regex.IsMatch(id, @"-\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}");
+```
+
+Filtering by ID pattern works for most use cases. For stricter separation, attach a custom
+Search Attribute at object creation time and filter on it when listing. A built-in
 attribute-tagging option is planned for v1.1.

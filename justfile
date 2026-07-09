@@ -12,7 +12,9 @@ coverage_dir          := "artifacts/coverage"
 unit_tests_dir        := "tests/TemporalCommunity.DurableObjects.Tests"
 integration_tests_dir := "tests/TemporalCommunity.DurableObjects.IntegrationTests"
 benchmarks_dir        := "benchmarks/TemporalCommunity.DurableObjects.Benchmarks"
-sample_dir            := "samples/TemporalCommunity.DurableObjects.Sample"
+# Runs minver (local tool — .config/dotnet-tools.json) to compute the current version from git tags.
+# The sed/tr reads MinVerDefaultPreReleaseIdentifiers from Directory.Build.props so the pre-release
+# label has a single source of truth; minver-cli must be installed via `dotnet tool restore`.
 version               := `dotnet tool run minver --tag-prefix "" --default-pre-release-identifiers $(sed -n 's/.*<MinVerDefaultPreReleaseIdentifiers>\(.*\)<\/MinVerDefaultPreReleaseIdentifiers>.*/\1/p' Directory.Build.props | tr -d ' ')`
 
 # ── Meta ──────────────────────────────────────────────────
@@ -37,7 +39,7 @@ doctor:
     @echo "==> temporal CLI"
     temporal --version
     @echo "==> Temporal server reachability"
-    -temporal workflow list --namespace default --limit 1 2>&1 || echo "⚠  Temporal server not reachable (required for integration tests)"
+    -temporal workflow list --namespace default --limit 1 2>&1 || echo "⚠  Temporal server not reachable (required to run SAMPLES; integration tests use an embedded server via WorkflowEnvironment.StartLocalAsync)"
     @echo "==> minver-cli (local tool)"
     dotnet tool run minver --version
 
@@ -203,9 +205,22 @@ sync-remotes:
 
 # ── Sample ────────────────────────────────────────────────
 
-# Run the sample project (requires a running Temporal server at localhost:7233)
-run-sample:
-    dotnet run --project "{{sample_dir}}" --configuration "{{configuration}}"
+# Run a sample project (requires a running Temporal server at localhost:7233)
+# Usage: just run-sample           → runs 01-getting-started
+#        just run-sample 03        → runs 03-scheduling
+#        just run-sample-all       → lists all available samples
+run-sample SAMPLE="01-getting-started":
+    dotnet run --project "samples/{{SAMPLE}}" --configuration "{{configuration}}"
+
+# List all available samples
+run-sample-all:
+    @echo "Available samples:"
+    @echo "  01-getting-started   — Full setup + client proxy"
+    @echo "  02-input-validation  — Update validators + error handling"
+    @echo "  03-scheduling        — Schedule vs Reminder patterns"
+    @echo "  04-object-to-object  — Activity-mediated DO-to-DO"
+    @echo "  05-observability     — OpenTelemetry traces"
+    @echo "  06-testing           — xUnit reference test suite (use: dotnet test samples/06-testing)"
 
 # ── Process Hygiene (Unix only) ────────────────────────────
 # These recipes use Unix utilities (pkill, pgrep, find) and do not run on Windows.

@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <!-- CA1303: string literals — acceptable in samples -->
+    <!-- CA1515: public types in application — required by Temporal for workflow/activity scanning -->
+    <!-- CA1024: properties instead of Get methods — [WorkflowQuery] requires methods -->
+    <!-- CA1848/CA1873: LoggerMessage — overkill for sample code -->
+    <!-- CA2007: ConfigureAwait — suppressed globally for sample code -->
+    <!-- CA1031: catch general Exception — intentional in demo error-handling scenarios -->
+    <!-- CA1812: internal never instantiated — classes are registered via AddHostedService -->
+    <NoWarn>$(NoWarn);CA1303;CA1515;CA1024;CA1848;CA1873;CA2007;CA1031;CA1812</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Temporalio.Extensions.Hosting" Version="1.*" />
+    <PackageReference Include="Temporalio.Extensions.OpenTelemetry" Version="1.*" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.*" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TemporalCommunity.DurableObjects\TemporalCommunity.DurableObjects.csproj" />
+  </ItemGroup>
+</Project>

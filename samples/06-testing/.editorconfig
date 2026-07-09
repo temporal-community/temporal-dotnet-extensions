@@ -1,0 +1,21 @@
+[*.cs]
+# Workflow code rules — mirror the integration test project suppressions
+dotnet_diagnostic.CA2007.severity = none  # ConfigureAwait — omitted in test code per xUnit1030
+dotnet_diagnostic.CA2008.severity = none  # Task without TaskCreationOptions
+dotnet_diagnostic.CA5394.severity = none  # Non-crypto random (Workflow.Random)
+dotnet_diagnostic.CS1998.severity = none  # Async without await
+dotnet_diagnostic.CA1024.severity = none  # Use properties where appropriate — WorkflowQuery methods cannot be properties
+dotnet_diagnostic.CA1822.severity = none  # Mark member as static — workflow methods must be instance methods
+
+# Test project suppressions
+dotnet_diagnostic.CA1707.severity = none  # Test methods use underscore naming convention (Given_When_Then)
+dotnet_diagnostic.CA1515.severity = none  # Test infrastructure types are intentionally public (xUnit requires it for collection fixtures)
+dotnet_diagnostic.CA1711.severity = none  # WorkflowEnvironmentCollection name ends in 'Collection' — intentional xUnit naming
+dotnet_diagnostic.CA1812.severity = none  # Internal class never instantiated — workflow types instantiated by SDK runtime
+dotnet_diagnostic.CA1852.severity = none  # Seal internal types — workflow types must not be sealed
+dotnet_diagnostic.CA2000.severity = none  # CancellationTokenSource in tests is disposed via finally block
+dotnet_diagnostic.CA1031.severity = none  # Catch general exceptions in test cleanup — intentional
+dotnet_diagnostic.CA1062.severity = none  # Validate parameter null — workflow update params guaranteed non-null by SDK
+dotnet_diagnostic.CS8602.severity = none  # Dereference of possibly null — expected in test assertions
+dotnet_diagnostic.CA1848.severity = none  # Use LoggerMessage delegates — not needed in test workflow code
+dotnet_diagnostic.xUnit1030.severity = none  # ConfigureAwait in test methods — we use ConfigureAwait(true) to satisfy CA2007

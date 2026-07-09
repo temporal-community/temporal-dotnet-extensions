@@ -108,6 +108,16 @@ dotnet run
 The counter object starts on first call and persists across restarts. State survives worker
 crashes, ContinueAsNew history compaction, and re-deployments.
 
+### What happens when an update throws?
+
+If an update handler throws an unexpected exception, `DurableObjectWorkerInterceptor` catches it
+and converts it to an `ApplicationFailureException` so the object does not wedge permanently.
+On the calling side, the exception chain is: `WorkflowUpdateFailedException` wraps an
+`ApplicationFailureException`, which carries the original error in `InnerException`. Inspect
+`ApplicationFailureException.ErrorType` for domain-specific error codes (e.g. `"Unauthorized"`,
+`"UnhandledUpdateException"`). See [FAILURE_HANDLING.md](docs/FAILURE_HANDLING.md) for the full
+exception taxonomy, lifecycle hook failure behavior, and authorization patterns.
+
 ---
 
 ## Key Concepts
@@ -121,6 +131,52 @@ Objects have three lifecycle tiers. V1 ships Tier 1 and Tier 3. See [TIER_MODEL.
 | 1 | Resident | Stays open indefinitely; Temporal sticky-cache handles idle periods. **Default.** |
 | 2 | Cold Passivation | Deferred to v1.1 — not in this release. |
 | 3 | Explicit Deactivation | Caller or object itself calls `DeactivateAsync()` / `Deactivate()` to close. |
+
+#### Deactivation semantics
+
+When deactivation is triggered (via `DeactivateAsync()` from outside, or `Deactivate()` from
+inside a handler), the object drains before closing:
+
+- **In-flight updates complete.** Any update handler already executing when deactivation is
+  signaled runs to completion before the object closes. New updates arriving after the signal is
+  received are rejected with `errorType: "ObjectDeactivating"`.
+- **Reactivation is always possible.** After an object deactivates, the next `GetOrCreate` or
+  `update-with-start` call on the same ID spins up a fresh execution under
+  `WorkflowIdReusePolicy.AllowDuplicate`. The object effectively restarts clean.
+- **Drain timeout is not configurable in v1.** The drain waits on
+  `Workflow.WaitConditionAsync(() => Workflow.AllHandlersFinished)` with no deadline. Design
+  update handlers to complete promptly; avoid long-running blocking operations inside handlers.
+
+#### ContinueAsNew and state preservation
+
+ContinueAsNew is triggered automatically when `Workflow.CurrentHistoryLength` exceeds the
+`MaxHistoryLength` threshold (default 10,000 events) or when the Temporal server sets
+`Workflow.ContinueAsNewSuggested`. State is preserved across ContinueAsNew because
+`DurableObjectBase.OnBeforeContinueAsNewAsync()` passes constructor arguments through to the
+new execution — override this hook to carry forward any state that must survive the boundary.
+
+### Object identity and namespace scope
+
+> **Object IDs are globally unique within a Temporal namespace — not per-task-queue.**
+> Two workers registered on different task queues in the same namespace cannot both own an object
+> with the same ID unless they are both registered for the same workflow type. If a second worker
+> issues `GetOrCreate` for an ID that is already owned by a different workflow type, Temporal will
+> route the start to the existing execution's task queue (the one it was originally started on),
+> not the caller's queue. Use distinct ID namespacing conventions (e.g., prefixes) to avoid
+> accidental cross-type collisions.
+
+### Reminders vs Schedules
+
+Two mechanisms trigger recurring behavior in DurableObjects — they serve different roles:
+
+| Mechanism | Trigger origin | Use when |
+|-----------|---------------|----------|
+| **Reminder** (`CreateDurableObjectReminderAsync`) | Fires from inside the object via `AddDurableObjectReminderDelivery` — the object receives `OnTimerAsync` on a canonical, persistent execution | You want the object itself to wake up on a recurring basis (heartbeats, expiry checks). |
+| **Schedule** (`CreateDurableObjectScheduleAsync`) | Externally managed Temporal Schedule that triggers `OnTimerAsync` on a *fresh* execution per tick | You want a periodic job that self-deactivates after each run (batch jobs, reports). |
+
+The key difference: reminders keep one long-lived object alive and deliver updates to it;
+schedules spin up a new execution per tick and expect that execution to call `Deactivate()` on
+completion.
 
 ### DurableObject vs plain Temporal workflow
 
@@ -235,6 +291,19 @@ v1.1. See [ADR 003](docs/adr/003-do-to-do-messaging-deferred.md).
 
 ---
 
+## Samples
+
+Six runnable samples covering the core features are in `samples/`. See [samples/README.md](samples/README.md)
+for the full index. Each sample requires a live Temporal server (`temporal server start-dev`).
+
+```bash
+just run-sample                    # 01-getting-started (default)
+just run-sample 03-scheduling      # specific sample by directory name
+just run-sample-all                # list all available samples
+```
+
+---
+
 ## Building from Source
 
 Prerequisites: [.NET 10 SDK](https://dotnet.microsoft.com/download), [just](https://github.com/casey/just).
@@ -260,6 +329,17 @@ Run `just` with no arguments to list all available recipes.
 | `just pack` | Pack the library; MinVer reads the git tag for the version. |
 | `just run-sample` | Run the sample app (requires a live Temporal server at `localhost:7233`). |
 | `just ci` | Full CI pipeline: clean → build → unit tests → pack. |
+
+---
+
+## Documentation
+
+- [Getting Started guide](docs/GETTING_STARTED.md) — reading order, document map, and quick links for new developers.
+- [Boilerplate guide](docs/BOILERPLATE.md) — required patterns every DurableObject must follow.
+- [Failure handling](docs/FAILURE_HANDLING.md) — exception taxonomy, authorization, and reminder idempotency.
+- [Tier model](docs/TIER_MODEL.md) — lifecycle tiers and ContinueAsNew behavior.
+- [Troubleshooting](docs/TROUBLESHOOTING.md) — common mistakes and how to fix them.
+- [ADRs](docs/adr/) — architectural decisions and design rationale.
 
 ---
 

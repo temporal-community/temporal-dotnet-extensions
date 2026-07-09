@@ -54,6 +54,21 @@ Three reasons — none of them performance:
    compiler trims. Any consumer publishing with `PublishAot=true` gets a runtime
    `PlatformNotSupportedException` with no compile-time warning. This is a hard ceiling.
 
+   **Failure symptom:** the exception is thrown at the moment `DispatchProxy.Create<T>()` is
+   called — which happens inside `IDurableObjectFactory.Get<T>()` on first proxy creation for
+   type `T`. The application will appear to start normally (the host starts, the worker
+   registers) but the first call to `factory.Get<IMyObject>(id)` crashes with:
+
+   ```
+   System.PlatformNotSupportedException: Operation is not supported on this platform.
+      at System.Reflection.DispatchProxy.Create[T,TProxy]()
+      at TemporalCommunity.DurableObjects.DurableObjectProxy`1.CreateProxy(...)
+   ```
+
+   There is no compile-time warning. The failure only surfaces at runtime when the first typed
+   factory call executes. Search for `PlatformNotSupportedException` at `DispatchProxy.Create`
+   if you encounter this in a NativeAOT context.
+
 2. **Compile-time rename safety.** `DispatchProxy` resolves RPC wire names at runtime from
    `MethodInfo`. A rename without a corresponding handler update produces a different wire name
    that fails at first integration test — not silently in production — but only if integration
@@ -68,7 +83,13 @@ Three reasons — none of them performance:
 
 - `DurableObjectProxy<T>` is `internal` — no external caller depends on it directly.
 - The `MethodInfo` cache (static `ConcurrentDictionary<Type, MethodInfo>`) amortizes
-  `MakeGenericMethod` cost across calls.
+  `MakeGenericMethod` cost across calls. **Cache scope:** the cache is a `static` field on the
+  generic host class, making it per-`AppDomain` (per-process in modern .NET). It is shared
+  across all `IDurableObjectFactory` instances in the same process. This is safe in production
+  but has test-isolation implications: tests running in-process against multiple factory
+  instances share the cache. Tests that mutate `MethodInfo` entries (if any) must account for
+  cross-instance visibility. Tests in separate `AppDomain`-isolated processes (e.g., via
+  `xunit` `[Collection]` isolation or a separate test project process) get a clean cache.
 - `ValidateInterface<T>()` at `Get<T>()` time catches attribute mismatches at proxy creation,
   not at first RPC call, giving an earlier and clearer failure.
 - The source generator requires Roslyn incremental generator infrastructure, parity tests, and

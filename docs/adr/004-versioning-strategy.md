@@ -81,6 +81,24 @@ Live objects continue to receive updates on wire name `"Increment"`. Callers tha
 proxy still call `AddAsync()` on the C# interface — the proxy resolves the wire name from the
 `[WorkflowUpdate]` attribute.
 
+### Patch ID naming convention
+
+Patch IDs are global within a workflow type's history. Collisions across teams or features
+produce incorrect branching. Use the convention:
+
+```
+"{HandlerName}-{change-description}-{YYYYMM}"
+```
+
+Examples:
+- `counter-add-max-value-202506` — added `MaxValue` parameter to `Counter` in June 2025
+- `order-remove-legacy-status-202509` — removed `LegacyStatus` field from `Order` in Sept 2025
+- `session-rename-update-to-refresh-202601` — renamed `UpdateAsync` to `RefreshAsync`
+
+Keep the description lowercase-kebab and specific enough to be unique across the codebase. Avoid
+generic names like `counter-fix-202506` — the "fix" label tells future engineers nothing about
+the branching intent.
+
 ### CAN constructor schema versioning
 
 When `[WorkflowInit]` constructor parameters change, the prior run's `OnBeforeContinueAsNewAsync`
@@ -173,8 +191,15 @@ await replayer.ReplayWorkflowAsync(
     await WorkflowHistory.FromJsonAsync(capturedHistoryJson));
 ```
 
-Capture histories from production or staging before deploying the new binary. If replay fails,
-apply `Workflow.Patched` before deploying. Add one replay test per scenario before each release.
+Capture history from a running workflow using the Temporal CLI before deploying the new binary:
+
+```
+temporal workflow show --workflow-id <id> --output json > testdata/workflow-history.json
+```
+
+Commit the captured JSON into the repository under `testdata/` alongside the replay test. If
+replay fails, apply `Workflow.Patched` before deploying. Add one replay test per scenario before
+each release.
 
 ---
 
