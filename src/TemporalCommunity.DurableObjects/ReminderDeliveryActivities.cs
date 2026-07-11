@@ -1,6 +1,7 @@
 using Temporalio.Activities;
 using Temporalio.Api.Enums.V1;
 using Temporalio.Client;
+using TemporalCommunity.DurableObjects.Polyfills;
 
 namespace TemporalCommunity.DurableObjects;
 
@@ -37,7 +38,7 @@ public sealed class ReminderDeliveryActivities(ITemporalClient client)
     [Activity]
     public async Task DeliverReminderAsync(ReminderDispatch dispatch)
     {
-        ArgumentNullException.ThrowIfNull(dispatch);
+        Throw.IfNull(dispatch, nameof(dispatch));
         var deliveryId = ActivityExecutionContext.Current.Info.WorkflowId
             ?? throw new InvalidOperationException("DeliverReminderAsync must be invoked as a workflow-scheduled activity (WorkflowId was null).");
         var updateId = $"{deliveryId}:{dispatch.TargetObjectId}:{dispatch.ReminderName}";

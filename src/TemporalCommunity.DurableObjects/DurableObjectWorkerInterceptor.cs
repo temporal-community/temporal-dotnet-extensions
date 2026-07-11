@@ -89,11 +89,24 @@ public sealed class DurableObjectWorkerInterceptor : IWorkerInterceptor
     /// </para>
     /// </remarks>
     public static readonly FrozenSet<string> FrameworkUpdateNames =
-        FrozenSet.Create(StringComparer.Ordinal, "OnReminder");
+        new[] { "OnReminder" }.ToFrozenSet(StringComparer.Ordinal);
 
     /// <inheritdoc/>
     public WorkflowInboundInterceptor InterceptWorkflow(WorkflowInboundInterceptor nextInterceptor) =>
         new DurableObjectWorkflowInterceptor(nextInterceptor, _serialize, _authorize);
+
+#if !NETCOREAPP3_0_OR_GREATER
+    /// <inheritdoc/>
+    /// <remarks>Pass-through — this interceptor only instruments workflow inbound calls.</remarks>
+    ActivityInboundInterceptor IWorkerInterceptor.InterceptActivity(
+        ActivityInboundInterceptor nextInterceptor) =>
+        nextInterceptor;
+
+    /// <inheritdoc/>
+    /// <remarks>Pass-through — this interceptor only instruments workflow inbound calls.</remarks>
+    NexusOperationInboundInterceptor IWorkerInterceptor.InterceptNexusOperation(
+        NexusOperationInboundInterceptor nextInterceptor) => nextInterceptor;
+#endif
 
     private sealed class DurableObjectWorkflowInterceptor : WorkflowInboundInterceptor
     {

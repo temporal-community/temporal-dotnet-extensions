@@ -5,6 +5,7 @@ using Temporalio.Api.Enums.V1;
 using Temporalio.Client;
 using Temporalio.Exceptions;
 using Temporalio.Workflows;
+using TemporalCommunity.DurableObjects.Polyfills;
 
 namespace TemporalCommunity.DurableObjects;
 
@@ -35,7 +36,7 @@ internal class DurableObjectProxy<T> : DispatchProxy
     /// <inheritdoc/>
     protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
     {
-        ArgumentNullException.ThrowIfNull(targetMethod);
+        Throw.IfNull(targetMethod, nameof(targetMethod));
 
         var isQuery = targetMethod.GetCustomAttribute<WorkflowQueryAttribute>() is not null;
         var callArgs = args ?? Array.Empty<object?>();

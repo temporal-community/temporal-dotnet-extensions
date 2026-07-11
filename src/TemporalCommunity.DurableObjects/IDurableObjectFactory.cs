@@ -124,6 +124,10 @@ public interface IDurableObjectFactory
     /// querying Temporal visibility. Results are yielded as they arrive — no buffering.
     /// </summary>
     /// <remarks>
+    /// This method is available on the <c>net8.0</c> and <c>net10.0</c> assets. The
+    /// <c>netstandard2.1</c> asset throws <see cref="PlatformNotSupportedException"/> because
+    /// the Temporal SDK visibility API is not exposed on that target.
+    ///
     /// Visibility is eventually consistent: a just-created object may take a moment to appear.
     /// Results may include time-suffixed executions created by schedule-based activation;
     /// callers who need to distinguish canonical objects from scheduled one-shots should use

@@ -97,9 +97,26 @@ internal sealed class DurableObjectFactory : IDurableObjectFactory
     }
 
     /// <inheritdoc/>
-    public async IAsyncEnumerable<string> ListDurableObjectsAsync<T>(
+    public IAsyncEnumerable<string> ListDurableObjectsAsync<T>(
         bool runningOnly = true,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default)
+        where T : IDurableObject
+    {
+#if NETCOREAPP3_0_OR_GREATER
+        return ListDurableObjectsAsyncCore<T>(runningOnly, cancellationToken);
+#else
+        // This branch is compiled only into the netstandard2.1 asset. .NET 8+ consumers receive
+        // the net8.0 asset, where the SDK's ListWorkflowsAsync API is available.
+        throw new PlatformNotSupportedException(
+            $"{nameof(ListDurableObjectsAsync)} is not available in the netstandard2.1 binary. " +
+            "Use the net8.0 asset on .NET 8 or later to enumerate Durable Objects.");
+#endif
+    }
+
+#if NETCOREAPP3_0_OR_GREATER
+    private async IAsyncEnumerable<string> ListDurableObjectsAsyncCore<T>(
+        bool runningOnly,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
         where T : IDurableObject
     {
         var workflowType = DurableObjectNaming.ResolveWorkflowType(typeof(T));
@@ -116,6 +133,7 @@ internal sealed class DurableObjectFactory : IDurableObjectFactory
             yield return exec.Id;
         }
     }
+#endif
 
     /// <inheritdoc/>
     public Task<ScheduleHandle> CreateDurableObjectScheduleAsync<T>(

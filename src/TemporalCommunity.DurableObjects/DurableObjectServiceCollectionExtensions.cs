@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using Temporalio.Client;
+using TemporalCommunity.DurableObjects.Polyfills;
 
 namespace TemporalCommunity.DurableObjects;
 
@@ -43,7 +44,7 @@ public static class DurableObjectServiceCollectionExtensions
         this IServiceCollection services,
         string defaultTaskQueue)
     {
-        ArgumentException.ThrowIfNullOrEmpty(defaultTaskQueue);
+        Throw.IfNullOrEmpty(defaultTaskQueue, nameof(defaultTaskQueue));
 
         services.AddSingleton<IDurableObjectFactory>(sp =>
             new DurableObjectFactory(

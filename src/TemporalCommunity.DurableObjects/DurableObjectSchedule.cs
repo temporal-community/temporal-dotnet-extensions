@@ -1,6 +1,7 @@
 using Temporalio.Api.Enums.V1;
 using Temporalio.Client;
 using Temporalio.Client.Schedules;
+using TemporalCommunity.DurableObjects.Polyfills;
 
 namespace TemporalCommunity.DurableObjects;
 
@@ -72,7 +73,7 @@ public static class DurableObjectSchedule
         CancellationToken cancellationToken = default)
         where T : IDurableObject
     {
-        ArgumentNullException.ThrowIfNull(client);
+        Throw.IfNull(client, nameof(client));
         // Bug 1 fix: use DurableObjectNaming.ResolveWorkflowType instead of inline I-strip.
         var workflowType = DurableObjectNaming.ResolveWorkflowType(typeof(T));
 
@@ -141,7 +142,7 @@ public static class DurableObjectSchedule
         CancellationToken cancellationToken = default)
         where T : IReminderReceiver
     {
-        ArgumentNullException.ThrowIfNull(client);
+        Throw.IfNull(client, nameof(client));
         // Bug 1 fix: use DurableObjectNaming.ResolveWorkflowType instead of inline I-strip.
         var workflowType = DurableObjectNaming.ResolveWorkflowType(typeof(T));
 

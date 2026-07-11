@@ -1,5 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <!-- Clear the TargetFramework value inherited from Directory.Build.props. Without this
+         explicit clear, both TargetFramework (from Directory.Build.props) and TargetFrameworks
+         are set simultaneously, and the SDK uses the singular TargetFramework — silently
+         skipping the multi-targeting loop and building only net10.0. -->
+    <TargetFramework />
+    <TargetFrameworks>net10.0;net8.0;netstandard2.1</TargetFrameworks>
     <PackageId>TemporalCommunity.DurableObjects</PackageId>
     <PackageTags>temporal;workflow;durable;actors;grains;stateful;distributed</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -28,5 +34,9 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
     <PackageReference Include="MinVer" Version="6.*" PrivateAssets="all" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.*" PrivateAssets="all" />
+    <!-- FrozenSet<T> is BCL-native on net8.0+; the backport package is only needed on netstandard2.1.
+         The package ships a netstandard2.0 TFM that satisfies the netstandard2.1 target. -->
+    <PackageReference Include="System.Collections.Immutable" Version="10.0.1"
+                      Condition="'$(TargetFramework)' == 'netstandard2.1'" />
   </ItemGroup>
 </Project>

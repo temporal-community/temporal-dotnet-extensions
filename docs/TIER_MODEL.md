@@ -114,6 +114,10 @@ reactivation and asserts correct state.
 executions whose workflow type matches `T`. Temporal visibility is eventually consistent — a
 just-created object may not appear immediately.
 
+The `netstandard2.1` package asset does not include the Temporal SDK visibility API and throws
+`PlatformNotSupportedException` when this method is called. Use the `net8.0` or `net10.0` asset
+for visibility enumeration.
+
 **Scheduled-object executions appear in results.** `CreateDurableObjectScheduleAsync<T>` spawns
 fresh executions per tick; these have the same workflow type as canonical objects but carry a
 time-suffixed workflow ID pattern (e.g. `<base-id>-<ISO8601-timestamp>`). This suffix is

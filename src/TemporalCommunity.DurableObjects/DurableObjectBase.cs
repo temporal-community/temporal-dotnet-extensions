@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using Temporalio.Exceptions;
 using Temporalio.Workflows;
+using TemporalCommunity.DurableObjects.Polyfills;
 
 namespace TemporalCommunity.DurableObjects;
 
@@ -469,7 +470,7 @@ public abstract class DurableObjectBase : IDurableObject
     /// </remarks>
     protected async Task RunSerializedAsync(Func<Task> handler)
     {
-        ArgumentNullException.ThrowIfNull(handler);
+        Throw.IfNull(handler, nameof(handler));
 
         while (_handlerGate)
         {
@@ -498,7 +499,7 @@ public abstract class DurableObjectBase : IDurableObject
     /// <remarks>See <see cref="RunSerializedAsync(Func{Task})"/> for full documentation.</remarks>
     protected async Task<T> RunSerializedAsync<T>(Func<Task<T>> handler)
     {
-        ArgumentNullException.ThrowIfNull(handler);
+        Throw.IfNull(handler, nameof(handler));
 
         while (_handlerGate)
         {

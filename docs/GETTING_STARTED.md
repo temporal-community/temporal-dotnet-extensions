@@ -71,7 +71,7 @@ Before deploying a DurableObject with live state you care about, read these in f
 The ADRs document why the library is built the way it is. Read them in order for the full
 architectural picture; read individual ones when a constraint surprises you.
 
-- **[`docs/adr/001-net10-only.md`](adr/001-net10-only.md)** — Why .NET 10 only for v1; when multi-targeting is planned.
+- **[`docs/adr/001-net10-only.md`](adr/001-net10-only.md)** — Why the library ships `net10.0;net8.0;netstandard2.1`, what polyfills made it feasible, and the one method unavailable on .NET Standard.
 - **[`docs/adr/002-dispatchproxy-not-sourcegen.md`](adr/002-dispatchproxy-not-sourcegen.md)** — Why `DispatchProxy` is used for the typed
   proxy and why NativeAOT is not supported. The source generator is planned for v1.1.
 - **[`docs/adr/003-do-to-do-messaging-deferred.md`](adr/003-do-to-do-messaging-deferred.md)** — Why object-to-object messaging is not in v1
@@ -92,7 +92,7 @@ One-line description of every doc in this repository.
 | [`docs/BOILERPLATE.md`](BOILERPLATE.md) | The four required patterns every DurableObject class must follow, with explanations of why each exists and the common mistakes. |
 | [`docs/FAILURE_HANDLING.md`](FAILURE_HANDLING.md) | Complete failure taxonomy: client-side exception mapping, update handler and lifecycle hook exception behavior, authorization predicates, reminder idempotency, and deactivation drain protocol. |
 | [`docs/TIER_MODEL.md`](TIER_MODEL.md) | Lifecycle tiers (Resident, Explicit Deactivation, Cold Passivation), when each is used, and why Tier 2 is absent in v1. |
-| [`docs/adr/001-net10-only.md`](adr/001-net10-only.md) | Why the library targets `net10.0` only for v1 and when multi-targeting is planned. |
+| [`docs/adr/001-net10-only.md`](adr/001-net10-only.md) | Why the library ships `net10.0;net8.0;netstandard2.1`, what polyfills make it feasible, and the one method unavailable on .NET Standard. |
 | [`docs/adr/002-dispatchproxy-not-sourcegen.md`](adr/002-dispatchproxy-not-sourcegen.md) | Why `DispatchProxy` is used (not a source generator) and what this means for NativeAOT. |
 | [`docs/adr/003-do-to-do-messaging-deferred.md`](adr/003-do-to-do-messaging-deferred.md) | Why DurableObject-to-DurableObject messaging is not in v1 and the v1 Activity-mediated workaround. |
 | [`docs/adr/004-versioning-strategy.md`](adr/004-versioning-strategy.md) | Safe vs. breaking changes for long-lived objects, `Workflow.Patched`, worker deployment strategy, and replay tests. |

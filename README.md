@@ -4,7 +4,8 @@ An object-based programming model built on top of the [Temporal .NET SDK](https:
 Write stateful, durable actors backed by Temporal workflows — without managing workflow plumbing directly.
 
 > **Requires Temporal Server v1.28.0 or later** (Update-with-Start GA).
-> **Requires .NET 10.0.**
+> **Targets .NET 10.0, .NET 8.0, and .NET Standard 2.1.** .NET 8+ receives the full feature set;
+> the .NET Standard fallback does not support `ListDurableObjectsAsync`.
 > **NativeAOT is not supported in v1** — see [ADR 002](docs/adr/002-dispatchproxy-not-sourcegen.md).
 
 ## Installation
@@ -212,7 +213,7 @@ runtime. A source-generator-based proxy is planned for v1.1. See [ADR 002](docs/
 | `GetOrCreateAsync<T>(objectId, taskQueue)` | Same, with explicit task queue override. |
 | `QueryDurableObjectAsync<TResult>(objectId, queryName, args)` | Non-blocking async query. Use on hot paths where thread-parking is unacceptable. |
 | `QueryOrDefaultAsync<TResult>(objectId, queryName, args)` | Same, but returns `default` instead of throwing when the object is absent. |
-| `ListDurableObjectsAsync<T>(runningOnly)` | Async stream of object IDs from Temporal visibility. |
+| `ListDurableObjectsAsync<T>(runningOnly)` | Async stream of object IDs from Temporal visibility on .NET 8+; unavailable on the .NET Standard fallback. |
 | `CreateDurableObjectScheduleAsync<T>(...)` | Temporal Schedule that activates a fresh execution per tick. |
 | `CreateDurableObjectReminderAsync<T>(...)` | Temporal Schedule that delivers recurring reminders to a canonical object. |
 
@@ -328,7 +329,7 @@ Run `just` with no arguments to list all available recipes.
 | `just test-filter "FullyQualifiedName~ScenarioA"` | Run a specific scenario. |
 | `just pack` | Pack the library; MinVer reads the git tag for the version. |
 | `just run-sample` | Run the sample app (requires a live Temporal server at `localhost:7233`). |
-| `just ci` | Full CI pipeline: clean → build → unit tests → pack. |
+| `just ci` | Full CI pipeline: clean → build → unit tests → pack and consumer verification. |
 
 ---
 

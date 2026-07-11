@@ -2,9 +2,12 @@
   <PropertyGroup>
     <MinVerTagPrefix></MinVerTagPrefix>
     <MinVerDefaultPreReleaseIdentifiers>preview</MinVerDefaultPreReleaseIdentifiers>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- Default TFM for test/sample/benchmark projects. The library clears this inherited value
+         and declares net10.0;net8.0;netstandard2.1 explicitly in its own project file. -->
+    <TargetFramework Condition="'$(TargetFrameworks)' == ''">net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <WarningsNotAsErrors>NU1901;NU1902;NU1903</WarningsNotAsErrors>
     <AnalysisLevel>latest</AnalysisLevel>

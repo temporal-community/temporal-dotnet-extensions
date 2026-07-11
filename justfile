@@ -192,6 +192,75 @@ pack: build
         --nologo \
         --output "{{artifacts_dir}}"
 
+# Verify the packed nupkg: confirm net10.0 + net8.0 + netstandard2.1 lib/ folders exist,
+# then compile a netstandard2.1 consumer project against the local package.
+[unix]
+pack-verify: pack
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pkg=$(ls "{{artifacts_dir}}"/TemporalCommunity.DurableObjects.{{version}}*.nupkg 2>/dev/null | head -1)
+    [ -n "$pkg" ] || { echo "ERROR: no .nupkg found in {{artifacts_dir}}"; exit 1; }
+    echo "==> Checking lib/ folders in $(basename "$pkg")"
+    for tfm in net10.0 net8.0 netstandard2.1; do
+        if unzip -Z1 "$pkg" | grep -Fx "lib/$tfm/TemporalCommunity.DurableObjects.dll" >/dev/null; then
+            echo "  ✓ lib/$tfm/ present"
+        else
+            echo "  ✗ ERROR: lib/$tfm/ missing from nupkg" >&2; exit 1
+        fi
+    done
+    echo "==> Consumer compilation test (netstandard2.1)"
+    consumer_dir=$(mktemp -d /tmp/ns21-consumer.XXXXXX)
+    consumer_packages=$(mktemp -d /tmp/ns21-packages.XXXXXX)
+    trap 'rm -rf "$consumer_dir" "$consumer_packages"' EXIT
+    local_source=$(realpath "{{artifacts_dir}}")
+    # printf avoids a heredoc whose body would start with '<' at column 1 — just's parser
+    # treats '<' at column 1 as an unknown token and rejects the recipe before it runs.
+    printf '%s\n' \
+        '<Project Sdk="Microsoft.NET.Sdk">' \
+        '  <PropertyGroup>' \
+        '    <TargetFramework>netstandard2.1</TargetFramework>' \
+        '    <Nullable>enable</Nullable>' \
+        '    <LangVersion>latest</LangVersion>' \
+        '  </PropertyGroup>' \
+        '  <ItemGroup>' \
+        "    <PackageReference Include=\"TemporalCommunity.DurableObjects\" Version=\"{{version}}\" />" \
+        '  </ItemGroup>' \
+        '</Project>' \
+        > "$consumer_dir/consumer.csproj"
+    printf '%s\n' \
+        'using System;' \
+        'using TemporalCommunity.DurableObjects;' \
+        '' \
+        'namespace Consumer;' \
+        '' \
+        'public static class ApiCheck' \
+        '{' \
+        '    public static Type DurableObjectBaseType => typeof(DurableObjectBase);' \
+        '    public static Type DurableObjectFactoryType => typeof(IDurableObjectFactory);' \
+        '    public static System.Collections.Generic.IAsyncEnumerable<string> List(IDurableObjectFactory factory) =>' \
+        '        factory.ListDurableObjectsAsync<IDurableObject>();' \
+        '    public static bool AllowsReminders =>' \
+        '        DurableObjectWorkerInterceptor.FrameworkUpdateNames.Contains("OnReminder");' \
+        '}' \
+        > "$consumer_dir/Consumer.cs"
+    NUGET_PACKAGES="$consumer_packages" dotnet build "$consumer_dir/consumer.csproj" \
+        --nologo \
+        -p:RestoreAdditionalProjectSources="$local_source"
+    echo "  ✓ netstandard2.1 consumer compiled successfully"
+    echo "==> Consumer asset-selection test (net8.0)"
+    NUGET_PACKAGES="$consumer_packages" dotnet restore "$consumer_dir/consumer.csproj" \
+        --nologo \
+        -p:TargetFramework=net8.0 \
+        -p:RestoreForce=true \
+        -p:RestoreAdditionalProjectSources="$local_source"
+    NUGET_PACKAGES="$consumer_packages" dotnet build "$consumer_dir/consumer.csproj" \
+        --nologo \
+        --no-restore \
+        -p:TargetFramework=net8.0 \
+        -p:RestoreAdditionalProjectSources="$local_source"
+    grep -q 'lib/net8.0/TemporalCommunity.DurableObjects.dll' "$consumer_dir/obj/project.assets.json"
+    echo "  ✓ net8.0 consumer selected the net8.0 package asset"
+
 # Push to NuGet.org (NUGET_API_KEY required; CI uses OIDC Trusted Publishing instead)
 publish-nuget: pack
     dotnet nuget push "{{artifacts_dir}}/*.nupkg" \
@@ -259,4 +328,4 @@ alias verify  := test
 alias validate := test-unit
 
 # CI pipeline: clean → build → unit tests → pack (all pure dotnet, cross-platform)
-ci: clean build test-unit pack
+ci: clean build test-unit pack-verify

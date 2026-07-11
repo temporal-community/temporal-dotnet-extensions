@@ -1,3 +1,5 @@
+using TemporalCommunity.DurableObjects.Polyfills;
+
 namespace TemporalCommunity.DurableObjects;
 
 /// <summary>
@@ -40,7 +42,7 @@ public sealed record DurableObjectOptions
         get => _maxHistoryLength;
         init
         {
-            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
+            Throw.IfNegativeOrZero(value, nameof(value));
             _maxHistoryLength = value;
         }
     }

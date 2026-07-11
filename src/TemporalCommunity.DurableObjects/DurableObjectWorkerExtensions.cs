@@ -2,6 +2,7 @@ using System.Reflection;
 using Temporalio.Extensions.Hosting;
 using Temporalio.Worker;
 using Temporalio.Workflows;
+using TemporalCommunity.DurableObjects.Polyfills;
 
 namespace TemporalCommunity.DurableObjects;
 
@@ -77,8 +78,8 @@ public static class DurableObjectWorkerExtensions
         Assembly assembly,
         DurableObjectWorkerOptions? options = null)
     {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(assembly);
+        Throw.IfNull(builder, nameof(builder));
+        Throw.IfNull(assembly, nameof(assembly));
 
         return builder.ConfigureOptions(workerOptions =>
             ConfigureDurableObjectWorkflows(workerOptions, assembly, options));
@@ -107,8 +108,8 @@ public static class DurableObjectWorkerExtensions
         Assembly assembly,
         DurableObjectWorkerOptions? options = null)
     {
-        ArgumentNullException.ThrowIfNull(workerOptions);
-        ArgumentNullException.ThrowIfNull(assembly);
+        Throw.IfNull(workerOptions, nameof(workerOptions));
+        Throw.IfNull(assembly, nameof(assembly));
 
         ConfigureDurableObjectWorkflows(workerOptions, assembly, options);
         return workerOptions;
