@@ -69,10 +69,9 @@ public class DurableObjectCallActivity(IDurableObjectFactory factory)
 [WorkflowUpdate]
 public async Task SyncCountAsync(string remoteId)
 {
-    _count = await Workflow.ExecuteActivityAsync(
+    _count = await ExecuteActivityAsync(
         (DurableObjectCallActivity a) => a.GetRemoteCountAsync(remoteId),
-        new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) })
-        .ConfigureAwait(true);
+        new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) });
 }
 ```
 
@@ -112,7 +111,7 @@ headers if needed.
 
 | Approach | Description | Trade-offs |
 |----------|-------------|------------|
-| Activity-mediated | `Workflow.ExecuteActivityAsync` calls the target via `IDurableObjectFactory`. Ships as a convenience helper wrapping the pattern above. | Existing, proven. Adds one activity round-trip per call. No cross-namespace. |
+| Activity-mediated | `DurableObjectBase.ExecuteActivityAsync` calls the target via `IDurableObjectFactory`. | Existing, proven. Adds one activity round-trip per call. No cross-namespace. |
 | Child workflows | The calling object spawns a child workflow whose sole purpose is delivering an update to the target. | More workflow overhead. Handles long-lived calls naturally. |
 | Nexus | A Nexus operation handler dispatches the call as a typed RPC. Cross-namespace capable. | Requires Nexus API stabilization in the .NET SDK and server. Most future-proof. |
 

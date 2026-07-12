@@ -193,7 +193,7 @@ internal class DurableObjectProxy<T> : DispatchProxy
                 throw new InvalidOperationException(
                     $"Method '{method.Name}' on '{interfaceType.Name}' carries [WorkflowSignal]. " +
                     "Signals are not supported on DurableObjects in v1. Use [WorkflowUpdate] instead. " +
-                    "See docs/adr/005-signals-banned.md for rationale.");
+                    "See adr/005-signals-banned.md for rationale.");
             }
 
             var returnsTask = method.ReturnType == typeof(Task);

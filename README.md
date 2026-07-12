@@ -6,7 +6,7 @@ Write stateful, durable actors backed by Temporal workflows — without managing
 > **Requires Temporal Server v1.28.0 or later** (Update-with-Start GA).
 > **Targets .NET 10.0, .NET 8.0, and .NET Standard 2.1.** .NET 8+ receives the full feature set;
 > the .NET Standard fallback does not support `ListDurableObjectsAsync`.
-> **NativeAOT is not supported in v1** — see [ADR 002](docs/adr/002-dispatchproxy-not-sourcegen.md).
+> **NativeAOT is not supported in v1** — see [ADR 002](adr/002-dispatchproxy-not-sourcegen.md).
 
 ## Installation
 
@@ -63,11 +63,10 @@ Extend `DurableObjectBase` and implement your interface. The one mandatory boile
 `[WorkflowRun]` from the base class, so every concrete DurableObject must declare it.
 See [BOILERPLATE.md](docs/BOILERPLATE.md) for the full explanation.
 The `[WorkflowUpdateValidator]` runs before the handler body;
-`Workflow.ExecuteActivityAsync` is how workflow code triggers external I/O.
+`DurableObjectBase.ExecuteActivityAsync` is how workflow code triggers external I/O.
 
 ```csharp
 #pragma warning disable CA1822 // Workflow methods must be instance methods
-#pragma warning disable CA2007 // ConfigureAwait — workflow code must use ConfigureAwait(true)
 using Temporalio.Workflows;
 using TemporalCommunity.DurableObjects;
 
@@ -94,14 +93,12 @@ public sealed class Counter : DurableObjectBase, ICounter
     {
         _count += amount;
 
-        // External I/O belongs in activities.
-        // StartToCloseTimeout is required. ConfigureAwait(true) keeps execution on
-        // the workflow scheduler — never use ConfigureAwait(false) in workflow code.
-        await Workflow.ExecuteActivityAsync(
+        // External I/O belongs in activities. DurableObjectBase keeps the call in the
+        // workflow context; do not use ConfigureAwait(false) in workflow code.
+        await ExecuteActivityAsync(
             (CounterActivities act) =>
-                act.RecordIncrementAsync(Workflow.Info.WorkflowId, amount, _count),
-            new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(10) })
-            .ConfigureAwait(true);
+                act.RecordIncrementAsync(WorkflowId, amount, _count),
+            new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(10) });
     }
 
     [WorkflowQuery]
@@ -258,13 +255,13 @@ or other SDK primitives not exposed by the DurableObject API surface.
 All methods on a DurableObject interface must be `[WorkflowUpdate]` or `[WorkflowQuery]`.
 `[WorkflowSignal]` is banned in v1, including on framework-provided methods. Signals bypass
 the authorization hook, give callers no confirmation, and offer no rollback on partial state
-mutation. See [ADR 005](docs/adr/005-signals-banned.md).
+mutation. See [ADR 005](adr/005-signals-banned.md).
 
 ### NativeAOT limitation
 
 `DispatchProxy` (used internally for the typed proxy) uses `Reflection.Emit`. NativeAOT strips
 this at publish time. Publishing a DurableObject worker with `PublishAot=true` will fail at
-runtime. A source-generator-based proxy is planned for v1.1. See [ADR 002](docs/adr/002-dispatchproxy-not-sourcegen.md).
+runtime. A source-generator-based proxy is planned for v1.1. See [ADR 002](adr/002-dispatchproxy-not-sourcegen.md).
 
 ---
 
@@ -320,7 +317,7 @@ patterns, and reminder idempotency — see [FAILURE_HANDLING.md](docs/FAILURE_HA
 ## Versioning
 
 Long-lived DurableObjects accumulate workflow history. Changes to handler names, signatures, and
-ContinueAsNew constructor schemas require care. See [ADR 004](docs/adr/004-versioning-strategy.md)
+ContinueAsNew constructor schemas require care. See [ADR 004](adr/004-versioning-strategy.md)
 for the full versioning strategy: what is safe, what requires `Workflow.Patched`, and how to
 deploy new versions safely.
 
@@ -348,14 +345,14 @@ Execute it from inside an update handler:
 [WorkflowUpdate]
 public async Task SyncFromRemoteAsync(string remoteId)
 {
-    _count = await Workflow.ExecuteActivityAsync(
+    _count = await ExecuteActivityAsync(
         (CallCounterActivity a) => a.GetRemoteCountAsync(remoteId),
         new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) });
 }
 ```
 
 Three candidate designs (Activity-mediated, child workflows, Nexus) are under evaluation for
-v1.1. See [ADR 003](docs/adr/003-do-to-do-messaging-deferred.md).
+v1.1. See [ADR 003](adr/003-do-to-do-messaging-deferred.md).
 
 ---
 
@@ -407,7 +404,7 @@ Run `just` with no arguments to list all available recipes.
 - [Failure handling](docs/FAILURE_HANDLING.md) — exception taxonomy, authorization, and reminder idempotency.
 - [Tier model](docs/TIER_MODEL.md) — lifecycle tiers and ContinueAsNew behavior.
 - [Troubleshooting](docs/TROUBLESHOOTING.md) — common mistakes and how to fix them.
-- [ADRs](docs/adr/) — architectural decisions and design rationale.
+- [ADRs](adr/) — maintainer-facing architectural decisions and design rationale.
 
 ---
 
@@ -418,7 +415,7 @@ Run `just` with no arguments to list all available recipes.
 3. Run `just ci` before opening a PR — this is what CI runs.
 4. For integration tests: `just test-integration` (no external Temporal server needed; it uses
    `WorkflowEnvironment.StartLocalAsync()`).
-5. Add an ADR in `docs/adr/` for any architectural decision, API surface change, or significant
+5. Add an ADR in `adr/` for any architectural decision, API surface change, or significant
    constraint. Follow the format in the existing ADRs.
 
 ---

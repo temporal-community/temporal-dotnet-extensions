@@ -87,7 +87,7 @@ hooks (`OnActivateAsync`, `OnTimerAsync`, `OnBeforeContinueAsNewAsync`, `OnDeact
 [WorkflowUpdate]
 public async Task IncrementAsync()
 {
-    var result = await Workflow.ExecuteActivityAsync(
+    var result = await ExecuteActivityAsync(
         (MyActivity a) => a.SomeWorkAsync(),
         new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) })
         .ConfigureAwait(false); // off-scheduler continuation
@@ -95,14 +95,14 @@ public async Task IncrementAsync()
     _count += result;
 }
 
-// Right — ConfigureAwait(true) keeps continuation on the workflow scheduler
+// Right — a bare await captures the workflow scheduler. DurableObjectBase provides the
+// preferred activity helper, so application code does not need to access Workflow directly.
 [WorkflowUpdate]
 public async Task IncrementAsync()
 {
-    var result = await Workflow.ExecuteActivityAsync(
+    var result = await ExecuteActivityAsync(
         (MyActivity a) => a.SomeWorkAsync(),
-        new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) })
-        .ConfigureAwait(true); // load-bearing
+        new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) });
 
     _count += result;
 }
@@ -318,10 +318,10 @@ Do not publish DurableObject workers with `PublishAot=true` in v1. Remove or set
 </PropertyGroup>
 ```
 
-A source-generator-based proxy that eliminates this limitation is planned for v1.1 as a separate
-package (`TemporalCommunity.DurableObjects.Generator`).
+A source-generator-based proxy that eliminates this limitation is planned as part of the separate
+`TemporalCommunity.DurableObjects.Analyzers` package.
 
-**See also:** [`docs/adr/002-dispatchproxy-not-sourcegen.md`](adr/002-dispatchproxy-not-sourcegen.md)
+**See also:** [`adr/002-dispatchproxy-not-sourcegen.md`](../adr/002-dispatchproxy-not-sourcegen.md)
 
 ---
 

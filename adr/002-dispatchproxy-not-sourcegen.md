@@ -30,8 +30,8 @@ no `MethodInfo`, no runtime code generation.
 
 ## Decision
 
-Use `DispatchProxy` for v1. The source generator is deferred to v1.1 as a separate package
-(`TemporalCommunity.DurableObjects.Generator`).
+Use `DispatchProxy` for v1. Source generation is deferred to a separate analyzer and generator
+package (`TemporalCommunity.DurableObjects.Analyzers`).
 
 ---
 
@@ -102,8 +102,8 @@ Three reasons — none of them performance:
 
 - **NativeAOT is not supported in v1.** This is documented prominently in the README and
   NuGet package description. Callers using `PublishAot=true` must wait for v1.1.
-- v1.1 scope: `TemporalCommunity.DurableObjects.Generator` — an incremental Roslyn source
-  generator that emits a typed proxy class per DurableObject interface. It will include parity
+- Future scope: `TemporalCommunity.DurableObjects.Analyzers` — DurableObjects-specific analyzers,
+  code fixes, and an incremental generator that emits a typed proxy class per interface. It will include parity
   tests asserting behavioral equivalence with the `DispatchProxy` implementation, and an AOT
   validation step in CI.
 - The transition from `DispatchProxy` to generated proxies is internal to the library.

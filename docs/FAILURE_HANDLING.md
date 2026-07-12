@@ -218,7 +218,7 @@ resolve). This is why `DeactivateAsync` sets the flag and returns rather than dr
 
 ## Versioning Quick Reference
 
-See [ADR 004](adr/004-versioning-strategy.md) for the full versioning strategy.
+See [ADR 004](../adr/004-versioning-strategy.md) for the full versioning strategy.
 
 | Change | Safe without patching? |
 |--------|----------------------|

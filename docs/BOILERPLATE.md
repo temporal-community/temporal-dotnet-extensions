@@ -197,17 +197,18 @@ history in ways that are difficult to recover from.
 `TaskScheduler.Current`, which inside a workflow is `WorkflowInstance`. The continuation queues
 back onto the same scheduler and runs deterministically.
 
-**Use `ConfigureAwait(true)` on every `await` in workflow code** — update handlers, query
-handlers, and lifecycle hooks. This is not a stylistic choice; it is required for correctness.
+**Use a bare `await` or `ConfigureAwait(true)` on every await in workflow code** — update
+handlers, query handlers, and lifecycle hooks. This is not a stylistic choice; it is required
+for correctness. `DurableObjectBase.ExecuteActivityAsync` is the preferred activity helper: it
+keeps the Temporal call out of application code while preserving the normal bare-`await` pattern.
 
 ```csharp
 [WorkflowUpdate]
 public async Task IncrementAsync()
 {
-    var result = await Workflow.ExecuteActivityAsync(
+    var result = await ExecuteActivityAsync(
         (MyActivity a) => a.SomeWorkAsync(),
-        new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) })
-        .ConfigureAwait(true); // load-bearing
+        new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) });
 
     _count += result;
 }

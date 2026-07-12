@@ -25,7 +25,7 @@ Work through this sequence top to bottom. Each step introduces one concept; none
    your environment works before reading further.
 3. **[`docs/BOILERPLATE.md`](BOILERPLATE.md) — Required patterns** — Four patterns every DurableObject must follow:
    `[WorkflowRun]` on every class, the `DeactivateAsync` override rule, the difference between
-   `AddDurableObjects` and `AddDurableObjectWorkflows`, and why `ConfigureAwait(true)` is not
+   `AddDurableObjects` and `AddDurableObjectWorkflows`, and why `ConfigureAwait(false)` is not
    optional. Read this once before writing your first real object.
 4. **[`samples/02-input-validation`](../samples/02-input-validation/)** — Error handling and validators. Shows how to use
    `[WorkflowUpdateValidator]`, what `DurableObjectNotFoundException` and
@@ -57,11 +57,11 @@ Before deploying a DurableObject with live state you care about, read these in f
 1. **[`docs/FAILURE_HANDLING.md`](FAILURE_HANDLING.md) (full read)** — All sections: lifecycle hook failure taxonomy,
    authorization predicate + framework updates, reminder at-least-once delivery and idempotency,
    and the deactivation drain protocol.
-2. **[`docs/adr/004-versioning-strategy.md`](adr/004-versioning-strategy.md)** — How to evolve objects safely. What changes are safe
+2. **[`adr/004-versioning-strategy.md`](../adr/004-versioning-strategy.md)** — How to evolve objects safely. What changes are safe
    with no action (adding a query, internal logic changes), what requires `Workflow.Patched` (adding
    or renaming an update handler), and what is forbidden without a migration plan. Use
    `WorkflowReplayer` before each release.
-3. **[`docs/adr/005-signals-banned.md`](adr/005-signals-banned.md)** — Why `[WorkflowSignal]` does not exist in this library.
+3. **[`adr/005-signals-banned.md`](../adr/005-signals-banned.md)** — Why `[WorkflowSignal]` does not exist in this library.
    Three independent reasons: signals bypass the authorization hook, give callers no confirmation,
    and offer no rollback on partial state mutation. `DeactivateAsync` is `[WorkflowUpdate]` by
    design.
@@ -71,14 +71,14 @@ Before deploying a DurableObject with live state you care about, read these in f
 The ADRs document why the library is built the way it is. Read them in order for the full
 architectural picture; read individual ones when a constraint surprises you.
 
-- **[`docs/adr/001-net10-only.md`](adr/001-net10-only.md)** — Why the library ships `net10.0;net8.0;netstandard2.1`, what polyfills made it feasible, and the one method unavailable on .NET Standard.
-- **[`docs/adr/002-dispatchproxy-not-sourcegen.md`](adr/002-dispatchproxy-not-sourcegen.md)** — Why `DispatchProxy` is used for the typed
+- **[`adr/001-net10-only.md`](../adr/001-net10-only.md)** — Why the library ships `net10.0;net8.0;netstandard2.1`, what polyfills made it feasible, and the one method unavailable on .NET Standard.
+- **[`adr/002-dispatchproxy-not-sourcegen.md`](../adr/002-dispatchproxy-not-sourcegen.md)** — Why `DispatchProxy` is used for the typed
   proxy and why NativeAOT is not supported. The source generator is planned for v1.1.
-- **[`docs/adr/003-do-to-do-messaging-deferred.md`](adr/003-do-to-do-messaging-deferred.md)** — Why object-to-object messaging is not in v1
+- **[`adr/003-do-to-do-messaging-deferred.md`](../adr/003-do-to-do-messaging-deferred.md)** — Why object-to-object messaging is not in v1
   and the three candidate designs under evaluation for v1.1 (Activity-mediated, child workflows,
   Nexus).
-- **[`docs/adr/004-versioning-strategy.md`](adr/004-versioning-strategy.md)** — Versioning strategy for long-lived objects.
-- **[`docs/adr/005-signals-banned.md`](adr/005-signals-banned.md)** — Why signals are banned.
+- **[`adr/004-versioning-strategy.md`](../adr/004-versioning-strategy.md)** — Versioning strategy for long-lived objects.
+- **[`adr/005-signals-banned.md`](../adr/005-signals-banned.md)** — Why signals are banned.
 
 ---
 
@@ -92,11 +92,11 @@ One-line description of every doc in this repository.
 | [`docs/BOILERPLATE.md`](BOILERPLATE.md) | The four required patterns every DurableObject class must follow, with explanations of why each exists and the common mistakes. |
 | [`docs/FAILURE_HANDLING.md`](FAILURE_HANDLING.md) | Complete failure taxonomy: client-side exception mapping, update handler and lifecycle hook exception behavior, authorization predicates, reminder idempotency, and deactivation drain protocol. |
 | [`docs/TIER_MODEL.md`](TIER_MODEL.md) | Lifecycle tiers (Resident, Explicit Deactivation, Cold Passivation), when each is used, and why Tier 2 is absent in v1. |
-| [`docs/adr/001-net10-only.md`](adr/001-net10-only.md) | Why the library ships `net10.0;net8.0;netstandard2.1`, what polyfills make it feasible, and the one method unavailable on .NET Standard. |
-| [`docs/adr/002-dispatchproxy-not-sourcegen.md`](adr/002-dispatchproxy-not-sourcegen.md) | Why `DispatchProxy` is used (not a source generator) and what this means for NativeAOT. |
-| [`docs/adr/003-do-to-do-messaging-deferred.md`](adr/003-do-to-do-messaging-deferred.md) | Why DurableObject-to-DurableObject messaging is not in v1 and the v1 Activity-mediated workaround. |
-| [`docs/adr/004-versioning-strategy.md`](adr/004-versioning-strategy.md) | Safe vs. breaking changes for long-lived objects, `Workflow.Patched`, worker deployment strategy, and replay tests. |
-| [`docs/adr/005-signals-banned.md`](adr/005-signals-banned.md) | Why `[WorkflowSignal]` is banned and the three conditions required to reconsider it in v1.1. |
+| [`adr/001-net10-only.md`](../adr/001-net10-only.md) | Why the library ships `net10.0;net8.0;netstandard2.1`, what polyfills make it feasible, and the one method unavailable on .NET Standard. |
+| [`adr/002-dispatchproxy-not-sourcegen.md`](../adr/002-dispatchproxy-not-sourcegen.md) | Why `DispatchProxy` is used (not a source generator) and what this means for NativeAOT. |
+| [`adr/003-do-to-do-messaging-deferred.md`](../adr/003-do-to-do-messaging-deferred.md) | Why DurableObject-to-DurableObject messaging is not in v1 and the v1 Activity-mediated workaround. |
+| [`adr/004-versioning-strategy.md`](../adr/004-versioning-strategy.md) | Safe vs. breaking changes for long-lived objects, `Workflow.Patched`, worker deployment strategy, and replay tests. |
+| [`adr/005-signals-banned.md`](../adr/005-signals-banned.md) | Why `[WorkflowSignal]` is banned and the three conditions required to reconsider it in v1.1. |
 | [`docs/TROUBLESHOOTING.md`](TROUBLESHOOTING.md) | Common mistakes and how to fix them: silent startup failures, non-determinism errors, object-not-found errors, scheduled objects that never deactivate, and more. |
 | [`samples/README.md`](../samples/README.md) | Index of all six samples, suggested reading order, and common prerequisites. |
 | [`samples/01-getting-started/`](../samples/01-getting-started/) | Core programming model: proxy, factory, lifecycle hooks, activity from an update handler. |
