@@ -1,9 +1,9 @@
 # Plan 001: Product Positioning
 
-Status: In Progress
+Status: Complete
 Depends on: None
 GitHub issue: [#2](https://github.com/temporal-community/durable-objects-dotnet/issues/2)
-Completed by: —
+Completed by: [6cf07ce](https://github.com/temporal-community/durable-objects-dotnet/commit/6cf07ce)
 
 ## Outcome
 
