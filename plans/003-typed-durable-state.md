@@ -1,9 +1,9 @@
 # Plan 003: Strongly Typed Durable State
 
-Status: In Progress
+Status: Complete
 Depends on: Plan 002
 GitHub issue: [#4](https://github.com/temporal-community/durable-objects-dotnet/issues/4)
-Completed by: —
+Completed by: [e28fd5a](https://github.com/temporal-community/durable-objects-dotnet/commit/e28fd5a)
 
 ## Outcome
 

@@ -39,7 +39,7 @@ clarify their constraints.
 |---|---|---|---|---|
 | Product positioning | [001](001-product-positioning.md) | [#2](https://github.com/temporal-community/durable-objects-dotnet/issues/2) | Complete | [6cf07ce](https://github.com/temporal-community/durable-objects-dotnet/commit/6cf07ce) |
 | Correctness guarantees | [002](002-correctness-guarantees.md) | [#3](https://github.com/temporal-community/durable-objects-dotnet/issues/3) | Complete | [6cf07ce](https://github.com/temporal-community/durable-objects-dotnet/commit/6cf07ce) |
-| Strongly typed durable state | [003](003-typed-durable-state.md) | [#4](https://github.com/temporal-community/durable-objects-dotnet/issues/4) | In Progress | — |
+| Strongly typed durable state | [003](003-typed-durable-state.md) | [#4](https://github.com/temporal-community/durable-objects-dotnet/issues/4) | Complete | [e28fd5a](https://github.com/temporal-community/durable-objects-dotnet/commit/e28fd5a) |
 | Temporal analyzer platform | [004](004-temporal-analyzer-platform.md) | [#5](https://github.com/temporal-community/durable-objects-dotnet/issues/5) | Proposed | — |
 | Generated asynchronous clients | Not yet planned | — | Deferred | — |
 | Call context and cancellation | Not yet planned | — | Deferred | — |
