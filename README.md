@@ -23,6 +23,7 @@ Five steps from zero to a working DurableObject. No raw Temporal concepts in cal
 Every DurableObject starts with an interface extending `IDurableObject`. Decorate it with
 `[Workflow]` (the Temporal SDK uses this to derive the workflow type name). Updates are
 fire-and-confirm (`[WorkflowUpdate]`); queries are synchronous reads (`[WorkflowQuery]`).
+Updates can include input validation and activity calls.
 
 ```csharp
 using Temporalio.Workflows;
@@ -31,8 +32,27 @@ using TemporalCommunity.DurableObjects;
 [Workflow]
 public interface ICounter : IDurableObject
 {
-    [WorkflowUpdate] Task IncrementAsync();
+    /// <summary>Adds <paramref name="amount"/> to the count. Must be positive.</summary>
+    [WorkflowUpdate] Task IncrementAsync(int amount);
     [WorkflowQuery]  int  GetCount();
+}
+```
+
+```csharp
+using Temporalio.Activities;
+
+public sealed class CounterActivities
+{
+    /// <summary>
+    /// Records an increment. In production: write to a database, emit a metric, publish an event.
+    /// Activities run outside the workflow — they can do real I/O.
+    /// </summary>
+    [Activity]
+    public Task RecordIncrementAsync(string counterId, int amount, int newTotal)
+    {
+        Console.WriteLine($"[audit] {counterId}: +{amount} → total {newTotal}");
+        return Task.CompletedTask;
+    }
 }
 ```
 
@@ -42,21 +62,46 @@ Extend `DurableObjectBase` and implement your interface. The one mandatory boile
 `[WorkflowRun] public Task RunAsync() => DurableObjectRunAsync();` — the SDK does not inherit
 `[WorkflowRun]` from the base class, so every concrete DurableObject must declare it.
 See [BOILERPLATE.md](docs/BOILERPLATE.md) for the full explanation.
+The `[WorkflowUpdateValidator]` runs before the handler body;
+`Workflow.ExecuteActivityAsync` is how workflow code triggers external I/O.
 
 ```csharp
+#pragma warning disable CA1822 // Workflow methods must be instance methods
+#pragma warning disable CA2007 // ConfigureAwait — workflow code must use ConfigureAwait(true)
+using Temporalio.Workflows;
+using TemporalCommunity.DurableObjects;
+
 [Workflow]
-public class Counter : DurableObjectBase, ICounter
+public sealed class Counter : DurableObjectBase, ICounter
 {
     private int _count;
 
-    // Required boilerplate — see docs/BOILERPLATE.md
-    [WorkflowRun] public Task RunAsync() => DurableObjectRunAsync();
+    // Required on every concrete DurableObject — Temporal does not inherit [WorkflowRun].
+    [WorkflowRun]
+    public Task RunAsync() => DurableObjectRunAsync();
+
+    // Validator: runs synchronously BEFORE IncrementAsync.
+    // Throw here to reject the update before the handler body executes.
+    [WorkflowUpdateValidator(nameof(IncrementAsync))]
+    public void ValidateIncrementAsync(int amount)
+    {
+        if (amount <= 0)
+            throw new ArgumentOutOfRangeException(nameof(amount), "Amount must be positive.");
+    }
 
     [WorkflowUpdate]
-    public Task IncrementAsync()
+    public async Task IncrementAsync(int amount)
     {
-        _count++;
-        return Task.CompletedTask;
+        _count += amount;
+
+        // External I/O belongs in activities.
+        // StartToCloseTimeout is required. ConfigureAwait(true) keeps execution on
+        // the workflow scheduler — never use ConfigureAwait(false) in workflow code.
+        await Workflow.ExecuteActivityAsync(
+            (CounterActivities act) =>
+                act.RecordIncrementAsync(Workflow.Info.WorkflowId, amount, _count),
+            new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(10) })
+            .ConfigureAwait(true);
     }
 
     [WorkflowQuery]
@@ -77,10 +122,14 @@ services.AddTemporalClient(opts => opts.TargetHost = "localhost:7233");
 // Client-side: registers IDurableObjectFactory with DefaultTaskQueue = "my-task-queue"
 services.AddDurableObjects("my-task-queue");
 
-// Worker-side: scans the assembly, registers DurableObject workflow types
+// Worker-side: scans the assembly, registers DurableObject workflow types and activities
 services.AddHostedTemporalWorker("my-task-queue")
-        .AddDurableObjectWorkflows(typeof(Counter).Assembly);
+        .AddDurableObjectWorkflows(typeof(Counter).Assembly)
+        .AddSingletonActivities<CounterActivities>();
 ```
+
+Without `AddSingletonActivities`, no worker can pick up the activity; the update eventually
+fails according to its activity timeout and retry policy.
 
 ### Step 4: Call it
 
@@ -88,17 +137,35 @@ Inject `IDurableObjectFactory`, get a typed proxy, and call methods. No task que
 ID management, no SDK ceremony.
 
 ```csharp
+using Temporalio.Exceptions;
+
 public class MyService(IDurableObjectFactory factory)
 {
     public async Task RunAsync()
     {
-        ICounter counter = factory.Get<ICounter>("my-counter");
+        // GetOrCreateAsync starts the object if it doesn't exist, then returns a typed proxy.
+        ICounter counter = await factory.GetOrCreateAsync<ICounter>("my-counter");
 
-        await counter.IncrementAsync();   // starts the object if not running; delivers the update
-        int count = counter.GetCount();   // 1
+        await counter.IncrementAsync(5);  // validator passes; activity records the increment
+        int count = counter.GetCount();   // 5
+
+        try
+        {
+            await counter.IncrementAsync(-1);
+        }
+        catch (WorkflowUpdateFailedException)
+        {
+            // Expected: the validator rejects this before the handler body runs.
+        }
+
+        count = counter.GetCount(); // still 5; the object remains alive
     }
 }
 ```
+
+`WorkflowUpdateFailedException` is thrown on the caller side; the object remains alive. Inspect
+`ApplicationFailureException.ErrorType` in the chain. See [FAILURE_HANDLING.md](docs/FAILURE_HANDLING.md)
+for the full taxonomy.
 
 ### Step 5: Verify
 
