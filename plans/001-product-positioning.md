@@ -1,6 +1,6 @@
 # Plan 001: Product Positioning
 
-Status: Proposed
+Status: In Progress
 Depends on: None
 GitHub issue: [#2](https://github.com/temporal-community/durable-objects-dotnet/issues/2)
 Completed by: —
@@ -23,10 +23,10 @@ for process-oriented orchestration.
 
 ## Implementation
 
-- [ ] Inventory current claims in the README, guides, samples, and package metadata.
-- [ ] Rewrite the top-level value proposition and decision guidance.
-- [ ] Correct or remove claims not supported by implementation or tests.
-- [ ] Check links and terminology across user-facing material.
+- [x] Inventory current claims in the README, guides, samples, and package metadata.
+- [x] Rewrite the top-level value proposition and decision guidance.
+- [x] Correct or remove claims not supported by implementation or tests.
+- [x] Check links and terminology across user-facing material.
 
 ## Tests
 

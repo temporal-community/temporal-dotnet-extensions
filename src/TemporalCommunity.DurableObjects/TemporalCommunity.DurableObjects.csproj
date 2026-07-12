@@ -10,7 +10,7 @@
     <PackageTags>temporal;workflow;durable;actors;grains;stateful;distributed</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
-    <Description>An object-based programming model built on top of the Temporal .NET SDK. Requires Temporal Server v1.28.0 or later.</Description>
+    <Description>An opinionated durable-actor model for Temporal .NET with atomic activation, serialized updates, safe update failures, and managed lifecycle behavior. Requires Temporal Server v1.28.0 or later.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <!-- MinVer owns Version — do NOT set <Version> here -->
   </PropertyGroup>

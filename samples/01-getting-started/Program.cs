@@ -75,8 +75,8 @@ internal sealed class DemoService : BackgroundService
             var proxy = _factory.Get<IPageCounter>("home");
             Console.WriteLine($"Got proxy for object id 'home' (no RPC yet).");
 
-            // Step 2: Ensure the object exists. GetOrCreateAsync issues an update-with-start
-            // RPC that atomically creates the execution if it does not exist.
+            // Step 2: Ensure the object exists. GetOrCreateAsync atomically starts the
+            // execution if it is not already running, then returns a proxy.
             var counter = await _factory.GetOrCreateAsync<IPageCounter>("home", stoppingToken)
                 .ConfigureAwait(false);
             Console.WriteLine($"Ensured 'home' counter exists.");

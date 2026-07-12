@@ -1,4 +1,3 @@
-using Temporalio.Client;
 using Temporalio.Worker;
 using TemporalCommunity.DurableObjects;
 using TemporalCommunity.DurableObjects.IntegrationTests.Infrastructure;
@@ -27,20 +26,32 @@ public sealed class ScenarioD_DurabilityWorkerFailure : DurableObjectTestBase
         var worker1 = BuildWorker(tq);
         var run1 = worker1.ExecuteAsync(cts1.Token);
 
-        // Cold-start the workflow.
-        var handle = await Client.StartWorkflowAsync(
-            "AuditedCounter",
-            Array.Empty<object?>(),
-            new WorkflowOptions(id: id, taskQueue: tq)
-            {
-                IdConflictPolicy = Temporalio.Api.Enums.V1.WorkflowIdConflictPolicy.UseExisting,
-            });
+        var counter = TestFactory.Create(Client, tq).Get<IAuditedCounter>(id);
 
-        // Start the slow update (increment + 4s durable timer) and wait for acceptance only.
-        var updateHandle = await handle.StartUpdateAsync<int>(
-            "IncrementSlowly",
-            [7],
-            new WorkflowUpdateStartOptions(WorkflowUpdateStage.Accepted));
+        // Enter through the DurableObjects public API. The update mutates state before parking
+        // on a durable timer, so observing 7 proves worker 1 started the handler.
+        var updateTask = counter.IncrementSlowlyAsync(7);
+        var startedDeadline = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+        var observedCount = 0;
+        while (DateTime.UtcNow < startedDeadline)
+        {
+            try
+            {
+                observedCount = counter.GetCount();
+                if (observedCount == 7)
+                {
+                    break;
+                }
+            }
+            catch (DurableObjectNotFoundException)
+            {
+                // Update-with-start has not made the cold object queryable yet.
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+        }
+
+        Assert.Equal(7, observedCount);
 
         // Kill worker 1 while the timer is still pending.
         await cts1.CancelAsync();
@@ -54,14 +65,14 @@ public sealed class ScenarioD_DurabilityWorkerFailure : DurableObjectTestBase
         try
         {
             // The update should complete via replay on worker 2.
-            var result = await updateHandle.GetResultAsync();
-            var count = await handle.QueryAsync<int>("GetCount", Array.Empty<object?>());
+            var result = await updateTask;
+            var count = counter.GetCount();
 
             Assert.Equal(7, result);
             Assert.Equal(7, count);
 
             // Clean up.
-            await handle.ExecuteUpdateAsync<object?>("Deactivate", Array.Empty<object?>());
+            await counter.DeactivateAsync();
         }
         finally
         {

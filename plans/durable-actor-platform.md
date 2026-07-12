@@ -37,8 +37,8 @@ clarify their constraints.
 
 | Workstream | Plan | GitHub issue | Status | Completed by |
 |---|---|---|---|---|
-| Product positioning | [001](001-product-positioning.md) | [#2](https://github.com/temporal-community/durable-objects-dotnet/issues/2) | Proposed | — |
-| Correctness guarantees | [002](002-correctness-guarantees.md) | [#3](https://github.com/temporal-community/durable-objects-dotnet/issues/3) | Proposed | — |
+| Product positioning | [001](001-product-positioning.md) | [#2](https://github.com/temporal-community/durable-objects-dotnet/issues/2) | In Progress | — |
+| Correctness guarantees | [002](002-correctness-guarantees.md) | [#3](https://github.com/temporal-community/durable-objects-dotnet/issues/3) | In Progress | — |
 | Strongly typed durable state | [003](003-typed-durable-state.md) | [#4](https://github.com/temporal-community/durable-objects-dotnet/issues/4) | Proposed | — |
 | Temporal analyzer platform | [004](004-temporal-analyzer-platform.md) | [#5](https://github.com/temporal-community/durable-objects-dotnet/issues/5) | Proposed | — |
 | Generated asynchronous clients | Not yet planned | — | Deferred | — |

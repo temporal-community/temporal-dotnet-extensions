@@ -48,10 +48,11 @@ public sealed class ScenarioN_WorkerInterceptorInvariants : DurableObjectTestBas
             await obj.IncrementAsync(10); // count = 10
 
             // Unauthorized withdraw — wrong token.
-            var rejected = false;
-            try { await obj.WithdrawAsync(3, "wrong-token"); }
-            catch (WorkflowUpdateFailedException) { rejected = true; }
-            Assert.True(rejected, "Expected unauthorized update to be rejected");
+            var authorizationFailure = await Assert.ThrowsAsync<WorkflowUpdateFailedException>(
+                () => obj.WithdrawAsync(3, "wrong-token"));
+            var authorizationApplicationFailure = Assert.IsType<ApplicationFailureException>(
+                authorizationFailure.InnerException);
+            Assert.Equal("Unauthorized", authorizationApplicationFailure.ErrorType);
 
             var afterBad = obj.GetCount();
             Assert.Equal(10, afterBad); // Rejected update mutated nothing.
@@ -69,12 +70,11 @@ public sealed class ScenarioN_WorkerInterceptorInvariants : DurableObjectTestBas
             Assert.Equal([8, 9], slow);
 
             // --- (d) Exception safety net (test before deactivation so the object stays alive) ---
-            var unhandledRejected = false;
-            WorkflowUpdateFailedException? unhandledEx = null;
-            try { await obj.ThrowingUpdateAsync(); }
-            catch (WorkflowUpdateFailedException ex) { unhandledRejected = true; unhandledEx = ex; }
-
-            Assert.True(unhandledRejected, "Expected unhandled exception to surface as WorkflowUpdateFailedException");
+            var updateFailure = await Assert.ThrowsAsync<WorkflowUpdateFailedException>(
+                obj.ThrowingUpdateAsync);
+            var updateApplicationFailure = Assert.IsType<ApplicationFailureException>(
+                updateFailure.InnerException);
+            Assert.Equal("UnhandledUpdateException", updateApplicationFailure.ErrorType);
             // Object still alive — verify by querying.
             var countAfterThrow = obj.GetCount();
             Assert.Equal(9, countAfterThrow);
@@ -119,10 +119,9 @@ public sealed class ScenarioN_WorkerInterceptorInvariants : DurableObjectTestBas
                 drainRejected = true;
             }
 
-            // Allow slow update and deactivation to complete normally.
-            try { await slowTask; } catch { /* may throw if object deactivated underneath */ }
-            try { await deactivateTask; } catch { /* may already be processed */ }
-
+            // The update accepted before deactivation must finish; deactivation then completes.
+            Assert.Equal(10, await slowTask);
+            await deactivateTask;
             Assert.True(drainRejected, "Expected post-deactivation update to be rejected with ObjectDeactivating");
         }
         finally

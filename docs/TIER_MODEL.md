@@ -8,10 +8,10 @@ deferred — no API surface for it exists in this release.
 ## Tier 1 — Resident (Default)
 
 A Tier 1 object's workflow execution stays open indefinitely. The run loop parks at
-`Workflow.WaitConditionAsync` between activations, consuming no server resources when idle.
-Temporal's sticky-cache eviction handles periods of inactivity transparently — the worker keeps
-a cached copy of the workflow's state in memory; if the worker restarts, the execution resumes
-from the event history on the next activation.
+`Workflow.WaitConditionAsync` between activations, consuming no worker compute while idle.
+The open execution and its history still exist in Temporal. Temporal's sticky-cache eviction
+handles periods of inactivity transparently: the worker may retain a cached workflow instance,
+or reconstruct it from event history when work arrives after eviction or restart.
 
 **There is no idle ContinueAsNew and no idle passivation in v1.** An idle Tier 1 object simply
 waits. History compaction (ContinueAsNew) is triggered only by the `MaxHistoryLength` threshold
@@ -21,16 +21,15 @@ is true.
 > **Tuning `MaxHistoryLength`:** The default of 10,000 events matches the Temporal SDK default
 > and is appropriate for most objects. For objects with very high update frequency (hundreds of
 > updates per minute), consider reducing `MaxHistoryLength` to compact history more aggressively
-> and keep individual executions shorter. Pass the value via the `DurableObjectBase` constructor
-> parameter (forwarded to `WorkflowRunOptions`) or set it in your workflow options at worker
-> registration time. Lowering this value increases the frequency of ContinueAsNew transitions,
-> which have a small latency cost but reduce per-execution memory on the worker.
+> and keep individual executions shorter. Pass a `DurableObjectOptions` value to the
+> `DurableObjectBase` constructor. Lowering this value increases the frequency of ContinueAsNew
+> transitions, which have a small latency cost but reduce the history replayed per execution.
 
 **This is the default.** Every DurableObject that does not call `Deactivate()` or
 `DeactivateAsync()` is Tier 1.
 
-**Use Tier 1 when:** the object accumulates state over time and you want it always accessible
-at its stable ID — counters, accounts, player sessions, shopping carts, document state machines.
+**Use Tier 1 when:** the object accumulates state over time and should be addressable at a stable
+ID — counters, accounts, player sessions, shopping carts, document state machines.
 
 ---
 

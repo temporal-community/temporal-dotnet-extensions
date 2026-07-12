@@ -382,9 +382,10 @@ public abstract class DurableObjectBase : IDurableObject
     /// <para>
     /// <b>Tier 1 (resident) behavior:</b> Objects stay open indefinitely. When no timers are
     /// scheduled and no updates are arriving, the run loop parks at
-    /// <c>Workflow.WaitConditionAsync</c> consuming no server resources. Temporal's sticky-cache
-    /// eviction handles idleness transparently — there is no idle-triggered CAN or passivation
-    /// in v1 (Tier 2 is excluded from this release).
+    /// <c>Workflow.WaitConditionAsync</c> consuming no worker compute while idle. The open
+    /// execution and its history remain in Temporal. Sticky-cache eviction handles idleness
+    /// transparently — there is no idle-triggered CAN or passivation in v1 (Tier 2 is excluded
+    /// from this release).
     /// </para>
     /// <para>
     /// <b>ContinueAsNew flow:</b> When <see cref="ShouldContinueAsNew"/> returns <c>true</c>,

@@ -1,6 +1,6 @@
 # Plan 002: Correctness Guarantees
 
-Status: Proposed
+Status: In Progress
 Depends on: Plan 001 for final terminology
 GitHub issue: [#3](https://github.com/temporal-community/durable-objects-dotnet/issues/3)
 Completed by: —
@@ -24,13 +24,24 @@ Organize integration coverage around these guarantees:
 Reuse or rename existing scenarios where they already prove the behavior. Add a test only when a
 guarantee is currently unproven.
 
+## Guarantee coverage
+
+| Guarantee | Integration coverage |
+|---|---|
+| Concurrent cold updates create one canonical execution | `ScenarioC_ConcurrencySingleActivation` |
+| Updates serialize across awaits by default | `ScenarioN_WorkerInterceptorInvariants` |
+| An unexpected update failure does not wedge the object | `ScenarioN_WorkerInterceptorInvariants` |
+| Deactivation finishes accepted updates and rejects later updates | `ScenarioN_WorkerInterceptorInvariants` |
+| Explicit state survives worker restart and Continue-as-New | `ScenarioD_DurabilityWorkerFailure` and `ScenarioB_ContinueAsNewStateSurvival` |
+| Authorization rejection prevents handler execution | `ScenarioN_WorkerInterceptorInvariants` |
+
 ## Implementation
 
-- [ ] Map existing integration scenarios to the guarantees above.
-- [ ] Identify missing behavioral boundaries and redundant coverage.
-- [ ] Rename or document unclear scenarios without rewriting valid tests.
-- [ ] Add the minimum missing black-box tests.
-- [ ] Ensure failures report the violated guarantee clearly.
+- [x] Map existing integration scenarios to the guarantees above.
+- [x] Identify missing behavioral boundaries and redundant coverage.
+- [x] Rename or document unclear scenarios without rewriting valid tests.
+- [x] Add the minimum missing black-box tests.
+- [x] Ensure failures report the violated guarantee clearly.
 
 ## Tests
 

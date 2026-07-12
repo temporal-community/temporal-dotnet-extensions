@@ -1,7 +1,15 @@
 # TemporalCommunity.DurableObjects
 
-An object-based programming model built on top of the [Temporal .NET SDK](https://github.com/temporalio/sdk-dotnet).
-Write stateful, durable actors backed by Temporal workflows — without managing workflow plumbing directly.
+An opinionated durable-actor programming model built on the
+[Temporal .NET SDK](https://github.com/temporalio/sdk-dotnet). It gives entity-style workflows
+safe defaults for atomic activation, serialized updates, contained update failures, and managed
+lifecycle behavior. Temporal supplies the durable execution and replay model; this library adds
+the actor conventions and guardrails.
+
+Use DurableObjects for long-lived entities addressed by stable ID, such as accounts, carts,
+devices, sessions, and counters. Use a plain Temporal workflow for a process with a defined start
+and end, orchestration-heavy control flow, child workflows, signals, or direct access to the full
+Temporal SDK surface.
 
 > **Requires Temporal Server v1.28.0 or later** (Update-with-Start GA).
 > **Targets .NET 10.0, .NET 8.0, and .NET Standard 2.1.** .NET 8+ receives the full feature set;
@@ -16,7 +24,8 @@ dotnet add package TemporalCommunity.DurableObjects
 
 ## Quick Start
 
-Five steps from zero to a working DurableObject. No raw Temporal concepts in calling code.
+Five steps from zero to a working DurableObject. Calling code uses a typed object contract while
+the library manages the Temporal start/update dispatch.
 
 ### Step 1: Define the contract
 
@@ -130,8 +139,8 @@ fails according to its activity timeout and retry policy.
 
 ### Step 4: Call it
 
-Inject `IDurableObjectFactory`, get a typed proxy, and call methods. No task queue, no workflow
-ID management, no SDK ceremony.
+Inject `IDurableObjectFactory`, get a typed proxy, and call methods. The object ID remains a
+Temporal workflow ID, while the proxy handles update-with-start and query dispatch.
 
 ```csharp
 using Temporalio.Exceptions;
@@ -170,8 +179,10 @@ for the full taxonomy.
 dotnet run
 ```
 
-The counter object starts on first call and persists across restarts. State survives worker
-crashes, ContinueAsNew history compaction, and re-deployments.
+The counter object starts on first update. Its state is recovered from Temporal history after
+worker restarts and compatible re-deployments. Instance fields are **not** automatically carried
+across Continue-as-New; stateful objects must explicitly return the state needed by the next
+execution from `OnBeforeContinueAsNewAsync()` and accept matching workflow constructor arguments.
 
 ### What happens when an update throws?
 
@@ -216,9 +227,11 @@ inside a handler), the object drains before closing:
 
 ContinueAsNew is triggered automatically when `Workflow.CurrentHistoryLength` exceeds the
 `MaxHistoryLength` threshold (default 10,000 events) or when the Temporal server sets
-`Workflow.ContinueAsNewSuggested`. State is preserved across ContinueAsNew because
-`DurableObjectBase.OnBeforeContinueAsNewAsync()` passes constructor arguments through to the
-new execution — override this hook to carry forward any state that must survive the boundary.
+`Workflow.ContinueAsNewSuggested`. `DurableObjectBase` does not infer which instance fields are
+object state. Override `OnBeforeContinueAsNewAsync()` to return the constructor arguments the
+next execution needs, and keep that argument shape compatible with the concrete workflow's
+`[WorkflowInit]` constructor. Without that override, mutable instance fields reset to their
+constructor or field-initializer values after Continue-as-New.
 
 ### Object identity and namespace scope
 
@@ -245,10 +258,17 @@ completion.
 
 ### DurableObject vs plain Temporal workflow
 
-Use a DurableObject when you want an always-accessible stateful actor by stable ID — the mental
-model is a grain or entity, not a process. Use a plain Temporal workflow when the execution has
-a defined start and end with complex branching logic, or when you need child workflows, signals,
-or other SDK primitives not exposed by the DurableObject API surface.
+| Choose a DurableObject when... | Choose a plain Temporal workflow when... |
+|---|---|
+| A stable ID represents a long-lived entity. | The execution represents a process with a defined end. |
+| Updates should be serialized across `await` boundaries by default. | Handler interleaving or direct concurrency control is part of the design. |
+| Calls should atomically start the entity when it is not running. | Starting, signaling, and child-workflow relationships should be explicit. |
+| You want the framework's update failure and deactivation policies. | You need signals, child workflows, or the unrestricted SDK surface. |
+
+DurableObjects do not add persistence outside Temporal or provide cross-object transactions.
+“Resident” means the workflow execution remains open; it does not mean a CLR object is always
+loaded in worker memory. Typed interface queries are synchronous and park the calling thread;
+use `QueryDurableObjectAsync` on asynchronous or high-throughput call paths.
 
 ### Signals are banned — use updates
 
