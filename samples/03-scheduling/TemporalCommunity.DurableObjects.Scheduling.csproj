@@ -7,7 +7,7 @@
     <!-- CA1515: public types in application — required by Temporal for workflow/activity scanning -->
     <!-- CA1024: properties instead of Get methods — [WorkflowQuery] requires methods -->
     <!-- CA1848/CA1873: LoggerMessage — overkill for sample code -->
-    <!-- CA2007: ConfigureAwait — suppressed globally; workflow code uses ConfigureAwait(true) explicitly -->
+    <!-- CA2007: workflow code uses bare await through DurableObjectBase activity helpers. -->
     <!-- CA1031: catch general Exception — intentional in demo error-handling scenarios -->
     <!-- CA1812: internal never instantiated — classes are registered via AddHostedService -->
     <NoWarn>$(NoWarn);CA1303;CA1515;CA1024;CA1848;CA1873;CA2007;CA1031;CA1812</NoWarn>

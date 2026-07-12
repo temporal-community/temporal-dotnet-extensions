@@ -17,7 +17,7 @@ execution engine instead of an in-process scheduler.
 - How to define a DurableObject contract (`IPageCounter : IDurableObject`)
 - How to implement a DurableObject (`PageCounter : DurableObjectBase`)
 - The required `[WorkflowRun]` boilerplate on the concrete class
-- How to call activities from workflow code (`Workflow.ExecuteActivityAsync`)
+- How to call activities from workflow code (`DurableObjectBase.ExecuteActivityAsync`)
 - How to wire everything up with `Microsoft.Extensions.Hosting`
 - How to obtain a proxy via `IDurableObjectFactory`
 
@@ -54,10 +54,13 @@ var counter = await factory.GetOrCreateAsync<IPageCounter>("home");
 All I/O must go through activities. Inside a `[WorkflowUpdate]` or `[WorkflowRun]` method:
 
 ```csharp
-await Workflow.ExecuteActivityAsync(
+await ExecuteActivityAsync(
     (PageCounterActivities act) => act.RecordViewAsync(slug, count),
-    new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(10) })
-    .ConfigureAwait(true); // ConfigureAwait(true) is required in workflow code
+    new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(10) });
+
+`DurableObjectBase` supplies this helper so workflow code does not need to access the static
+`Workflow` class. A bare `await` captures the workflow scheduler; never use
+`ConfigureAwait(false)` in workflow code.
 ```
 
 ### WorkflowRun boilerplate

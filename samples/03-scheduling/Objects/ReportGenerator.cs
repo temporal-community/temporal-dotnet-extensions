@@ -1,5 +1,4 @@
 #pragma warning disable CA1822 // Workflow methods must be instance methods
-#pragma warning disable CA2007 // ConfigureAwait — workflow code must use ConfigureAwait(true), never false
 using Microsoft.Extensions.Logging;
 using Temporalio.Workflows;
 using TemporalCommunity.DurableObjects;
@@ -30,13 +29,12 @@ public sealed class ReportGenerator : DurableObjectBase, IReportGenerator
     /// </summary>
     protected override async Task OnActivateAsync()
     {
-        var reportId = Workflow.Info.WorkflowId;
+        var reportId = WorkflowId;
         Workflow.Logger.LogInformation("ReportGenerator activated for execution {ReportId}", reportId);
 
-        await Workflow.ExecuteActivityAsync(
+        await ExecuteActivityAsync(
             (SchedulingActivities act) => act.PublishReportAsync(reportId),
-            new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) })
-            .ConfigureAwait(true);
+            new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) });
 
         // Self-deactivate so the next scheduled tick can create a fresh execution.
         // Without this, ScheduleOverlapPolicy.Skip suppresses all subsequent ticks.
@@ -50,14 +48,13 @@ public sealed class ReportGenerator : DurableObjectBase, IReportGenerator
     [WorkflowUpdate]
     public async Task GenerateAsync()
     {
-        var reportId = Workflow.Info.WorkflowId;
-        await Workflow.ExecuteActivityAsync(
+        var reportId = WorkflowId;
+        await ExecuteActivityAsync(
             (SchedulingActivities act) => act.PublishReportAsync(reportId),
-            new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) })
-            .ConfigureAwait(true);
+            new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) });
     }
 
     /// <inheritdoc/>
     [WorkflowQuery]
-    public string GetReportId() => Workflow.Info.WorkflowId;
+    public string GetReportId() => WorkflowId;
 }

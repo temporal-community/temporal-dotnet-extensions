@@ -25,7 +25,7 @@ The solution is to route the cross-object call through a Temporal activity:
 
 ```
 OrderProcessor (workflow update)
-  -> Workflow.ExecuteActivityAsync<FulfillmentActivities>
+  -> DurableObjectBase.ExecuteActivityAsync<FulfillmentActivities>
      -> FulfillmentActivities.ReserveInventoryAsync (activity — runs outside workflow scheduler)
         -> IDurableObjectFactory.Get<IInventoryTracker>
            -> InventoryTracker.ReserveStockAsync (workflow update on the target object)
@@ -48,10 +48,9 @@ public async Task PlaceOrderAsync(string productId, int quantity)
     _orderHistory.Add($"{productId}:{quantity}");
 
     // Cross into the activity boundary — the bridge.
-    await Workflow.ExecuteActivityAsync(
+    await ExecuteActivityAsync(
         (FulfillmentActivities act) => act.ReserveInventoryAsync(productId, quantity),
-        new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) })
-        .ConfigureAwait(true);
+        new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) });
 }
 ```
 

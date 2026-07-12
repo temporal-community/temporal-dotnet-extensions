@@ -1,5 +1,4 @@
 #pragma warning disable CA1822 // Workflow methods must be instance methods
-#pragma warning disable CA2007 // ConfigureAwait — workflow code must use ConfigureAwait(true), never false
 using Microsoft.Extensions.Logging;
 using Temporalio.Activities;
 using Temporalio.Workflows;
@@ -49,11 +48,11 @@ public sealed class PageCounter : DurableObjectBase, IPageCounter
         _count++;
         // Activities are the only place that can do I/O.
         // StartToCloseTimeout is required on every ActivityOptions.
-        // ConfigureAwait(true) keeps the continuation on the workflow scheduler.
-        await Workflow.ExecuteActivityAsync(
+        // Awaiting the DurableObjectBase helper keeps the call site concise; never use
+        // ConfigureAwait(false) in workflow code.
+        await ExecuteActivityAsync(
             (PageCounterActivities act) => act.RecordViewAsync(_slug, _count),
-            new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(10) })
-            .ConfigureAwait(true);
+            new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(10) });
     }
 
     /// <inheritdoc/>

@@ -1,5 +1,4 @@
 #pragma warning disable CA1822 // Workflow methods must be instance methods
-#pragma warning disable CA2007 // ConfigureAwait — workflow code must use ConfigureAwait(true), never false
 using Microsoft.Extensions.Logging;
 using Temporalio.Workflows;
 using TemporalCommunity.DurableObjects;
@@ -69,10 +68,9 @@ public sealed class SubscriptionTracker : DurableObjectBase, ISubscriptionTracke
 
         if (!string.IsNullOrEmpty(_email))
         {
-            await Workflow.ExecuteActivityAsync(
+            await ExecuteActivityAsync(
                 (SchedulingActivities act) => act.NotifySubscriberAsync(_email, context.DeliveryId),
-                new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) })
-                .ConfigureAwait(true);
+                new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) });
         }
     }
 

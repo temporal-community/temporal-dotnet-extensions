@@ -1,5 +1,4 @@
 #pragma warning disable CA1822 // Workflow methods must be instance methods
-#pragma warning disable CA2007 // ConfigureAwait — workflow code must use ConfigureAwait(true), never false
 using Microsoft.Extensions.Logging;
 using Temporalio.Activities;
 using Temporalio.Workflows;
@@ -27,7 +26,7 @@ public sealed class TemperatureSensor : DurableObjectBase, ITemperatureSensor
     protected override Task OnActivateAsync()
     {
         Workflow.Logger.LogInformation(
-            "TemperatureSensor {Id} activated", Workflow.Info.WorkflowId);
+            "TemperatureSensor {Id} activated", WorkflowId);
         return Task.CompletedTask;
     }
 
@@ -45,10 +44,9 @@ public sealed class TemperatureSensor : DurableObjectBase, ITemperatureSensor
         //   workflow-task
         //     └─ update:RecordReadingAsync
         //          └─ activity:PersistReadingAsync
-        await Workflow.ExecuteActivityAsync(
-            (SensorActivities act) => act.PersistReadingAsync(Workflow.Info.WorkflowId, celsius),
-            new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(10) })
-            .ConfigureAwait(true);
+        await ExecuteActivityAsync(
+            (SensorActivities act) => act.PersistReadingAsync(WorkflowId, celsius),
+            new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(10) });
     }
 
     /// <inheritdoc/>

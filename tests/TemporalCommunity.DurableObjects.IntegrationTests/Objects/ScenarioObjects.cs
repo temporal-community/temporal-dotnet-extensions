@@ -21,10 +21,10 @@ public record CounterState(int Count)
 public class ScenarioActivities
 {
     [Temporalio.Activities.Activity]
-    public string Audit(string objectId, int newCount)
+    public Task<string> AuditAsync(string objectId, int newCount)
     {
         var receipt = $"audit:{objectId}:{newCount}:{Guid.NewGuid():N}";
-        return receipt;
+        return Task.FromResult(receipt);
     }
 }
 
@@ -66,9 +66,8 @@ public class AuditedCounter : DurableObjectBase, IAuditedCounter
     {
         RecordActivity();
         _state = _state.Increment(amount);
-        return await Workflow.ExecuteActivityAsync<string>(
-            "Audit",
-            new object?[] { Workflow.Info.WorkflowId, _state.Count },
+        return await ExecuteActivityAsync(
+            (ScenarioActivities activities) => activities.AuditAsync(WorkflowId, _state.Count),
             new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) });
     }
 

@@ -1,5 +1,4 @@
 #pragma warning disable CA1822 // Workflow methods must be instance methods
-#pragma warning disable CA2007 // ConfigureAwait — workflow code must use ConfigureAwait(true), never false
 using Microsoft.Extensions.Logging;
 using Temporalio.Workflows;
 using TemporalCommunity.DurableObjects;
@@ -40,10 +39,9 @@ public sealed class OrderProcessor : DurableObjectBase, IOrderProcessor
         // Cross into the activity boundary. FulfillmentActivities uses IDurableObjectFactory
         // from DI to update the InventoryTracker — this is the only safe way to call another
         // DurableObject from workflow code in v1.
-        await Workflow.ExecuteActivityAsync(
+        await ExecuteActivityAsync(
             (FulfillmentActivities act) => act.ReserveInventoryAsync(productId, quantity),
-            new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) })
-            .ConfigureAwait(true);
+            new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) });
 
         Workflow.Logger.LogInformation(
             "OrderProcessor: order fulfilled for {Quantity}x '{ProductId}'", quantity, productId);

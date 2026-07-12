@@ -21,10 +21,9 @@ does its work, and calls `Deactivate()` to self-complete.
 ```csharp
 protected override async Task OnActivateAsync()
 {
-    await Workflow.ExecuteActivityAsync(
-        (SchedulingActivities act) => act.PublishReportAsync(Workflow.Info.WorkflowId),
-        new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) })
-        .ConfigureAwait(true);
+    await ExecuteActivityAsync(
+        (SchedulingActivities act) => act.PublishReportAsync(WorkflowId),
+        new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) });
 
     // Self-deactivate: the run loop exits after OnActivateAsync returns.
     // Without this, ScheduleOverlapPolicy.Skip suppresses the next tick
@@ -62,10 +61,9 @@ public async Task OnReminderAsync(string reminderName, ReminderDeliveryContext c
     _lastDeliveryIds[reminderName] = ctx.DeliveryId;
     _reminderCount++;
 
-    await Workflow.ExecuteActivityAsync(
+    await ExecuteActivityAsync(
         (SchedulingActivities act) => act.NotifySubscriberAsync(_email, ctx.DeliveryId),
-        new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) })
-        .ConfigureAwait(true);
+        new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) });
 }
 ```
 

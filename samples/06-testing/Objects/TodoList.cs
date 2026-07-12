@@ -2,7 +2,7 @@
 //
 // Key rules for workflow code (enforced here as a reference pattern):
 //
-//   1. ConfigureAwait(true) on every await — workflow continuations MUST stay on the
+//   1. Use a bare await or ConfigureAwait(true) — workflow continuations MUST stay on the
 //      Temporal task scheduler. ConfigureAwait(false) routes to the thread pool, causing
 //      InvalidWorkflowSchedulerException and replay divergence.
 //
@@ -18,8 +18,6 @@
 //      as the run loop implementation; the concrete class just delegates to it.
 
 #pragma warning disable CA1822 // Workflow methods must be instance methods — the SDK calls them via reflection on the instance
-#pragma warning disable CA2007 // Do not use ConfigureAwait — this pragma is suppressed; we explicitly use ConfigureAwait(true) below
-
 using Temporalio.Workflows;
 using TemporalCommunity.DurableObjects;
 

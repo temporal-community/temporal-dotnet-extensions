@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq.Expressions;
 using Microsoft.Extensions.Logging;
 using Temporalio.Exceptions;
 using Temporalio.Workflows;
@@ -106,6 +107,19 @@ public abstract class DurableObjectBase : IDurableObject
     }
 
     /// <summary>
+    /// Gets the identifier of the current Durable Object workflow execution.
+    /// </summary>
+    /// <remarks>
+    /// Use this property instead of accessing <c>Workflow.Info.WorkflowId</c> directly from
+    /// derived classes.
+    /// </remarks>
+    [SuppressMessage(
+        "Performance",
+        "CA1822:Mark members as static",
+        Justification = "This is an instance-level workflow API exposed to durable object implementations.")]
+    protected string WorkflowId => Workflow.Info.WorkflowId;
+
+    /// <summary>
     /// Whether this object has received a <see cref="DeactivateAsync"/> request and is in the
     /// drain window. Read by <c>DurableObjectWorkerInterceptor</c> to reject new updates.
     /// </summary>
@@ -191,6 +205,55 @@ public abstract class DurableObjectBase : IDurableObject
     /// deterministic under replay.
     /// </summary>
     protected virtual void OnActivityRecorded() { }
+
+    /// <summary>
+    /// Executes an asynchronous instance activity.
+    /// </summary>
+    /// <typeparam name="TActivity">The registered activity implementation type.</typeparam>
+    /// <param name="activityCall">An expression that invokes the activity method.</param>
+    /// <param name="options">
+    /// Activity execution options. Either <see cref="ActivityOptions.StartToCloseTimeout"/> or
+    /// <see cref="ActivityOptions.ScheduleToCloseTimeout"/> must be set.
+    /// </param>
+    /// <returns>A task that completes when the activity completes.</returns>
+    /// <remarks>
+    /// Await the returned task directly from workflow code. A bare <c>await</c> captures the
+    /// workflow scheduler, which is equivalent to <c>ConfigureAwait(true)</c>. Never append
+    /// <c>ConfigureAwait(false)</c> inside workflow code.
+    /// </remarks>
+    [SuppressMessage(
+        "Performance",
+        "CA1822:Mark members as static",
+        Justification = "This is an instance-level workflow API exposed to durable object implementations.")]
+    protected Task ExecuteActivityAsync<TActivity>(
+        Expression<Func<TActivity, Task>> activityCall,
+        ActivityOptions options) =>
+        Workflow.ExecuteActivityAsync(activityCall, options);
+
+    /// <summary>
+    /// Executes an asynchronous instance activity that returns a result.
+    /// </summary>
+    /// <typeparam name="TActivity">The registered activity implementation type.</typeparam>
+    /// <typeparam name="TResult">The activity result type.</typeparam>
+    /// <param name="activityCall">An expression that invokes the activity method.</param>
+    /// <param name="options">
+    /// Activity execution options. Either <see cref="ActivityOptions.StartToCloseTimeout"/> or
+    /// <see cref="ActivityOptions.ScheduleToCloseTimeout"/> must be set.
+    /// </param>
+    /// <returns>A task that completes with the activity result.</returns>
+    /// <remarks>
+    /// Await the returned task directly from workflow code. A bare <c>await</c> captures the
+    /// workflow scheduler, which is equivalent to <c>ConfigureAwait(true)</c>. Never append
+    /// <c>ConfigureAwait(false)</c> inside workflow code.
+    /// </remarks>
+    [SuppressMessage(
+        "Performance",
+        "CA1822:Mark members as static",
+        Justification = "This is an instance-level workflow API exposed to durable object implementations.")]
+    protected Task<TResult> ExecuteActivityAsync<TActivity, TResult>(
+        Expression<Func<TActivity, Task<TResult>>> activityCall,
+        ActivityOptions options) =>
+        Workflow.ExecuteActivityAsync(activityCall, options);
 
     /// <summary>
     /// Registers (or re-arms) a durable timer with the given name. The timer fires
