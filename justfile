@@ -11,6 +11,8 @@ artifacts_dir         := "artifacts/packages"
 coverage_dir          := "artifacts/coverage"
 unit_tests_dir        := "tests/TemporalCommunity.DurableObjects.Tests"
 integration_tests_dir := "tests/TemporalCommunity.DurableObjects.IntegrationTests"
+general_analyzer_tests_dir := "tests/TemporalCommunity.Extensions.Analyzers.Tests"
+durable_analyzer_tests_dir := "tests/TemporalCommunity.DurableObjects.Analyzers.Tests"
 benchmarks_dir        := "benchmarks/TemporalCommunity.DurableObjects.Benchmarks"
 # Runs minver (local tool — .config/dotnet-tools.json) to compute the current version from git tags.
 # The sed/tr reads MinVerDefaultPreReleaseIdentifiers from Directory.Build.props so the pre-release
@@ -90,6 +92,16 @@ test-unit: build
         --no-build \
         --nologo \
         --logger "trx;LogFileName=unit.trx"
+    dotnet test "{{general_analyzer_tests_dir}}" \
+        --configuration "{{configuration}}" \
+        --no-build \
+        --nologo \
+        --logger "trx;LogFileName=analyzers.trx"
+    dotnet test "{{durable_analyzer_tests_dir}}" \
+        --configuration "{{configuration}}" \
+        --no-build \
+        --nologo \
+        --logger "trx;LogFileName=durable-analyzers.trx"
 
 # Run integration tests (uses WorkflowEnvironment.StartLocalAsync — no external server needed)
 test-integration: build
@@ -191,6 +203,16 @@ pack: build
         --no-build \
         --nologo \
         --output "{{artifacts_dir}}"
+    dotnet pack "src/TemporalCommunity.Extensions.Analyzers" \
+        --configuration "{{configuration}}" \
+        --no-build \
+        --nologo \
+        --output "{{artifacts_dir}}"
+    dotnet pack "src/TemporalCommunity.DurableObjects.Analyzers" \
+        --configuration "{{configuration}}" \
+        --no-build \
+        --nologo \
+        --output "{{artifacts_dir}}"
 
 # Verify the packed nupkg: confirm net10.0 + net8.0 + netstandard2.1 lib/ folders exist,
 # then compile a netstandard2.1 consumer project against the local package.
@@ -198,7 +220,7 @@ pack: build
 pack-verify: pack
     #!/usr/bin/env bash
     set -euo pipefail
-    pkg=$(ls "{{artifacts_dir}}"/TemporalCommunity.DurableObjects.{{version}}*.nupkg 2>/dev/null | head -1)
+    pkg=$(ls "{{artifacts_dir}}"/TemporalCommunity.DurableObjects.{{version}}.nupkg 2>/dev/null | head -1)
     [ -n "$pkg" ] || { echo "ERROR: no .nupkg found in {{artifacts_dir}}"; exit 1; }
     echo "==> Checking lib/ folders in $(basename "$pkg")"
     for tfm in net10.0 net8.0 netstandard2.1; do
@@ -208,6 +230,12 @@ pack-verify: pack
             echo "  ✗ ERROR: lib/$tfm/ missing from nupkg" >&2; exit 1
         fi
     done
+    echo "==> Checking analyzer package assets"
+    general_analyzer_pkg="{{artifacts_dir}}/TemporalCommunity.Extensions.Analyzers.{{version}}.nupkg"
+    durable_analyzer_pkg="{{artifacts_dir}}/TemporalCommunity.DurableObjects.Analyzers.{{version}}.nupkg"
+    unzip -Z1 "$general_analyzer_pkg" | grep -Fx 'analyzers/dotnet/cs/TemporalCommunity.Extensions.Analyzers.dll' >/dev/null
+    unzip -Z1 "$durable_analyzer_pkg" | grep -Fx 'analyzers/dotnet/cs/TemporalCommunity.DurableObjects.Analyzers.dll' >/dev/null
+    echo "  ✓ general and DurableObjects analyzer assets present"
     echo "==> Consumer compilation test (netstandard2.1)"
     consumer_dir=$(mktemp -d /tmp/ns21-consumer.XXXXXX)
     consumer_packages=$(mktemp -d /tmp/ns21-packages.XXXXXX)

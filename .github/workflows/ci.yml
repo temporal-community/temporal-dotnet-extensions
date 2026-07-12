@@ -34,7 +34,10 @@ jobs:
         run: dotnet build TemporalDurableObjects.slnx --configuration Release --no-restore --nologo
 
       - name: Unit tests
-        run: dotnet test tests/TemporalCommunity.DurableObjects.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=unit.trx"
+        run: |
+          dotnet test tests/TemporalCommunity.DurableObjects.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=unit.trx"
+          dotnet test tests/TemporalCommunity.Extensions.Analyzers.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=analyzers.trx"
+          dotnet test tests/TemporalCommunity.DurableObjects.Analyzers.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=durable-analyzers.trx"
 
       - name: Install just
         if: matrix.os == 'ubuntu-latest'
@@ -49,4 +52,4 @@ jobs:
         if: always()
         with:
           name: unit-test-results-${{ matrix.os }}
-          path: tests/TemporalCommunity.DurableObjects.Tests/**/*.trx
+          path: tests/**/*.trx

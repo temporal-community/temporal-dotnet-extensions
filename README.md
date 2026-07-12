@@ -431,6 +431,7 @@ Run `just` with no arguments to list all available recipes.
 - [Failure handling](docs/FAILURE_HANDLING.md) — exception taxonomy, authorization, and reminder idempotency.
 - [Tier model](docs/TIER_MODEL.md) — lifecycle tiers and ContinueAsNew behavior.
 - [Troubleshooting](docs/TROUBLESHOOTING.md) — common mistakes and how to fix them.
+- [Temporal analyzers](docs/ANALYZERS.md) — opt-in compile-time determinism and DurableObjects contract checks.
 - [ADRs](adr/) — maintainer-facing architectural decisions and design rationale.
 
 ---

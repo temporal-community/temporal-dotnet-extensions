@@ -1,6 +1,6 @@
 # Plan 004: Temporal Analyzer Platform
 
-Status: Proposed
+Status: In Progress
 Depends on: Initial rule research; Plan 003 for typed-state-specific rules
 GitHub issue: [#5](https://github.com/temporal-community/durable-objects-dotnet/issues/5)
 GitHub epic: [#1](https://github.com/temporal-community/durable-objects-dotnet/issues/1)
@@ -35,13 +35,17 @@ reviewed.
 
 ## Proposed phases
 
-1. Inventory and classify candidate rules by severity, confidence, and analysis cost.
-2. Specify the first small set of precise general Temporal diagnostics.
-3. Establish shared Roslyn testing and rule-documentation infrastructure.
-4. Implement general analyzers and valuable code fixes.
-5. Add DurableObjects contract diagnostics.
-6. Add generation for boilerplate, registration, and clients only after their runtime designs are
-   stable.
+1. [x] Inventory and classify candidate rules by severity, confidence, and analysis cost.
+2. [x] Specify the first small set of precise general Temporal diagnostics.
+3. [x] Establish Roslyn testing and rule-documentation infrastructure.
+4. [x] Implement the first general analyzer rules (`TEMP001`–`TEMP003`).
+5. [x] Add the first DurableObjects contract rules (`DO0001`–`DO0004`).
+6. [ ] Add generation for boilerplate, registration, and clients only after their public designs
+   are approved.
+
+Roslyn requires code-fix providers that depend on Workspaces to live outside the command-line
+analyzer assembly (`RS1038`). Code fixes are therefore deferred until a companion-assembly/package
+strategy is approved; analyzer validation will not be weakened to combine them.
 
 Initial high-confidence candidates include workflow `ConfigureAwait(false)`, known nondeterministic
 APIs in workflow context, `Task.Delay` in workflows, invalid workflow/query signatures, and missing
@@ -60,6 +64,9 @@ the output; snapshots alone are insufficient for behavioral guarantees.
   suppression guidance, and authoritative sources.
 - Document package installation and configuration once.
 - Keep research notes and unshipped rule specifications under `plans/`, not `docs/`.
+
+The current catalog is `plans/analyzers/rule-catalog.md`; shipped-rule guidance is consolidated in
+`docs/ANALYZERS.md` to avoid low-value per-rule pages for the initial set.
 
 ## Completion criteria
 
