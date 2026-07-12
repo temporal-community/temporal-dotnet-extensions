@@ -14,6 +14,11 @@ public record CounterState(int Count)
     public CounterState Increment(int amount) => this with { Count = Count + amount };
 }
 
+public readonly record struct RollingCounterState(int Count)
+{
+    public RollingCounterState Increment(int amount) => this with { Count = Count + amount };
+}
+
 // ---------------------------------------------------------------------------
 // Activities
 // ---------------------------------------------------------------------------
@@ -105,33 +110,30 @@ public interface IRollingCounter : IDurableObject
 }
 
 [Workflow]
-public class RollingCounter : DurableObjectBase, IRollingCounter
+public class RollingCounter : DurableObjectBase<RollingCounterState>, IRollingCounter
 {
-    private CounterState _state;
-
     [WorkflowInit]
-    public RollingCounter(CounterState? state) => _state = state ?? new CounterState(0);
+    public RollingCounter(DurableObjectSnapshot<RollingCounterState>? snapshot = null)
+        : base(snapshot, new RollingCounterState(0)) { }
 
     [WorkflowRun]
-    public Task RunAsync(CounterState? state = null) => DurableObjectRunAsync();
+    public Task RunAsync(DurableObjectSnapshot<RollingCounterState>? snapshot = null) =>
+        DurableObjectRunAsync();
 
     // Deliberately low threshold so CAN fires quickly in tests.
     protected override bool ShouldContinueAsNew() =>
         base.ShouldContinueAsNew() || Workflow.CurrentHistoryLength >= 30;
 
-    protected override Task<IReadOnlyCollection<object?>> OnBeforeContinueAsNewAsync() =>
-        Task.FromResult<IReadOnlyCollection<object?>>(new object?[] { _state });
-
     [WorkflowUpdate]
     public Task<int> IncrementAsync(int amount)
     {
         RecordActivity();
-        _state = _state.Increment(amount);
-        return Task.FromResult(_state.Count);
+        State = State.Increment(amount);
+        return Task.FromResult(State.Count);
     }
 
     [WorkflowQuery]
-    public int GetCount() => _state.Count;
+    public int GetCount() => State.Count;
 }
 
 // ---------------------------------------------------------------------------

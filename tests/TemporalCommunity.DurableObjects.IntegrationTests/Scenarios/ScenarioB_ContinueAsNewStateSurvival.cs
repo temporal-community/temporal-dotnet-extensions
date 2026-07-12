@@ -31,13 +31,15 @@ public sealed class ScenarioB_ContinueAsNewStateSurvival : DurableObjectTestBase
             var counter = factory.Get<IRollingCounter>(id);
 
             // First update cold-starts the object. Capture initial run ID.
-            await counter.IncrementAsync(1);
+            Assert.Equal(1, await counter.IncrementAsync(1));
             var initialRunId = (await Client.GetWorkflowHandle(id).DescribeAsync()).RunId;
+            var observedRunIds = new HashSet<string>(StringComparer.Ordinal) { initialRunId };
 
             // Drive remaining updates to force CAN (threshold is 30 history events).
             for (var i = 1; i < updates; i++)
             {
                 await counter.IncrementAsync(1);
+                observedRunIds.Add((await Client.GetWorkflowHandle(id).DescribeAsync()).RunId);
             }
 
             var finalRunId = (await Client.GetWorkflowHandle(id).DescribeAsync()).RunId;
@@ -47,6 +49,8 @@ public sealed class ScenarioB_ContinueAsNewStateSurvival : DurableObjectTestBase
             Assert.Equal(updates, count);
             // Run ID changed — CAN actually fired.
             Assert.NotEqual(initialRunId, finalRunId);
+            // The low threshold produces at least two Continue-as-New boundaries.
+            Assert.True(observedRunIds.Count >= 3, $"Expected at least 3 runs, observed {observedRunIds.Count}.");
 
             await counter.DeactivateAsync();
         }

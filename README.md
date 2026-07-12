@@ -180,9 +180,9 @@ dotnet run
 ```
 
 The counter object starts on first update. Its state is recovered from Temporal history after
-worker restarts and compatible re-deployments. Instance fields are **not** automatically carried
-across Continue-as-New; stateful objects must explicitly return the state needed by the next
-execution from `OnBeforeContinueAsNewAsync()` and accept matching workflow constructor arguments.
+worker restarts and compatible re-deployments. For state that must cross Continue-as-New, derive
+from `DurableObjectBase<TState>` as shown in the Getting Started sample; the non-generic base
+continues to support explicit carry-forward through `OnBeforeContinueAsNewAsync()`.
 
 ### What happens when an update throws?
 
@@ -227,11 +227,14 @@ inside a handler), the object drains before closing:
 
 ContinueAsNew is triggered automatically when `Workflow.CurrentHistoryLength` exceeds the
 `MaxHistoryLength` threshold (default 10,000 events) or when the Temporal server sets
-`Workflow.ContinueAsNewSuggested`. `DurableObjectBase` does not infer which instance fields are
-object state. Override `OnBeforeContinueAsNewAsync()` to return the constructor arguments the
-next execution needs, and keep that argument shape compatible with the concrete workflow's
-`[WorkflowInit]` constructor. Without that override, mutable instance fields reset to their
-constructor or field-initializer values after Continue-as-New.
+`Workflow.ContinueAsNewSuggested`. `DurableObjectBase<TState>` carries its protected `State` in a
+typed `DurableObjectSnapshot<TState>` automatically. The concrete workflow declares matching
+optional snapshot parameters on its `[WorkflowInit]` constructor and `[WorkflowRun]` method.
+Applications remain responsible for serialization-compatible evolution of `TState`.
+
+The non-generic `DurableObjectBase` does not infer which fields are state. Objects using it must
+override `OnBeforeContinueAsNewAsync()` and keep its argument shape compatible with the workflow
+initializer. Otherwise mutable fields reset after Continue-as-New.
 
 ### Object identity and namespace scope
 
@@ -311,6 +314,10 @@ Override any of these in your class. All have no-op defaults.
 | `OnDeactivateAsync()` | After drain completes on deactivation. | Swallowed and logged — deactivation completes regardless. |
 | `OnTimerAsync(name)` | When a durable timer registered with `ScheduleTimer` fires. | Non-`ApplicationFailureException` → workflow terminates cleanly. |
 | `OnBeforeContinueAsNewAsync()` | Just before ContinueAsNew; return carry-forward constructor args. | Non-`ApplicationFailureException` → workflow terminates cleanly. |
+
+`DurableObjectBase<TState>` adds a protected `State` property and automatically carries it through
+Continue-as-New in `DurableObjectSnapshot<TState>`. Use `PrepareStateForContinueAsNewAsync` only
+when state needs deterministic normalization before the next execution.
 
 ### `DurableObjectWorkerInterceptor` options
 

@@ -7,37 +7,35 @@ using TemporalCommunity.DurableObjects.GettingStarted.Activities;
 
 namespace TemporalCommunity.DurableObjects.GettingStarted.Objects;
 
+public sealed record PageCounterState(int Count);
+
 /// <summary>
 /// Concrete DurableObject that tracks page views for a URL slug.
 /// Demonstrates: WorkflowInit constructor, activity calls, OnActivateAsync, and the
 /// required [WorkflowRun] boilerplate.
 /// </summary>
 [Workflow]
-public sealed class PageCounter : DurableObjectBase, IPageCounter
+public sealed class PageCounter : DurableObjectBase<PageCounterState>, IPageCounter
 {
-    private readonly string _slug;
-    private int _count;
-
     /// <summary>
-    /// Constructor called by Temporal on every new execution and after ContinueAsNew.
-    /// The [WorkflowInit] attribute tells the SDK to call this constructor with the
-    /// workflow's start arguments.
+    /// Restores the typed state snapshot after Continue-as-New, or creates cold-start state.
     /// </summary>
     [WorkflowInit]
-    public PageCounter(string slug) => _slug = slug;
+    public PageCounter(DurableObjectSnapshot<PageCounterState>? snapshot = null)
+        : base(snapshot, new PageCounterState(0)) { }
 
     /// <summary>
     /// Required boilerplate on every concrete DurableObject.
     /// Temporal does not inherit [WorkflowRun] — it must be declared on the concrete type.
     /// </summary>
     [WorkflowRun]
-    public Task RunAsync() => DurableObjectRunAsync();
+    public Task RunAsync(DurableObjectSnapshot<PageCounterState>? snapshot = null) => DurableObjectRunAsync();
 
     /// <inheritdoc/>
     protected override Task OnActivateAsync()
     {
         // Workflow.Logger is replay-safe; use it (not ILogger) inside workflow code.
-        Workflow.Logger.LogInformation("PageCounter {Slug} activated", _slug);
+        Workflow.Logger.LogInformation("PageCounter {Slug} activated", WorkflowId);
         return Task.CompletedTask;
     }
 
@@ -45,21 +43,21 @@ public sealed class PageCounter : DurableObjectBase, IPageCounter
     [WorkflowUpdate]
     public async Task IncrementAsync()
     {
-        _count++;
+        State = State with { Count = State.Count + 1 };
         // Activities are the only place that can do I/O.
         // StartToCloseTimeout is required on every ActivityOptions.
         // Awaiting the DurableObjectBase helper keeps the call site concise; never use
         // ConfigureAwait(false) in workflow code.
         await ExecuteActivityAsync(
-            (PageCounterActivities act) => act.RecordViewAsync(_slug, _count),
+            (PageCounterActivities act) => act.RecordViewAsync(WorkflowId, State.Count),
             new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(10) });
     }
 
     /// <inheritdoc/>
     [WorkflowQuery]
-    public int GetCount() => _count;
+    public int GetCount() => State.Count;
 
     /// <inheritdoc/>
     [WorkflowQuery]
-    public string GetSlug() => _slug;
+    public string GetSlug() => WorkflowId;
 }

@@ -7,15 +7,15 @@ that tracks page views per URL slug.
 
 Persistent state in distributed systems usually means a database row + a background worker +
 a polling loop. DurableObjects replace that pattern with a single addressable object that retains
-its state as long as it's needed, survives worker crashes automatically, and executes operations
-exactly once — with a full audit trail in its workflow history. If you've used Orleans grains or
+its state as long as it's needed, recovers after worker crashes, and records operations in Temporal
+workflow history. If you've used Orleans grains or
 Akka.NET actors, DurableObjects are conceptually similar but backed by Temporal's durable
 execution engine instead of an in-process scheduler.
 
 ## What you'll learn
 
 - How to define a DurableObject contract (`IPageCounter : IDurableObject`)
-- How to implement a DurableObject (`PageCounter : DurableObjectBase`)
+- How to implement a stateful DurableObject (`PageCounter : DurableObjectBase<PageCounterState>`)
 - The required `[WorkflowRun]` boilerplate on the concrete class
 - How to call activities from workflow code (`DurableObjectBase.ExecuteActivityAsync`)
 - How to wire everything up with `Microsoft.Extensions.Hosting`
@@ -45,7 +45,7 @@ dotnet run
 // No RPC — just a local dispatch facade.
 var proxy = factory.Get<IPageCounter>("home");
 
-// Issues an update-with-start RPC: atomically creates the execution if it doesn't exist.
+// Atomically starts the execution if it is not already running, then returns a proxy.
 var counter = await factory.GetOrCreateAsync<IPageCounter>("home");
 ```
 
@@ -55,21 +55,27 @@ All I/O must go through activities. Inside a `[WorkflowUpdate]` or `[WorkflowRun
 
 ```csharp
 await ExecuteActivityAsync(
-    (PageCounterActivities act) => act.RecordViewAsync(slug, count),
+    (PageCounterActivities act) => act.RecordViewAsync(WorkflowId, State.Count),
     new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(10) });
+```
 
 `DurableObjectBase` supplies this helper so workflow code does not need to access the static
 `Workflow` class. A bare `await` captures the workflow scheduler; never use
 `ConfigureAwait(false)` in workflow code.
-```
 
 ### WorkflowRun boilerplate
 
-Every concrete DurableObject must declare `[WorkflowRun]` on the class (not inherited):
+Every concrete DurableObject must declare `[WorkflowRun]` on the class (not inherited). A typed
+state object uses matching snapshot parameters on its initializer and run method:
 
 ```csharp
+[WorkflowInit]
+public PageCounter(DurableObjectSnapshot<PageCounterState>? snapshot = null)
+    : base(snapshot, new PageCounterState(0)) { }
+
 [WorkflowRun]
-public Task RunAsync() => DurableObjectRunAsync();
+public Task RunAsync(DurableObjectSnapshot<PageCounterState>? snapshot = null) =>
+    DurableObjectRunAsync();
 ```
 
 ### Querying asynchronously

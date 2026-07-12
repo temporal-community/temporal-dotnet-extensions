@@ -96,6 +96,45 @@ workerOptions.AddDurableObjectWorkflows(typeof(MyObject).Assembly);
 
 ---
 
+## Typed State Across Continue-as-New
+
+Use `DurableObjectBase<TState>` when an object has one state model that must survive automatic
+Continue-as-New. The generic base carries `State` in a typed snapshot, avoiding manual argument
+arrays:
+
+```csharp
+public sealed record CounterState(int Count);
+
+[Workflow]
+public sealed class Counter : DurableObjectBase<CounterState>, ICounter
+{
+    [WorkflowInit]
+    public Counter(DurableObjectSnapshot<CounterState>? snapshot = null)
+        : base(snapshot, new CounterState(0)) { }
+
+    [WorkflowRun]
+    public Task RunAsync(DurableObjectSnapshot<CounterState>? snapshot = null) =>
+        DurableObjectRunAsync();
+
+    [WorkflowUpdate]
+    public Task IncrementAsync()
+    {
+        State = State with { Count = State.Count + 1 };
+        return Task.CompletedTask;
+    }
+
+    [WorkflowQuery]
+    public int GetCount() => State.Count;
+}
+```
+
+The initializer and run method must have matching signatures because the Temporal SDK owns that
+contract. Keep `CounterState` serialization-compatible as it evolves. Existing objects using the
+non-generic base may continue overriding `OnBeforeContinueAsNewAsync`; adopting the generic base
+for a live workflow changes its Continue-as-New argument schema and requires a migration plan.
+
+---
+
 ## Scheduled Objects
 
 Objects used with `CreateDurableObjectScheduleAsync<T>` must self-deactivate after each tick.
