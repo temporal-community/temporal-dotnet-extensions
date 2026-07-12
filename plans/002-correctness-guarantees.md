@@ -2,7 +2,7 @@
 
 Status: Proposed
 Depends on: Plan 001 for final terminology
-GitHub issue: To be created
+GitHub issue: [#3](https://github.com/temporal-community/durable-objects-dotnet/issues/3)
 Completed by: —
 
 ## Outcome

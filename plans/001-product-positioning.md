@@ -2,7 +2,7 @@
 
 Status: Proposed
 Depends on: None
-GitHub issue: To be created
+GitHub issue: [#2](https://github.com/temporal-community/durable-objects-dotnet/issues/2)
 Completed by: —
 
 ## Outcome

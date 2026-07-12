@@ -2,7 +2,8 @@
 
 Status: Proposed
 Depends on: Initial rule research; Plan 003 for typed-state-specific rules
-GitHub issue: To be created
+GitHub issue: [#5](https://github.com/temporal-community/durable-objects-dotnet/issues/5)
+GitHub epic: [#1](https://github.com/temporal-community/durable-objects-dotnet/issues/1)
 Completed by: —
 
 ## Outcome
