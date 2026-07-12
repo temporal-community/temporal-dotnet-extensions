@@ -185,7 +185,7 @@ public abstract class DurableObjectBase : IDurableObject
     protected void RecordActivity() => OnActivityRecorded();
 
     /// <summary>
-    /// Called by <see cref="RecordActivity"/> after updating the activity timestamp.
+    /// Called by <see cref="RecordActivity"/> when handler activity is recorded.
     /// Override to emit telemetry or perform additional bookkeeping. Must use
     /// <c>Workflow.UtcNow</c> (not <c>DateTime.UtcNow</c>) for any time reads to stay
     /// deterministic under replay.

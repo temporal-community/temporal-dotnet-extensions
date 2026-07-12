@@ -13,8 +13,9 @@ namespace TemporalCommunity.DurableObjects;
 
 /// <summary>
 /// DispatchProxy-based implementation of <typeparamref name="T"/> that routes every method call
-/// to Temporal RPC. This type is intentionally <c>internal sealed</c> — callers obtain instances
-/// only through <see cref="IDurableObjectFactory.Get{T}(string)"/> and its overloads.
+/// to Temporal RPC. This internal type is the base class for the runtime-generated proxy;
+/// callers obtain instances only through <see cref="IDurableObjectFactory.Get{T}(string)"/>
+/// and its overloads.
 /// </summary>
 /// <typeparam name="T">A DurableObject interface that extends <see cref="IDurableObject"/>.</typeparam>
 internal class DurableObjectProxy<T> : DispatchProxy

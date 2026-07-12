@@ -25,6 +25,7 @@ internal static class DurableObjectQuery
     /// <param name="objectId">The workflow ID of the target DurableObject.</param>
     /// <param name="queryName">The registered query wire name.</param>
     /// <param name="args">Query arguments; pass an empty array for zero-argument queries.</param>
+    /// <param name="cancellationToken">Token to cancel the query RPC.</param>
     /// <returns>The deserialized query result.</returns>
     /// <exception cref="DurableObjectNotFoundException">
     /// Thrown when no workflow execution exists for <paramref name="objectId"/>.
@@ -36,7 +37,8 @@ internal static class DurableObjectQuery
         ITemporalClient client,
         string objectId,
         string queryName,
-        object?[] args)
+        object?[] args,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -44,7 +46,11 @@ internal static class DurableObjectQuery
                 .QueryAsync<TResult>(
                     queryName,
                     args,
-                    new WorkflowQueryOptions { RejectCondition = QueryRejectCondition.NotOpen })
+                    new WorkflowQueryOptions
+                    {
+                        RejectCondition = QueryRejectCondition.NotOpen,
+                        Rpc = new RpcOptions { CancellationToken = cancellationToken },
+                    })
                 .ConfigureAwait(false);
         }
         catch (WorkflowQueryRejectedException ex)

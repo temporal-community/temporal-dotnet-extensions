@@ -55,6 +55,7 @@ internal sealed class DurableObjectFactory : IDurableObjectFactory
             {
                 IdConflictPolicy = WorkflowIdConflictPolicy.UseExisting,
                 IdReusePolicy = WorkflowIdReusePolicy.AllowDuplicate,
+                Rpc = new RpcOptions { CancellationToken = cancellationToken },
             }).ConfigureAwait(false);
 
         return DurableObjectProxy<T>.Create(_client, objectId, taskQueue);
@@ -66,7 +67,8 @@ internal sealed class DurableObjectFactory : IDurableObjectFactory
         string queryName,
         object?[]? args = null,
         CancellationToken cancellationToken = default) =>
-        DurableObjectQuery.ExecuteAsync<TResult>(_client, objectId, queryName, args ?? []);
+        DurableObjectQuery.ExecuteAsync<TResult>(
+            _client, objectId, queryName, args ?? [], cancellationToken);
 
     /// <inheritdoc/>
     [return: MaybeNull]
@@ -79,7 +81,7 @@ internal sealed class DurableObjectFactory : IDurableObjectFactory
         try
         {
             return await DurableObjectQuery
-                .ExecuteAsync<TResult>(_client, objectId, queryName, args ?? [])
+                .ExecuteAsync<TResult>(_client, objectId, queryName, args ?? [], cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (DurableObjectNotFoundException)
