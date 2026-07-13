@@ -1,8 +1,8 @@
 # Epic: Safe-by-Construction Durable Actors for Temporal .NET
 
-Status: Proposed
+Status: Complete
 GitHub epic: [#6](https://github.com/temporal-community/durable-objects-dotnet/issues/6)
-Completed by: —
+Completed by: [f76abfa](https://github.com/temporal-community/durable-objects-dotnet/commit/f76abfa)
 
 ## Outcome
 
@@ -44,7 +44,7 @@ clarify their constraints.
 | Generated asynchronous clients | [005](005-generated-async-clients.md) | [#8](https://github.com/temporal-community/durable-objects-dotnet/issues/8) | Complete | [ff7738e](https://github.com/temporal-community/durable-objects-dotnet/commit/ff7738e) |
 | Call context and cancellation | [006](006-durable-object-call-context.md) | [#7](https://github.com/temporal-community/durable-objects-dotnet/issues/7) | Complete | [f980640](https://github.com/temporal-community/durable-objects-dotnet/commit/f980640) |
 | Object identity and metadata | [007](007-object-identity-and-visibility.md) | [#9](https://github.com/temporal-community/durable-objects-dotnet/issues/9) | Complete | [a5d841e](https://github.com/temporal-community/durable-objects-dotnet/commit/a5d841e) |
-| Performance, NativeAOT, and scale | [008](008-performance-replay-aot-scale.md) | [#10](https://github.com/temporal-community/durable-objects-dotnet/issues/10) | In Progress | — |
+| Performance, NativeAOT, and scale | [008](008-performance-replay-aot-scale.md) | [#10](https://github.com/temporal-community/durable-objects-dotnet/issues/10) | Complete | [f76abfa](https://github.com/temporal-community/durable-objects-dotnet/commit/f76abfa) |
 
 ## Dependencies
 
