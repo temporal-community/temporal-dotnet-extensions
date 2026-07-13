@@ -5,7 +5,13 @@ Two opt-in analyzer packages provide compile-time guidance and IDE code fixes:
 - `TemporalCommunity.Extensions.Analyzers` applies to vanilla Temporal .NET workflows.
 - `TemporalCommunity.DurableObjects.Analyzers` adds DurableObjects contract checks.
 
+Both packages include their IDE code fixes. There are no separate code-fix packages to install.
+
 Install the package appropriate for the project that declares workflows:
+
+```bash
+dotnet add package TemporalCommunity.Extensions.Analyzers
+```
 
 ```xml
 <PackageReference Include="TemporalCommunity.Extensions.Analyzers" Version="...">
@@ -16,6 +22,10 @@ Install the package appropriate for the project that declares workflows:
 
 DurableObjects projects may reference both packages. The general package does not depend on the
 DurableObjects runtime.
+
+```bash
+dotnet add package TemporalCommunity.DurableObjects.Analyzers
+```
 
 ## General Temporal rules
 

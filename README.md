@@ -1,40 +1,63 @@
-# TemporalCommunity.DurableObjects
+# TemporalCommunity.Extensions
 
-An opinionated durable-actor programming model built on the
-[Temporal .NET SDK](https://github.com/temporalio/sdk-dotnet). It gives entity-style workflows
-safe defaults for atomic activation, serialized updates, contained update failures, and managed
-lifecycle behavior. Temporal supplies the durable execution and replay model; this library adds
-the actor conventions and guardrails.
+Community-built extensions and compile-time guardrails for the
+[Temporal .NET SDK](https://github.com/temporalio/sdk-dotnet).
 
-Use DurableObjects for long-lived entities addressed by stable ID, such as accounts, carts,
-devices, sessions, and counters. Use a plain Temporal workflow for a process with a defined start
-and end, orchestration-heavy control flow, child workflows, signals, or direct access to the full
-Temporal SDK surface.
+This repository contains a durable-actor programming model, general Temporal workflow analyzers,
+Durable Objects analyzers and source generators, and their IDE code fixes. Each package is opt-in;
+using the analyzers does not require adopting Durable Objects.
 
-> **Requires Temporal Server v1.28.0 or later** (Update-with-Start GA).
-> **Targets .NET 10.0, .NET 8.0, and .NET Standard 2.1.** .NET 8+ receives the full feature set;
-> the .NET Standard fallback does not support `ListDurableObjectsAsync`.
-> **NativeAOT client dispatch requires the generated client package.** Ungenerated contracts still
-> fall back to `DispatchProxy`, which is not NativeAOT-compatible.
+## Packages
 
-## Installation
+| Package | Purpose |
+|---|---|
+| [`TemporalCommunity.Extensions.Analyzers`](https://www.nuget.org/packages/TemporalCommunity.Extensions.Analyzers) | Replay-safety analyzers and code fixes for ordinary Temporal .NET workflows. |
+| [`TemporalCommunity.DurableObjects`](https://www.nuget.org/packages/TemporalCommunity.DurableObjects) | An opinionated durable-actor model for long-lived entities addressed by stable ID. |
+| [`TemporalCommunity.DurableObjects.Analyzers`](https://www.nuget.org/packages/TemporalCommunity.DurableObjects.Analyzers) | Durable Objects contract analyzers, code fixes, and generated asynchronous clients. |
 
+The analyzer packages contain both the compiler-safe analyzer and the IDE code-fix assembly. There
+are no separate code-fix packages to install.
+
+## Temporal workflow analyzers
+
+Add compile-time checks to any Temporal .NET workflow project:
+
+```bash
+dotnet add package TemporalCommunity.Extensions.Analyzers
 ```
+
+The package currently detects workflow use of `ConfigureAwait(false)`, `Task.Delay`, and system
+clock reads, with code fixes for each rule. These diagnostics also work in projects that do not
+reference the Durable Objects runtime.
+
+See [Temporal .NET Analyzers](docs/ANALYZERS.md) for installation details, the full rule catalog,
+code-fix behavior, limitations, and Durable Objects generator requirements.
+
+## Durable Objects
+
+`TemporalCommunity.DurableObjects` is for entity-style workflows such as accounts, carts, devices,
+sessions, and counters. It adds atomic activation, serialized updates, contained update failures,
+typed state across Continue-as-New, managed lifecycle behavior, visibility metadata, reminders,
+and generated clients.
+
+Use a plain Temporal workflow when the execution represents a process with a defined end or needs
+signals, child workflows, orchestration-heavy control flow, or unrestricted SDK behavior. See
+[Durable Objects concepts](docs/DURABLE_OBJECTS.md) for the detailed comparison and lifecycle model.
+
+### Install
+
+```bash
 dotnet add package TemporalCommunity.DurableObjects
+dotnet add package TemporalCommunity.Extensions.Analyzers
 dotnet add package TemporalCommunity.DurableObjects.Analyzers
 ```
 
-## Quick Start
+> Requires Temporal Server v1.28.0 or later for Update-with-Start. The runtime targets .NET 10,
+> .NET 8, and .NET Standard 2.1. .NET Standard does not support visibility-listing APIs.
 
-Five steps from zero to a working DurableObject. Calling code uses a typed object contract while
-the library manages the Temporal start/update dispatch.
+### Minimal example
 
-### Step 1: Define the contract
-
-Every DurableObject starts with an interface extending `IDurableObject`. Decorate it with
-`[Workflow]` (the Temporal SDK uses this to derive the workflow type name). Updates are
-fire-and-confirm (`[WorkflowUpdate]`); queries are synchronous reads (`[WorkflowQuery]`).
-Updates can include input validation and activity calls.
+Define a contract and implementation:
 
 ```csharp
 using Temporalio.Workflows;
@@ -43,451 +66,104 @@ using TemporalCommunity.DurableObjects;
 [Workflow]
 public interface ICounter : IDurableObject
 {
-    /// <summary>Adds <paramref name="amount"/> to the count. Must be positive.</summary>
-    [WorkflowUpdate] Task IncrementAsync(int amount);
-    [WorkflowQuery]  int  GetCount();
+    [WorkflowUpdate] Task<int> IncrementAsync(int amount);
+    [WorkflowQuery] int GetCount();
 }
-```
-
-```csharp
-using Temporalio.Activities;
-
-public sealed class CounterActivities
-{
-    /// <summary>
-    /// Records an increment. In production: write to a database, emit a metric, publish an event.
-    /// Activities run outside the workflow — they can do real I/O.
-    /// </summary>
-    [Activity]
-    public Task RecordIncrementAsync(string counterId, int amount, int newTotal)
-    {
-        Console.WriteLine($"[audit] {counterId}: +{amount} → total {newTotal}");
-        return Task.CompletedTask;
-    }
-}
-```
-
-### Step 2: Implement it
-
-Extend `DurableObjectBase` and implement your interface. The one mandatory boilerplate is
-`[WorkflowRun] public Task RunAsync() => DurableObjectRunAsync();` — the SDK does not inherit
-`[WorkflowRun]` from the base class, so every concrete DurableObject must declare it.
-See [BOILERPLATE.md](docs/BOILERPLATE.md) for the full explanation.
-The `[WorkflowUpdateValidator]` runs before the handler body;
-`DurableObjectBase.ExecuteActivityAsync` is how workflow code triggers external I/O.
-
-```csharp
-#pragma warning disable CA1822 // Workflow methods must be instance methods
-using Temporalio.Workflows;
-using TemporalCommunity.DurableObjects;
 
 [Workflow]
-public sealed class Counter : DurableObjectBase, ICounter
+public sealed class Counter : DurableObjectBase<int>, ICounter
 {
-    private int _count;
+    [WorkflowInit]
+    public Counter(DurableObjectSnapshot<int>? snapshot = null) : base(snapshot, 0) { }
 
-    // Required on every concrete DurableObject — Temporal does not inherit [WorkflowRun].
     [WorkflowRun]
-    public Task RunAsync() => DurableObjectRunAsync();
-
-    // Validator: runs synchronously BEFORE IncrementAsync.
-    // Throw here to reject the update before the handler body executes.
-    [WorkflowUpdateValidator(nameof(IncrementAsync))]
-    public void ValidateIncrementAsync(int amount)
-    {
-        if (amount <= 0)
-            throw new ArgumentOutOfRangeException(nameof(amount), "Amount must be positive.");
-    }
+    public Task RunAsync(DurableObjectSnapshot<int>? snapshot = null) => DurableObjectRunAsync();
 
     [WorkflowUpdate]
-    public async Task IncrementAsync(int amount)
+    public Task<int> IncrementAsync(int amount)
     {
-        _count += amount;
-
-        // External I/O belongs in activities. DurableObjectBase keeps the call in the
-        // workflow context; do not use ConfigureAwait(false) in workflow code.
-        await ExecuteActivityAsync(
-            (CounterActivities act) =>
-                act.RecordIncrementAsync(WorkflowId, amount, _count),
-            new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(10) });
+        State += amount;
+        return Task.FromResult(State);
     }
 
     [WorkflowQuery]
-    public int GetCount() => _count;
+    public int GetCount() => State;
 }
 ```
 
-### Step 3: Register on the worker
-
-`AddDurableObjects` registers `IDurableObjectFactory` in DI (client-side).
-`AddDurableObjectWorkflows` scans the assembly and registers the workflow types on the worker
-(worker-side). Both go in the same service configuration; they serve different roles.
+Register the client factory and worker types:
 
 ```csharp
-// Using Temporalio.Extensions.Hosting
-services.AddTemporalClient(opts => opts.TargetHost = "localhost:7233");
-
-// Client-side: registers IDurableObjectFactory with DefaultTaskQueue = "my-task-queue"
+services.AddTemporalClient(options => options.TargetHost = "localhost:7233");
 services.AddDurableObjects("my-task-queue");
-
-// Worker-side: scans the assembly, registers DurableObject workflow types and activities
 services.AddHostedTemporalWorker("my-task-queue")
-        .AddDurableObjectWorkflows(typeof(Counter).Assembly)
-        .AddSingletonActivities<CounterActivities>();
+    .AddDurableObjectWorkflows(typeof(Counter).Assembly);
 ```
 
-Without `AddSingletonActivities`, no worker can pick up the activity; the update eventually
-fails according to its activity timeout and retry policy.
-
-### Step 4: Call it
-
-Inject `IDurableObjectFactory` and use the generated client extension. The object ID remains a
-Temporal workflow ID, while the concrete client handles update-with-start and asynchronous query
-dispatch without reflection.
+Use the concrete client generated by `TemporalCommunity.DurableObjects.Analyzers`:
 
 ```csharp
-using Temporalio.Exceptions;
-
-public class MyService(IDurableObjectFactory factory)
-{
-    public async Task RunAsync()
-    {
-        // Generated from ICounter by TemporalCommunity.DurableObjects.Analyzers.
-        var counter = factory.GetCounterClient("my-counter");
-
-        await counter.IncrementAsync(5);  // validator passes; activity records the increment
-        int count = await counter.GetCountAsync(); // 5; no blocked caller thread
-
-        try
-        {
-            await counter.IncrementAsync(-1);
-        }
-        catch (WorkflowUpdateFailedException)
-        {
-            // Expected: the validator rejects this before the handler body runs.
-        }
-
-        count = await counter.GetCountAsync(); // still 5; the object remains alive
-    }
-}
+var counter = factory.GetCounterClient("counter-42");
+await counter.IncrementAsync(5);
+var current = await counter.GetCountAsync();
 ```
 
-`WorkflowUpdateFailedException` is thrown on the caller side; the object remains alive. Inspect
-`ApplicationFailureException.ErrorType` in the chain. See [FAILURE_HANDLING.md](docs/FAILURE_HANDLING.md)
-for the full taxonomy.
+The first update starts the object atomically. Its state is rebuilt from Temporal history after
+worker restarts and carried through Continue-as-New by `DurableObjectBase<TState>`.
 
-### Step 5: Verify
-
-```
-dotnet run
-```
-
-The counter object starts on first update. Its state is recovered from Temporal history after
-worker restarts and compatible re-deployments. For state that must cross Continue-as-New, derive
-from `DurableObjectBase<TState>` as shown in the Getting Started sample; the non-generic base
-continues to support explicit carry-forward through `OnBeforeContinueAsNewAsync()`.
-
-### What happens when an update throws?
-
-If an update handler throws an unexpected exception, `DurableObjectWorkerInterceptor` catches it
-and converts it to an `ApplicationFailureException` so the object does not wedge permanently.
-On the calling side, the exception chain is: `WorkflowUpdateFailedException` wraps an
-`ApplicationFailureException`, which carries the original error in `InnerException`. Inspect
-`ApplicationFailureException.ErrorType` for domain-specific error codes (e.g. `"Unauthorized"`,
-`"UnhandledUpdateException"`). See [FAILURE_HANDLING.md](docs/FAILURE_HANDLING.md) for the full
-exception taxonomy, lifecycle hook failure behavior, and authorization patterns.
-
----
-
-## Key Concepts
-
-### Tier model
-
-Objects have three lifecycle tiers. V1 ships Tier 1 and Tier 3. See [TIER_MODEL.md](docs/TIER_MODEL.md).
-
-| Tier | Name | Behavior |
-|------|------|----------|
-| 1 | Resident | Stays open indefinitely; Temporal sticky-cache handles idle periods. **Default.** |
-| 2 | Cold Passivation | Deferred to v1.1 — not in this release. |
-| 3 | Explicit Deactivation | Caller or object itself calls `DeactivateAsync()` / `Deactivate()` to close. |
-
-#### Deactivation semantics
-
-When deactivation is triggered (via `DeactivateAsync()` from outside, or `Deactivate()` from
-inside a handler), the object drains before closing:
-
-- **In-flight updates complete.** Any update handler already executing when deactivation is
-  signaled runs to completion before the object closes. New updates arriving after the signal is
-  received are rejected with `errorType: "ObjectDeactivating"`.
-- **Reactivation is always possible.** After an object deactivates, the next `GetOrCreate` or
-  `update-with-start` call on the same ID spins up a fresh execution under
-  `WorkflowIdReusePolicy.AllowDuplicate`. The object effectively restarts clean.
-- **Drain timeout is not configurable in v1.** The drain waits on
-  `Workflow.WaitConditionAsync(() => Workflow.AllHandlersFinished)` with no deadline. Design
-  update handlers to complete promptly; avoid long-running blocking operations inside handlers.
-
-#### ContinueAsNew and state preservation
-
-ContinueAsNew is triggered automatically when `Workflow.CurrentHistoryLength` exceeds the
-`MaxHistoryLength` threshold (default 10,000 events) or when the Temporal server sets
-`Workflow.ContinueAsNewSuggested`. `DurableObjectBase<TState>` carries its protected `State` in a
-typed `DurableObjectSnapshot<TState>` automatically. The concrete workflow declares matching
-optional snapshot parameters on its `[WorkflowInit]` constructor and `[WorkflowRun]` method.
-Applications remain responsible for serialization-compatible evolution of `TState`.
-
-The non-generic `DurableObjectBase` does not infer which fields are state. Objects using it must
-override `OnBeforeContinueAsNewAsync()` and keep its argument shape compatible with the workflow
-initializer. Otherwise mutable fields reset after Continue-as-New.
-
-### Object identity and namespace scope
-
-> **Object IDs are globally unique within a Temporal namespace — not per-task-queue.**
-> Two workers registered on different task queues in the same namespace cannot both own an object
-> with the same ID unless they are both registered for the same workflow type. If a second worker
-> issues `GetOrCreate` for an ID that is already owned by a different workflow type, Temporal will
-> route the start to the existing execution's task queue (the one it was originally started on),
-> not the caller's queue. Use distinct ID namespacing conventions (e.g., prefixes) to avoid
-> accidental cross-type collisions.
-
-The library never rewrites or prefixes IDs. On .NET 8+, use
-`ListDurableObjectExecutionsAsync<T>()` for run ID, status, task queue, timestamps, history length,
-and schedule origin. It returns running canonical objects by default; pass
-`new DurableObjectListOptions(includeScheduled: true)` to include schedule-created executions.
-
-### Reminders vs Schedules
-
-Two mechanisms trigger recurring behavior in DurableObjects — they serve different roles:
-
-| Mechanism | Trigger origin | Use when |
-|-----------|---------------|----------|
-| **Reminder** (`CreateDurableObjectReminderAsync`) | Fires from inside the object via `AddDurableObjectReminderDelivery` — the object receives `OnTimerAsync` on a canonical, persistent execution | You want the object itself to wake up on a recurring basis (heartbeats, expiry checks). |
-| **Schedule** (`CreateDurableObjectScheduleAsync`) | Externally managed Temporal Schedule that triggers `OnTimerAsync` on a *fresh* execution per tick | You want a periodic job that self-deactivates after each run (batch jobs, reports). |
-
-The key difference: reminders keep one long-lived object alive and deliver updates to it;
-schedules spin up a new execution per tick and expect that execution to call `Deactivate()` on
-completion.
-
-### DurableObject vs plain Temporal workflow
-
-| Choose a DurableObject when... | Choose a plain Temporal workflow when... |
-|---|---|
-| A stable ID represents a long-lived entity. | The execution represents a process with a defined end. |
-| Updates should be serialized across `await` boundaries by default. | Handler interleaving or direct concurrency control is part of the design. |
-| Calls should atomically start the entity when it is not running. | Starting, signaling, and child-workflow relationships should be explicit. |
-| You want the framework's update failure and deactivation policies. | You need signals, child workflows, or the unrestricted SDK surface. |
-
-DurableObjects do not add persistence outside Temporal or provide cross-object transactions.
-“Resident” means the workflow execution remains open; it does not mean a CLR object is always
-loaded in worker memory. Typed interface queries are synchronous and park the calling thread;
-use `QueryDurableObjectAsync` on asynchronous or high-throughput call paths.
-
-### Signals are banned — use updates
-
-All methods on a DurableObject interface must be `[WorkflowUpdate]` or `[WorkflowQuery]`.
-`[WorkflowSignal]` is banned in v1, including on framework-provided methods. Signals bypass
-the authorization hook, give callers no confirmation, and offer no rollback on partial state
-mutation. See [ADR 005](adr/005-signals-banned.md).
-
-### Generated asynchronous clients and NativeAOT
-
-Installing `TemporalCommunity.DurableObjects.Analyzers` generates a concrete client for every
-public, non-generic DurableObject contract. For `ICounter`, call
-`factory.GetCounterClient("counter-id")`; updates keep their contract names and queries gain
-asynchronous methods such as `GetCountAsync()`. Every generated method also has an overload that
-accepts `DurableObjectCallOptions`.
-
-The factory registry automatically prefers the generated concrete implementation even when code
-continues to call `factory.Get<ICounter>()`. Contracts the generator cannot handle produce
-`DO0005`; contracts compiled without the generator retain the documented `DispatchProxy`
-fallback. Only the generated client path is NativeAOT-compatible—this does not claim that every
-worker-discovery feature in the Temporal SDK is reflection-free. See
-[ADR 009](adr/009-generated-asynchronous-clients.md).
-
----
-
-## API Reference
-
-### Per-call cancellation, timeouts, and metadata
-
-Use `DurableObjectCallOptions` when an update or query needs a deadline, retry override, or gRPC
-metadata. Options are captured by the local client and never become workflow arguments:
-
-```csharp
-var counter = factory.GetCounterClient(
-    "home",
-    new DurableObjectCallOptions(
-        rpcTimeout: TimeSpan.FromSeconds(5),
-        metadata: new Dictionary<string, string>
-        {
-            ["authorization"] = $"Bearer {accessToken}",
-        },
-        cancellationToken: cancellationToken));
-
-await counter.IncrementAsync();
-```
-
-Cancelling the token stops waiting for the client RPC. It does not cancel an update that Temporal
-has already accepted. Create another proxy when a later call needs different options.
-
-### `IDurableObjectFactory` methods
-
-| Method | Description |
-|--------|-------------|
-| `Get<T>(objectId)` | Returns the registered generated implementation, or a `DispatchProxy` fallback. No RPC is issued. |
-| `Get<T>(objectId, taskQueue)` | Same, with explicit task queue override. |
-| `Get<T>(objectId, callOptions)` | Returns a client whose queries and updates share immutable RPC options. |
-| `GetOrCreateAsync<T>(objectId)` | Guarantees the object exists, then returns the generated implementation or proxy fallback. Issues one RPC. |
-| `GetOrCreateAsync<T>(objectId, taskQueue)` | Same, with explicit task queue override. |
-| `QueryDurableObjectAsync<TResult>(objectId, queryName, args)` | Non-blocking async query. Use on hot paths where thread-parking is unacceptable. |
-| `QueryOrDefaultAsync<TResult>(objectId, queryName, args)` | Same, but returns `default` instead of throwing when the object is absent. |
-| `ListDurableObjectsAsync<T>(runningOnly)` | Async stream of object IDs from Temporal visibility on .NET 8+; unavailable on the .NET Standard fallback. |
-| `ListDurableObjectExecutionsAsync<T>(options)` | Rich visibility metadata; excludes schedule-created executions by default without relying on ID patterns. |
-| `CreateDurableObjectScheduleAsync<T>(...)` | Temporal Schedule that activates a fresh execution per tick. |
-| `CreateDurableObjectReminderAsync<T>(...)` | Temporal Schedule that delivers recurring reminders to a canonical object. |
-
-### `DurableObjectBase` lifecycle hooks
-
-Override any of these in your class. All have no-op defaults.
-
-| Hook | When called | Exception behavior |
-|------|-------------|-------------------|
-| `OnActivateAsync()` | Once per execution start (including post-ContinueAsNew). | Non-`ApplicationFailureException` → workflow terminates cleanly. |
-| `OnDeactivateAsync()` | After drain completes on deactivation. | Swallowed and logged — deactivation completes regardless. |
-| `OnTimerAsync(name)` | When a durable timer registered with `ScheduleTimer` fires. | Non-`ApplicationFailureException` → workflow terminates cleanly. |
-| `OnBeforeContinueAsNewAsync()` | Just before ContinueAsNew; return carry-forward constructor args. | Non-`ApplicationFailureException` → workflow terminates cleanly. |
-
-`DurableObjectBase<TState>` adds a protected `State` property and automatically carries it through
-Continue-as-New in `DurableObjectSnapshot<TState>`. Use `PrepareStateForContinueAsNewAsync` only
-when state needs deterministic normalization before the next execution.
-
-### `DurableObjectWorkerInterceptor` options
-
-Pass via `AddDurableObjectWorkflows(assembly, options)`:
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `Serialize` | `bool` | `true` | Non-reentrant by default — handlers execute turn-based. |
-| `Authorize` | `Func<HandleUpdateInput, bool>?` | `null` (allow all) | Return `false` to reject an update with `errorType: "Unauthorized"`. |
-
-The interceptor is installed automatically by `AddDurableObjectWorkflows`. It also wraps
-arbitrary update handler exceptions into clean `ApplicationFailureException` rejections so the
-object does not wedge permanently. See [FAILURE_HANDLING.md](docs/FAILURE_HANDLING.md).
-
----
-
-## Failure Handling
-
-Exception mapping, update handler failure taxonomy, lifecycle hook failure behavior, authorization
-patterns, and reminder idempotency — see [FAILURE_HANDLING.md](docs/FAILURE_HANDLING.md).
-
----
-
-## Versioning
-
-Long-lived DurableObjects accumulate workflow history. Changes to handler names, signatures, and
-ContinueAsNew constructor schemas require care. See [ADR 004](adr/004-versioning-strategy.md)
-for the full versioning strategy: what is safe, what requires `Workflow.Patched`, and how to
-deploy new versions safely.
-
----
-
-## Object-to-Object Communication
-
-Direct DurableObject-to-DurableObject messaging is deferred from v1. The v1 workaround is an
-Activity that calls the target object via `ITemporalClient`:
-
-```csharp
-[Activity]
-public class CallCounterActivity(IDurableObjectFactory factory)
-{
-    public async Task<int> GetRemoteCountAsync(string targetId)
-    {
-        var counter = factory.Get<ICounter>(targetId);
-        return counter.GetCount();
-    }
-}
-```
-
-Execute it from inside an update handler:
-```csharp
-[WorkflowUpdate]
-public async Task SyncFromRemoteAsync(string remoteId)
-{
-    _count = await ExecuteActivityAsync(
-        (CallCounterActivity a) => a.GetRemoteCountAsync(remoteId),
-        new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) });
-}
-```
-
-Three candidate designs (Activity-mediated, child workflows, Nexus) are under evaluation for
-v1.1. See [ADR 003](adr/003-do-to-do-messaging-deferred.md).
-
----
+Start with the runnable [getting-started sample](samples/01-getting-started/) and the
+[Durable Objects guide](docs/GETTING_STARTED.md) for validators, activities, lifecycle behavior,
+failure handling, and production guidance.
 
 ## Samples
 
-Six runnable samples covering the core features are in `samples/`. See [samples/README.md](samples/README.md)
-for the full index. Each sample requires a live Temporal server (`temporal server start-dev`).
+Six runnable Durable Objects samples cover generated clients, validation, scheduling and reminders,
+object-to-object calls through activities, observability, and testing. See the
+[samples index](samples/README.md).
 
 ```bash
-just run-sample                    # 01-getting-started (default)
-just run-sample 03-scheduling      # specific sample by directory name
-just run-sample-all                # list all available samples
+temporal server start-dev
+just run-sample
 ```
-
----
-
-## Building from Source
-
-Prerequisites: [.NET 10 SDK](https://dotnet.microsoft.com/download), [just](https://github.com/casey/just).
-
-```bash
-dotnet tool restore     # install minver-cli and reportgenerator
-just build              # restore + compile (Release)
-just test               # unit + integration tests
-just pack               # produces artifacts/packages/*.nupkg
-just doctor             # verify all prerequisites
-```
-
-Run `just` with no arguments to list all available recipes.
-
-### Common recipes
-
-| Recipe | What it does |
-|--------|-------------|
-| `just build` | Restore and compile in Release mode. |
-| `just test-unit` | Unit tests only — no Temporal server needed. |
-| `just test-integration` | Integration and replay suite (uses embedded `WorkflowEnvironment`). |
-| `just test-filter "FullyQualifiedName~ScenarioA"` | Run a specific scenario. |
-| `just pack` | Pack the runtime and both analyzer packages; MinVer reads the git tag for the version. |
-| `just run-sample` | Run the sample app (requires a live Temporal server at `localhost:7233`). |
-| `just ci` | Full CI pipeline: clean → build → unit tests → pack and consumer verification. |
-
----
 
 ## Documentation
 
-- [Getting Started guide](docs/GETTING_STARTED.md) — reading order, document map, and quick links for new developers.
-- [Boilerplate guide](docs/BOILERPLATE.md) — required patterns every DurableObject must follow.
-- [Failure handling](docs/FAILURE_HANDLING.md) — exception taxonomy, authorization, and reminder idempotency.
-- [Tier model](docs/TIER_MODEL.md) — lifecycle tiers and ContinueAsNew behavior.
-- [Troubleshooting](docs/TROUBLESHOOTING.md) — common mistakes and how to fix them.
-- [Temporal analyzers](docs/ANALYZERS.md) — opt-in compile-time determinism and DurableObjects contract checks.
-- [ADRs](adr/) — maintainer-facing architectural decisions and design rationale.
+| Guide | Contents |
+|---|---|
+| [Temporal .NET analyzers](docs/ANALYZERS.md) | General and Durable Objects rules, code fixes, generated clients, and installation. |
+| [Durable Objects concepts](docs/DURABLE_OBJECTS.md) | When to use the runtime, identity, lifecycle, state, scheduling, NativeAOT, and API overview. |
+| [Durable Objects getting started](docs/GETTING_STARTED.md) | Reading path from first object through production readiness. |
+| [Required Durable Objects patterns](docs/BOILERPLATE.md) | Workflow entry point, registration, activities, and scheduled-object requirements. |
+| [Failure handling](docs/FAILURE_HANDLING.md) | Exception taxonomy, authorization, lifecycle failures, and reminder idempotency. |
+| [Tier model](docs/TIER_MODEL.md) | Resident execution, explicit deactivation, and Continue-as-New behavior. |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | Common runtime, configuration, and NativeAOT problems. |
+| [Maintainer verification](docs/MAINTAINER_VERIFICATION.md) | Replay, packaging, NativeAOT, benchmark, scale, and release checks. |
+| [Architecture decisions](adr/) | Lasting design decisions and compatibility constraints. |
 
----
+Maintainer-facing implementation plans live in [`plans/`](plans/), separate from user documentation.
+
+## Building from source
+
+Prerequisites: [.NET 10 SDK](https://dotnet.microsoft.com/download) and
+[`just`](https://github.com/casey/just).
+
+```bash
+dotnet tool restore
+just build
+just test
+just pack-verify
+```
+
+Run `just` to list all recipes. Integration tests use an embedded Temporal test server; samples
+require a server at `localhost:7233`.
 
 ## Contributing
 
-1. Fork and clone.
-2. `dotnet tool restore` once after cloning.
-3. Run `just ci` before opening a PR — this is what CI runs.
-4. For integration tests: `just test-integration` (no external Temporal server needed; it uses
-   `WorkflowEnvironment.StartLocalAsync()`).
-5. Add an ADR in `adr/` for any architectural decision, API surface change, or significant
-   constraint. Follow the format in the existing ADRs.
-
----
+1. Fork and clone the repository.
+2. Run `dotnet tool restore` once.
+3. Run `just ci` before opening a pull request.
+4. Add or update meaningful tests and user documentation when behavior changes.
+5. Record architectural decisions and compatibility constraints in [`adr/`](adr/).
 
 ## License
 

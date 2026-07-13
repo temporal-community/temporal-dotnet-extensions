@@ -18,20 +18,22 @@ first and come back here when you want the object-oriented layer on top.
 
 Work through this sequence top to bottom. Each step introduces one concept; none assumes the next.
 
-1. **[Root `README.md`](../README.md) — Quick Start (Steps 1–5)** — Five steps from interface definition to a
-   running object. This is the minimal surface area: define a contract, implement it, register it,
-   call it, run it.
-2. **[`samples/01-getting-started`](../samples/01-getting-started/)** — The Quick Start in a runnable project. Use this to verify
+1. **[Root `README.md`](../README.md) — Durable Objects minimal example** — The smallest complete
+   path from contract definition through registration and a generated client call.
+2. **[`docs/DURABLE_OBJECTS.md`](DURABLE_OBJECTS.md) — Concepts and API overview** — When to choose
+   Durable Objects, identity, lifecycle, typed state, failure behavior, timers, generated clients,
+   and the main factory operations.
+3. **[`samples/01-getting-started`](../samples/01-getting-started/)** — The minimal example as a runnable project. Use this to verify
    your environment works before reading further.
-3. **[`docs/BOILERPLATE.md`](BOILERPLATE.md) — Required patterns** — Four patterns every DurableObject must follow:
+4. **[`docs/BOILERPLATE.md`](BOILERPLATE.md) — Required patterns** — Four patterns every DurableObject must follow:
    `[WorkflowRun]` on every class, the `DeactivateAsync` override rule, the difference between
    `AddDurableObjects` and `AddDurableObjectWorkflows`, and why `ConfigureAwait(false)` is not
    optional. Read this once before writing your first real object.
-4. **[`samples/02-input-validation`](../samples/02-input-validation/)** — Error handling and validators. Shows how to use
+5. **[`samples/02-input-validation`](../samples/02-input-validation/)** — Error handling and validators. Shows how to use
    `[WorkflowUpdateValidator]`, what `DurableObjectNotFoundException` and
    `DurableObjectNotActiveException` look like from the caller's side, and how to catch the right
    exception type from a failed update.
-5. **[`docs/FAILURE_HANDLING.md`](FAILURE_HANDLING.md) — Introduction** — The exception mapping table and update handler
+6. **[`docs/FAILURE_HANDLING.md`](FAILURE_HANDLING.md) — Introduction** — The exception mapping table and update handler
    failure taxonomy. After the first two samples, you will want to know why certain exceptions
    surface the way they do.
 
@@ -90,7 +92,9 @@ One-line description of every doc in this repository.
 
 | File | Description |
 |------|-------------|
-| [`README.md`](../README.md) | Quick Start (5 steps), Key Concepts, full API reference for `IDurableObjectFactory` and `DurableObjectBase`, building from source, contributing guide. |
+| [`README.md`](../README.md) | Repository-level package overview, analyzer entry point, minimal Durable Objects example, documentation map, and contributor commands. |
+| [`docs/ANALYZERS.md`](ANALYZERS.md) | General Temporal and Durable Objects analyzer rules, IDE code fixes, generated clients, and installation. |
+| [`docs/DURABLE_OBJECTS.md`](DURABLE_OBJECTS.md) | Durable Objects concepts and API overview: selection guidance, identity, lifecycle, state, failures, scheduling, and NativeAOT. |
 | [`docs/BOILERPLATE.md`](BOILERPLATE.md) | The four required patterns every DurableObject class must follow, with explanations of why each exists and the common mistakes. |
 | [`docs/FAILURE_HANDLING.md`](FAILURE_HANDLING.md) | Complete failure taxonomy: client-side exception mapping, update handler and lifecycle hook exception behavior, authorization predicates, reminder idempotency, and deactivation drain protocol. |
 | [`docs/TIER_MODEL.md`](TIER_MODEL.md) | Lifecycle tiers (Resident, Explicit Deactivation, Cold Passivation), when each is used, and why Tier 2 is absent in v1. |
@@ -116,8 +120,8 @@ One-line description of every doc in this repository.
 
 - Samples index: [`samples/README.md`](../samples/README.md)
 - Run a sample: `just run-sample` (sample 01) or `just run-sample <sample-name>`
-- Full API reference: [`README.md#api-reference`](../README.md#api-reference)
+- Durable Objects API overview: [`docs/DURABLE_OBJECTS.md#api-overview`](DURABLE_OBJECTS.md#api-overview)
 - Required patterns explained: [`docs/BOILERPLATE.md`](BOILERPLATE.md)
 - Troubleshooting: [`docs/TROUBLESHOOTING.md`](TROUBLESHOOTING.md)
-- Report a bug: [GitHub Issues](https://github.com/temporalcommunity/durable-objects/issues)
+- Report a bug: [GitHub Issues](https://github.com/temporal-community/durable-objects-dotnet/issues)
 - Temporal .NET SDK: [github.com/temporalio/sdk-dotnet](https://github.com/temporalio/sdk-dotnet)

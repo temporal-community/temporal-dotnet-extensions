@@ -1,6 +1,9 @@
-# Temporal .NET DurableObjects — Samples
+# Temporal .NET Extensions
 
-These samples demonstrate the key features of the `TemporalCommunity.DurableObjects` library.
+## Samples
+
+These samples demonstrate the Durable Objects library in the broader Temporal .NET Extensions
+repository.
 Each sample is independently runnable. Prerequisites: .NET 10 SDK and a running Temporal server
 (`temporal server start-dev`).
 

@@ -163,7 +163,7 @@ services.AddHostedTemporalWorker("my-task-queue")
         .AddDurableObjectWorkflows(typeof(Counter).Assembly);
 ```
 
-**See also:** [`README.md#api-reference`](../README.md#api-reference) — `IDurableObjectFactory` methods
+**See also:** [`docs/DURABLE_OBJECTS.md#api-overview`](DURABLE_OBJECTS.md#api-overview) — factory operations
 
 ---
 
@@ -414,6 +414,6 @@ just doctor
   wrong on first use.
 - Run `just test-unit` — unit tests do not require a Temporal server and are a fast sanity check
   that your build is correct.
-- Open a [GitHub Issue](https://github.com/temporalcommunity/durable-objects/issues) with the
+- Open a [GitHub Issue](https://github.com/temporal-community/durable-objects-dotnet/issues) with the
   error message, the exception chain (including `ex.Cause`), and which version of the library you
   are using.
