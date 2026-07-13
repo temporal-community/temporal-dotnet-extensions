@@ -252,9 +252,80 @@ pack-verify: pack
     echo "  ✓ analyzer and code-fix assets present in both packages"
     echo "==> Consumer compilation test (netstandard2.1)"
     consumer_dir=$(mktemp -d /tmp/ns21-consumer.XXXXXX)
+    analyzer_consumer_dir=$(mktemp -d /tmp/analyzer-consumer.XXXXXX)
     consumer_packages=$(mktemp -d /tmp/ns21-packages.XXXXXX)
-    trap 'rm -rf "$consumer_dir" "$consumer_packages"' EXIT
+    trap 'rm -rf "$consumer_dir" "$analyzer_consumer_dir" "$consumer_packages"' EXIT
     local_source=$(realpath "{{artifacts_dir}}")
+    echo "==> Packed analyzer consumer test"
+    printf '%s\n' \
+        '<Project Sdk="Microsoft.NET.Sdk">' \
+        '  <PropertyGroup>' \
+        '    <TargetFramework>net10.0</TargetFramework>' \
+        '    <Nullable>enable</Nullable>' \
+        '    <ImplicitUsings>enable</ImplicitUsings>' \
+        '    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>' \
+        '    <NoWarn>CA1050;CA1822;CA2007;CS1591</NoWarn>' \
+        '  </PropertyGroup>' \
+        '  <ItemGroup>' \
+        "    <PackageReference Include=\"TemporalCommunity.DurableObjects\" Version=\"{{version}}\" />" \
+        "    <PackageReference Include=\"TemporalCommunity.Extensions.Analyzers\" Version=\"{{version}}\" PrivateAssets=\"all\" />" \
+        "    <PackageReference Include=\"TemporalCommunity.DurableObjects.Analyzers\" Version=\"{{version}}\" PrivateAssets=\"all\" />" \
+        '  </ItemGroup>' \
+        '</Project>' \
+        > "$analyzer_consumer_dir/analyzer-consumer.csproj"
+    printf '%s\n' \
+        'using Temporalio.Workflows;' \
+        'using TemporalCommunity.DurableObjects;' \
+        '' \
+        '[Workflow]' \
+        'public sealed class InvalidWorkflow' \
+        '{' \
+        '    [WorkflowRun]' \
+        '    public async Task RunAsync() => await Task.Delay(1);' \
+        '}' \
+        '' \
+        'public interface IInvalidObject : IDurableObject' \
+        '{' \
+        '    Task IncrementAsync();' \
+        '}' \
+        > "$analyzer_consumer_dir/Consumer.cs"
+    if NUGET_PACKAGES="$consumer_packages" dotnet build "$analyzer_consumer_dir/analyzer-consumer.csproj" \
+        --nologo \
+        -p:RestoreAdditionalProjectSources="$local_source" \
+        > "$analyzer_consumer_dir/invalid.log" 2>&1; then
+        echo "  ✗ ERROR: invalid analyzer consumer unexpectedly compiled" >&2
+        cat "$analyzer_consumer_dir/invalid.log"
+        exit 1
+    fi
+    grep -q 'TEMP002' "$analyzer_consumer_dir/invalid.log"
+    grep -q 'DO0001' "$analyzer_consumer_dir/invalid.log"
+    if grep -q 'CS8032' "$analyzer_consumer_dir/invalid.log"; then
+        echo "  ✗ ERROR: compiler could not load a packaged analyzer assembly" >&2
+        cat "$analyzer_consumer_dir/invalid.log"
+        exit 1
+    fi
+    echo "  ✓ packed analyzers produced TEMP002 and DO0001 through dotnet build"
+    printf '%s\n' \
+        'using Temporalio.Workflows;' \
+        'using TemporalCommunity.DurableObjects;' \
+        '' \
+        '[Workflow]' \
+        'public sealed class ValidWorkflow' \
+        '{' \
+        '    [WorkflowRun]' \
+        '    public async Task RunAsync() => await Workflow.DelayAsync(TimeSpan.FromMilliseconds(1));' \
+        '}' \
+        '' \
+        'public interface IValidObject : IDurableObject' \
+        '{' \
+        '    [WorkflowUpdate] Task IncrementAsync();' \
+        '}' \
+        > "$analyzer_consumer_dir/Consumer.cs"
+    NUGET_PACKAGES="$consumer_packages" dotnet build "$analyzer_consumer_dir/analyzer-consumer.csproj" \
+        --nologo \
+        --no-restore \
+        -p:RestoreAdditionalProjectSources="$local_source"
+    echo "  ✓ valid packed-analyzer consumer compiled without loader warnings"
     # printf avoids a heredoc whose body would start with '<' at column 1 — just's parser
     # treats '<' at column 1 as an unknown token and rejects the recipe before it runs.
     printf '%s\n' \
