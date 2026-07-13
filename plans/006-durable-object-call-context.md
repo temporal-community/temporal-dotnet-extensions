@@ -1,9 +1,9 @@
 # Plan 006: DurableObject Call Context
 
-Status: Proposed
+Status: Complete
 Depends on: None
 GitHub issue: [#7](https://github.com/temporal-community/durable-objects-dotnet/issues/7)
-Completed by: —
+Completed by: [f980640](https://github.com/temporal-community/durable-objects-dotnet/commit/f980640)
 
 ## Outcome
 
@@ -25,11 +25,11 @@ wire handler names.
 
 ## Implementation
 
-- [ ] Inventory Temporal client update/query RPC option surfaces.
-- [ ] Specify the public options API and precedence rules.
-- [ ] Prototype update-with-start and query propagation.
-- [ ] Record the accepted public contract in an ADR.
-- [ ] Add runtime support before generated clients consume it.
+- [x] Inventory Temporal client update/query RPC option surfaces.
+- [x] Specify the public options API and precedence rules.
+- [x] Prototype update-with-start and query propagation.
+- [x] Record the accepted public contract in ADR 008.
+- [x] Add runtime support before generated clients consume it.
 
 ## Tests
 
