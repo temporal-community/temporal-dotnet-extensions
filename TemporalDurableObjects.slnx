@@ -18,6 +18,7 @@
     <Project Path="src/TemporalCommunity.DurableObjects/TemporalCommunity.DurableObjects.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/TemporalCommunity.DurableObjects.GeneratedClients.Tests/TemporalCommunity.DurableObjects.GeneratedClients.Tests.csproj" />
     <Project Path="tests/TemporalCommunity.DurableObjects.Analyzers.CodeFixes.Tests/TemporalCommunity.DurableObjects.Analyzers.CodeFixes.Tests.csproj" />
     <Project Path="tests/TemporalCommunity.DurableObjects.Analyzers.Tests/TemporalCommunity.DurableObjects.Analyzers.Tests.csproj" />
     <Project Path="tests/TemporalCommunity.DurableObjects.IntegrationTests/TemporalCommunity.DurableObjects.IntegrationTests.csproj" />

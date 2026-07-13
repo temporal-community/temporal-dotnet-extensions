@@ -98,13 +98,10 @@ Three reasons — none of them performance:
 
 ---
 
-## Consequences
+## Historical consequences and current status
 
-- **NativeAOT is not supported in v1.** This is documented prominently in the README and
-  NuGet package description. Callers using `PublishAot=true` must wait for v1.1.
-- Future scope: `TemporalCommunity.DurableObjects.Analyzers` — DurableObjects-specific analyzers,
-  code fixes, and an incremental generator that emits a typed proxy class per interface. It will include parity
-  tests asserting behavioral equivalence with the `DispatchProxy` implementation, and an AOT
-  validation step in CI.
+- The original `DispatchProxy` path remains unavailable under NativeAOT.
+- ADR 009 delivered `TemporalCommunity.DurableObjects.Analyzers`, concrete clients, parity tests,
+  and NativeAOT validation in CI.
 - The transition from `DispatchProxy` to generated proxies is internal to the library.
   The public `IDurableObjectFactory.Get<T>()` API surface does not change.

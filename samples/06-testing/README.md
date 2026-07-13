@@ -4,6 +4,9 @@ A reference test suite demonstrating how to write integration tests for DurableO
 with `TemporalCommunity.DurableObjects`. Copy patterns from this project to test your own
 DurableObjects.
 
+These tests intentionally cover the compatibility factory and named-query APIs. Generated-client
+execution is covered separately by `tests/TemporalCommunity.DurableObjects.GeneratedClients.Tests`.
+
 ## What this project shows
 
 - How to start an in-process Temporal server for tests
@@ -44,7 +47,8 @@ name so each test's worker and workflow history are fully isolated.
 
 ## Why `GetOrCreateAsync` is preferred over `Get` in tests
 
-`Get<T>(objectId)` returns a proxy immediately but issues no RPC. If the object has never
+`Get<T>(objectId)` returns a local client immediately but issues no RPC. With the analyzer package
+it prefers a generated implementation; otherwise it uses `DispatchProxy`. If the object has never
 been activated, the proxy will work for updates (which use update-with-start) but will throw
 `DurableObjectNotFoundException` on any query before the first update completes.
 

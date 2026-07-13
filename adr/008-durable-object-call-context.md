@@ -19,10 +19,10 @@ metadata through `RpcOptions` on both query and update-with-start calls.
 `DurableObjectCallOptions` is the immutable public transport contract. It snapshots caller-owned
 metadata and maps each operation to a fresh SDK `RpcOptions` instance.
 
-- Factory `Get` overloads bind options to a local proxy; every query or update through that proxy
+- Factory `Get` overloads bind options to a local client; every query or update through that client
   uses them.
 - Named async query overloads accept the same options directly.
-- `GetOrCreateAsync` applies the options to the start RPC and returns a proxy carrying them.
+- `GetOrCreateAsync` applies the options to the start RPC and returns a client carrying them.
 - Existing `CancellationToken` overloads remain source compatible and adapt to the new model.
 - Cancellation stops the caller from waiting for an RPC. It does not undo an update already
   accepted by Temporal.

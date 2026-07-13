@@ -3,6 +3,9 @@
 This sample demonstrates how to validate inputs and handle error conditions with DurableObjects,
 using a `BankAccount` object with deposit and withdraw operations.
 
+This sample intentionally uses the named async query APIs to demonstrate missing/inactive-object
+exception handling. For generated strongly typed async queries, start with sample 01.
+
 ## What you'll learn
 
 - Throwing `ArgumentException` inside a `[WorkflowUpdate]` to reject bad input

@@ -146,7 +146,7 @@ before calling any method:
 var counter = factory.Get<ICounter>("my-counter");
 var count = counter.GetCount(); // DurableObjectNotFoundException if object never started
 
-// Right — GetOrCreateAsync starts the object if it is not running, then returns a proxy
+// Right — GetOrCreateAsync starts the object if it is not running, then returns a client
 var counter = await factory.GetOrCreateAsync<ICounter>("my-counter");
 var count = counter.GetCount(); // safe — object exists
 ```
@@ -288,7 +288,7 @@ public Task WithdrawAsync(decimal amount)
 
 ## Symptom: "I'm getting a `PlatformNotSupportedException` at startup"
 
-**Cause:** The worker was published with `PublishAot=true`. NativeAOT is not supported in v1.
+**Cause:** A NativeAOT application reached the ungenerated `DispatchProxy` fallback.
 
 `DurableObjectProxy<T>` uses `DispatchProxy.Create<T, DurableObjectProxy<T>>()` internally to
 generate the typed proxy at runtime. `DispatchProxy` uses `Reflection.Emit`, which the .NET AOT
@@ -302,9 +302,11 @@ System.PlatformNotSupportedException: Operation is not supported on this platfor
    at System.Reflection.Emit.DynamicMethod...
 ```
 
-**Fix:**
+**Fix:** Install `TemporalCommunity.DurableObjects.Analyzers`, keep the contract public, top-level,
+and non-generic, and use its generated extension such as `factory.GetCounterClient(id)`. Resolve
+any `DO0005` diagnostic; it means the contract cannot safely generate a concrete client.
 
-Do not publish DurableObject workers with `PublishAot=true` in v1. Remove or set to `false`:
+If generation is not an option, disable NativeAOT for that application:
 
 ```xml
 <!-- Wrong -->
@@ -318,10 +320,10 @@ Do not publish DurableObject workers with `PublishAot=true` in v1. Remove or set
 </PropertyGroup>
 ```
 
-A source-generator-based proxy that eliminates this limitation is planned as part of the separate
-`TemporalCommunity.DurableObjects.Analyzers` package.
+The generated client-dispatch path is verified under NativeAOT in CI. This does not imply that
+reflection-based worker discovery or every Temporal SDK feature is NativeAOT-compatible.
 
-**See also:** [`adr/002-dispatchproxy-not-sourcegen.md`](../adr/002-dispatchproxy-not-sourcegen.md)
+**See also:** [`adr/009-generated-asynchronous-clients.md`](../adr/009-generated-asynchronous-clients.md)
 
 ---
 

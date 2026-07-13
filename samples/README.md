@@ -8,7 +8,7 @@ Each sample is independently runnable. Prerequisites: .NET 10 SDK and a running 
 
 | Sample | Domain Object | Key Concepts | Run Command |
 |--------|--------------|--------------|-------------|
-| [01-getting-started](01-getting-started/) | `PageCounter` | Setup, client proxy, `IDurableObjectFactory`, lifecycle hooks, activity from update | `just run-sample` |
+| [01-getting-started](01-getting-started/) | `PageCounter` | Generated async client, `IDurableObjectFactory`, lifecycle hooks, activity from update | `just run-sample` |
 | [02-input-validation](02-input-validation/) | `BankAccount` | `[WorkflowUpdateValidator]`, `DurableObjectNotFoundException`, `DurableObjectNotActiveException` | `just run-sample 02-input-validation` |
 | [03-scheduling](03-scheduling/) | `ReportGenerator` + `SubscriptionTracker` | `CreateDurableObjectScheduleAsync` vs `CreateDurableObjectReminderAsync`, `IReminderReceiver` | `just run-sample 03-scheduling` |
 | [04-object-to-object](04-object-to-object/) | `OrderProcessor` → `InventoryTracker` | Activity-mediated DO-to-DO, `IDurableObjectFactory` in activities | `just run-sample 04-object-to-object` |
@@ -17,7 +17,7 @@ Each sample is independently runnable. Prerequisites: .NET 10 SDK and a running 
 
 ## Suggested Reading Order
 
-Start with **01-getting-started** to understand the core programming model (proxy, factory,
+Start with **01-getting-started** to understand the core programming model (generated client, factory,
 lifecycle hooks). Then work through **02-input-validation** to see how errors and validators
 compose. After that, pick whichever topic fits your immediate need: scheduling (03), cross-object
 communication (04), observability (05), or testing patterns (06).

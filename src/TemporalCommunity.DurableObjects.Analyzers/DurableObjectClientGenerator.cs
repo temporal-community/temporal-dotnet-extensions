@@ -198,8 +198,10 @@ public sealed class DurableObjectClientGenerator : IIncrementalGenerator
                 methods.Any(candidate =>
                     candidate.Name == method.Name &&
                     candidate.Parameters.Length == method.Parameters.Length + 1 &&
-                    candidate.Parameters.Take(method.Parameters.Length).Select(parameter => parameter.Type)
-                        .SequenceEqual(method.Parameters.Select(parameter => parameter.Type), SymbolEqualityComparer.Default) &&
+                    Enumerable.Range(0, method.Parameters.Length).All(index =>
+                        SymbolEqualityComparer.Default.Equals(
+                            candidate.Parameters[index].Type,
+                            method.Parameters[index].Type)) &&
                     candidate.Parameters[candidate.Parameters.Length - 1].Type.ToDisplayString() ==
                         "TemporalCommunity.DurableObjects.DurableObjectCallOptions"))
             {
@@ -224,9 +226,13 @@ public sealed class DurableObjectClientGenerator : IIncrementalGenerator
         contract.GetMembers().OfType<IMethodSymbol>()
             .Concat(contract.AllInterfaces
                 .SelectMany(@interface => @interface.GetMembers().OfType<IMethodSymbol>()))
-            .GroupBy(method => method.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+            .GroupBy(GetMethodSignatureKey, StringComparer.Ordinal)
             .Select(group => group.First())
             .ToImmutableArray();
+
+    private static string GetMethodSignatureKey(IMethodSymbol method) =>
+        method.Name + "`" + method.Arity + "(" + string.Join(",", method.Parameters.Select(parameter =>
+            parameter.RefKind + ":" + parameter.Type.ToDisplayString(s_typeFormat))) + ")";
 
     private static string GetBaseName(INamedTypeSymbol contract) =>
         contract.Name.Length > 1 && contract.Name[0] == 'I' && char.IsUpper(contract.Name[1])

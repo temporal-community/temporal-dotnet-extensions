@@ -72,8 +72,10 @@ The ADRs document why the library is built the way it is. Read them in order for
 architectural picture; read individual ones when a constraint surprises you.
 
 - **[`adr/001-net10-only.md`](../adr/001-net10-only.md)** — Why the library ships `net10.0;net8.0;netstandard2.1`, what polyfills made it feasible, and the one method unavailable on .NET Standard.
-- **[`adr/002-dispatchproxy-not-sourcegen.md`](../adr/002-dispatchproxy-not-sourcegen.md)** — Why `DispatchProxy` is used for the typed
-  proxy and why NativeAOT is not supported. The source generator is planned for v1.1.
+- **[`adr/002-dispatchproxy-not-sourcegen.md`](../adr/002-dispatchproxy-not-sourcegen.md)** — Historical rationale for the remaining
+  `DispatchProxy` compatibility fallback.
+- **[`adr/009-generated-asynchronous-clients.md`](../adr/009-generated-asynchronous-clients.md)** — How generated clients add asynchronous
+  queries and a NativeAOT-compatible client dispatch path.
 - **[`adr/003-do-to-do-messaging-deferred.md`](../adr/003-do-to-do-messaging-deferred.md)** — Why object-to-object messaging is not in v1
   and the three candidate designs under evaluation for v1.1 (Activity-mediated, child workflows,
   Nexus).
@@ -93,13 +95,14 @@ One-line description of every doc in this repository.
 | [`docs/FAILURE_HANDLING.md`](FAILURE_HANDLING.md) | Complete failure taxonomy: client-side exception mapping, update handler and lifecycle hook exception behavior, authorization predicates, reminder idempotency, and deactivation drain protocol. |
 | [`docs/TIER_MODEL.md`](TIER_MODEL.md) | Lifecycle tiers (Resident, Explicit Deactivation, Cold Passivation), when each is used, and why Tier 2 is absent in v1. |
 | [`adr/001-net10-only.md`](../adr/001-net10-only.md) | Why the library ships `net10.0;net8.0;netstandard2.1`, what polyfills make it feasible, and the one method unavailable on .NET Standard. |
-| [`adr/002-dispatchproxy-not-sourcegen.md`](../adr/002-dispatchproxy-not-sourcegen.md) | Why `DispatchProxy` is used (not a source generator) and what this means for NativeAOT. |
+| [`adr/002-dispatchproxy-not-sourcegen.md`](../adr/002-dispatchproxy-not-sourcegen.md) | Historical rationale for the `DispatchProxy` fallback. |
+| [`adr/009-generated-asynchronous-clients.md`](../adr/009-generated-asynchronous-clients.md) | Generated concrete clients, async query API, registry integration, and NativeAOT scope. |
 | [`adr/003-do-to-do-messaging-deferred.md`](../adr/003-do-to-do-messaging-deferred.md) | Why DurableObject-to-DurableObject messaging is not in v1 and the v1 Activity-mediated workaround. |
 | [`adr/004-versioning-strategy.md`](../adr/004-versioning-strategy.md) | Safe vs. breaking changes for long-lived objects, `Workflow.Patched`, worker deployment strategy, and replay tests. |
 | [`adr/005-signals-banned.md`](../adr/005-signals-banned.md) | Why `[WorkflowSignal]` is banned and the three conditions required to reconsider it in v1.1. |
 | [`docs/TROUBLESHOOTING.md`](TROUBLESHOOTING.md) | Common mistakes and how to fix them: silent startup failures, non-determinism errors, object-not-found errors, scheduled objects that never deactivate, and more. |
 | [`samples/README.md`](../samples/README.md) | Index of all six samples, suggested reading order, and common prerequisites. |
-| [`samples/01-getting-started/`](../samples/01-getting-started/) | Core programming model: proxy, factory, lifecycle hooks, activity from an update handler. |
+| [`samples/01-getting-started/`](../samples/01-getting-started/) | Core programming model: generated client, async query, factory, lifecycle hooks, and activity calls. |
 | [`samples/02-input-validation/`](../samples/02-input-validation/) | `[WorkflowUpdateValidator]`, `DurableObjectNotFoundException`, `DurableObjectNotActiveException`, and catching the correct exception type. |
 | [`samples/03-scheduling/`](../samples/03-scheduling/) | `CreateDurableObjectScheduleAsync` and `CreateDurableObjectReminderAsync`, reminder idempotency with `IReminderReceiver`. |
 | [`samples/04-object-to-object/`](../samples/04-object-to-object/) | Activity-mediated DO-to-DO calls using `IDurableObjectFactory` inside activities. |

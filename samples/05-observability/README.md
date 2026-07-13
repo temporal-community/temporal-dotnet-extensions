@@ -3,6 +3,9 @@
 This sample demonstrates OpenTelemetry tracing integration with DurableObjects, using a
 `TemperatureSensor` object that records IoT readings and produces distributed traces.
 
+The sample intentionally calls the named async query API so its tracing output shows that raw
+client path. Sample 01 demonstrates the generated strongly typed async-query client.
+
 ## What you'll learn
 
 - How to attach `TracingInterceptor` to both the Temporal client and the worker

@@ -45,7 +45,7 @@ dotnet run
 // No RPC — creates a concrete, NativeAOT-compatible client with async queries.
 var client = factory.GetPageCounterClient("home");
 
-// Atomically starts the execution if it is not already running, then returns a proxy.
+// Atomically starts the execution if it is not already running, then returns a client.
 var counter = await factory.GetOrCreateAsync<IPageCounter>("home");
 ```
 

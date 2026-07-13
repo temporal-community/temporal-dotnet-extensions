@@ -141,8 +141,9 @@ fails according to its activity timeout and retry policy.
 
 ### Step 4: Call it
 
-Inject `IDurableObjectFactory`, get a typed proxy, and call methods. The object ID remains a
-Temporal workflow ID, while the proxy handles update-with-start and query dispatch.
+Inject `IDurableObjectFactory` and use the generated client extension. The object ID remains a
+Temporal workflow ID, while the concrete client handles update-with-start and asynchronous query
+dispatch without reflection.
 
 ```csharp
 using Temporalio.Exceptions;
@@ -151,11 +152,11 @@ public class MyService(IDurableObjectFactory factory)
 {
     public async Task RunAsync()
     {
-        // GetOrCreateAsync starts the object if it doesn't exist, then returns a typed proxy.
-        ICounter counter = await factory.GetOrCreateAsync<ICounter>("my-counter");
+        // Generated from ICounter by TemporalCommunity.DurableObjects.Analyzers.
+        var counter = factory.GetCounterClient("my-counter");
 
         await counter.IncrementAsync(5);  // validator passes; activity records the increment
-        int count = counter.GetCount();   // 5
+        int count = await counter.GetCountAsync(); // 5; no blocked caller thread
 
         try
         {
@@ -166,7 +167,7 @@ public class MyService(IDurableObjectFactory factory)
             // Expected: the validator rejects this before the handler body runs.
         }
 
-        count = counter.GetCount(); // still 5; the object remains alive
+        count = await counter.GetCountAsync(); // still 5; the object remains alive
     }
 }
 ```
@@ -327,10 +328,10 @@ has already accepted. Create another proxy when a later call needs different opt
 
 | Method | Description |
 |--------|-------------|
-| `Get<T>(objectId)` | Returns a typed proxy. No RPC issued — creation is local. Uses `DefaultTaskQueue`. |
+| `Get<T>(objectId)` | Returns the registered generated implementation, or a `DispatchProxy` fallback. No RPC is issued. |
 | `Get<T>(objectId, taskQueue)` | Same, with explicit task queue override. |
-| `Get<T>(objectId, callOptions)` | Returns a proxy whose queries and updates share immutable RPC options. |
-| `GetOrCreateAsync<T>(objectId)` | Guarantees the object exists (starts if not running) then returns a proxy. Issues one RPC. |
+| `Get<T>(objectId, callOptions)` | Returns a client whose queries and updates share immutable RPC options. |
+| `GetOrCreateAsync<T>(objectId)` | Guarantees the object exists, then returns the generated implementation or proxy fallback. Issues one RPC. |
 | `GetOrCreateAsync<T>(objectId, taskQueue)` | Same, with explicit task queue override. |
 | `QueryDurableObjectAsync<TResult>(objectId, queryName, args)` | Non-blocking async query. Use on hot paths where thread-parking is unacceptable. |
 | `QueryOrDefaultAsync<TResult>(objectId, queryName, args)` | Same, but returns `default` instead of throwing when the object is absent. |

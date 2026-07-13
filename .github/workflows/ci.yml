@@ -38,6 +38,7 @@ jobs:
           dotnet test tests/TemporalCommunity.DurableObjects.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=unit.trx"
           dotnet test tests/TemporalCommunity.Extensions.Analyzers.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=analyzers.trx"
           dotnet test tests/TemporalCommunity.DurableObjects.Analyzers.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=durable-analyzers.trx"
+          dotnet test tests/TemporalCommunity.DurableObjects.GeneratedClients.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=generated-clients.trx"
           dotnet test tests/TemporalCommunity.Extensions.Analyzers.CodeFixes.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=analyzer-codefixes.trx"
           dotnet test tests/TemporalCommunity.DurableObjects.Analyzers.CodeFixes.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=durable-analyzer-codefixes.trx"
 

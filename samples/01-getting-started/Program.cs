@@ -78,7 +78,7 @@ internal sealed class DemoService : BackgroundService
             Console.WriteLine($"Got generated client for object id 'home' (no RPC yet).");
 
             // Step 2: Ensure the object exists. GetOrCreateAsync atomically starts the
-            // execution if it is not already running, then returns a proxy.
+            // execution if it is not already running, then returns a client.
             await _factory.GetOrCreateAsync<IPageCounter>("home", stoppingToken)
                 .ConfigureAwait(false);
             Console.WriteLine($"Ensured 'home' counter exists.");

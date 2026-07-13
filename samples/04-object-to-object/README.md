@@ -67,7 +67,8 @@ public async Task ReserveInventoryAsync(string productId, int quantity)
 ```
 
 `IDurableObjectFactory` is injected via DI, registered by `AddDurableObjects(TaskQueue)` in
-`Program.cs`. The `Get<T>` call is a local proxy construction (no RPC); `ReserveStockAsync`
+`Program.cs`. This sample intentionally exercises the compatibility fallback: the `Get<T>` call is
+a local `DispatchProxy` construction (no RPC); `ReserveStockAsync`
 issues the actual update RPC.
 
 ---

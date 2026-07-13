@@ -39,7 +39,7 @@ A Tier 3 object closes its workflow execution when deactivated. There are two de
 
 ### External deactivation — `DeactivateAsync()`
 
-An external caller invokes `DeactivateAsync()` on the typed proxy. Because it is a
+An external caller invokes `DeactivateAsync()` on the typed client. Because it is a
 `[WorkflowUpdate]`, the caller gets confirmation that the deactivation was accepted. The
 interceptor then rejects any new updates with `errorType: "ObjectDeactivating"`. The run loop
 drains all in-flight handlers, calls `OnDeactivateAsync()`, and completes the execution.

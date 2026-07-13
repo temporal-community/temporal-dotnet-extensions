@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using System.Globalization;
 using Temporalio.Workflows;
 using TemporalCommunity.DurableObjects;
 using Xunit;
@@ -22,6 +23,9 @@ public sealed class DurableObjectClientGeneratorTests
             {
                 [WorkflowUpdate]
                 System.Threading.Tasks.Task IncrementAsync(int amount);
+
+                [WorkflowUpdate]
+                System.Threading.Tasks.Task IncrementAsync(string label);
 
                 [WorkflowUpdate("add-value")]
                 System.Threading.Tasks.Task<int> AddAsync(int amount);
@@ -68,6 +72,49 @@ public sealed class DurableObjectClientGeneratorTests
         Assert.Contains(
             driver.GetRunResult().Diagnostics,
             diagnostic => diagnostic.Id == DurableObjectClientGenerator.UnsupportedContractId);
+    }
+
+    [Fact]
+    public void ReportsAmbiguousAndNonMethodContractShapes()
+    {
+        var compilation = CreateCompilation("""
+            using Temporalio.Workflows;
+            using TemporalCommunity.DurableObjects;
+
+            public interface IFoo : IDurableObject
+            {
+                [WorkflowQuery] int Read();
+            }
+
+            public interface Foo : IDurableObject
+            {
+                [WorkflowQuery] int Read();
+            }
+
+            public interface IWithProperty : IDurableObject
+            {
+                int Value { get; }
+            }
+
+            public interface IOverload : IDurableObject
+            {
+                [WorkflowUpdate] System.Threading.Tasks.Task SaveAsync(int value);
+                [WorkflowUpdate] System.Threading.Tasks.Task SaveAsync(
+                    int value, DurableObjectCallOptions options);
+            }
+            """);
+        GeneratorDriver driver = CreateDriver().RunGenerators(compilation);
+        var diagnostics = driver.GetRunResult().Diagnostics
+            .Where(diagnostic => diagnostic.Id == DurableObjectClientGenerator.UnsupportedContractId)
+            .ToArray();
+
+        Assert.Equal(4, diagnostics.Length);
+        Assert.Contains(diagnostics, diagnostic => diagnostic.GetMessage(CultureInfo.InvariantCulture).Contains(
+            "same generated client name", StringComparison.Ordinal));
+        Assert.Contains(diagnostics, diagnostic => diagnostic.GetMessage(CultureInfo.InvariantCulture).Contains(
+            "properties and events", StringComparison.Ordinal));
+        Assert.Contains(diagnostics, diagnostic => diagnostic.GetMessage(CultureInfo.InvariantCulture).Contains(
+            "call-options overload", StringComparison.Ordinal));
     }
 
     private static CSharpCompilation CreateCompilation(string source)

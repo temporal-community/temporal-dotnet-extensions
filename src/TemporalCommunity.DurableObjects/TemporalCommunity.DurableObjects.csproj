@@ -26,6 +26,7 @@
     <!-- Allow test projects to access internal types (DurableObjectNaming, DurableObjectProxy<T>) -->
     <InternalsVisibleTo Include="TemporalCommunity.DurableObjects.Tests" />
     <InternalsVisibleTo Include="TemporalCommunity.DurableObjects.IntegrationTests" />
+    <InternalsVisibleTo Include="TemporalCommunity.DurableObjects.GeneratedClients.Tests" />
   </ItemGroup>
 
   <ItemGroup>

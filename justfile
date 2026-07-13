@@ -13,6 +13,7 @@ unit_tests_dir        := "tests/TemporalCommunity.DurableObjects.Tests"
 integration_tests_dir := "tests/TemporalCommunity.DurableObjects.IntegrationTests"
 general_analyzer_tests_dir := "tests/TemporalCommunity.Extensions.Analyzers.Tests"
 durable_analyzer_tests_dir := "tests/TemporalCommunity.DurableObjects.Analyzers.Tests"
+generated_client_tests_dir := "tests/TemporalCommunity.DurableObjects.GeneratedClients.Tests"
 general_codefix_tests_dir := "tests/TemporalCommunity.Extensions.Analyzers.CodeFixes.Tests"
 durable_codefix_tests_dir := "tests/TemporalCommunity.DurableObjects.Analyzers.CodeFixes.Tests"
 benchmarks_dir        := "benchmarks/TemporalCommunity.DurableObjects.Benchmarks"
@@ -111,6 +112,11 @@ test-unit: build
         --no-build \
         --nologo \
         --logger "trx;LogFileName=durable-analyzers.trx"
+    dotnet test "{{generated_client_tests_dir}}" \
+        --configuration "{{configuration}}" \
+        --no-build \
+        --nologo \
+        --logger "trx;LogFileName=generated-clients.trx"
     dotnet test "{{general_codefix_tests_dir}}" \
         --configuration "{{configuration}}" \
         --no-build \

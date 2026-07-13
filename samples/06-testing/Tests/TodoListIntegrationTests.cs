@@ -63,9 +63,9 @@ public sealed class TodoListIntegrationTests : DurableObjectTestBase
         try
         {
             // Pattern: GetOrCreateAsync is preferred over Get in tests.
-            // GetOrCreateAsync issues a start-with-update RPC that atomically activates the
-            // workflow and sends the first update in one round trip. Get() returns a proxy
-            // immediately without verifying the workflow exists — if no update has been sent yet,
+            // GetOrCreateAsync issues a StartWorkflow RPC that atomically ensures the workflow is
+            // active. Get() returns the compatibility client immediately without verifying the
+            // workflow exists — if no update has been sent yet,
             // there is nothing for the worker to execute.
             var todoList = await factory.GetOrCreateAsync<ITodoList>(objectId);
 
@@ -178,12 +178,12 @@ public sealed class TodoListIntegrationTests : DurableObjectTestBase
     // Test: GetOrCreateAsync is idempotent
     // -------------------------------------------------------------------------
     // Pattern: call GetOrCreateAsync twice with the same object ID and verify the
-    // second call returns a proxy to the same running workflow — not a duplicate start.
+    // second call returns a client for the same running workflow — not a duplicate start.
     // This is the "exactly-once activation" guarantee of DurableObjects.
     //
     // How it works: GetOrCreateAsync uses StartWorkflow with UseExisting conflict policy,
     // which Temporal implements as an atomic "start if not running, attach if running"
-    // operation. The second call sees the workflow already running and returns a proxy
+    // operation. The second call sees the workflow already running and returns a client
     // to the same execution without starting a new one.
     // -------------------------------------------------------------------------
 
