@@ -1,9 +1,9 @@
 # Plan 005: Generated Asynchronous Clients
 
-Status: Proposed
+Status: Complete
 Depends on: Plan 006
 GitHub issue: [#8](https://github.com/temporal-community/durable-objects-dotnet/issues/8)
-Completed by: —
+Completed by: [ff7738e](https://github.com/temporal-community/durable-objects-dotnet/commit/ff7738e)
 
 ## Outcome
 
@@ -26,11 +26,11 @@ Removing `DispatchProxy` requires a separate compatibility decision after adopti
 
 ## Implementation
 
-- [ ] Approve the asynchronous client and call-options API.
-- [ ] Specify generated source shape and registry integration.
-- [ ] Implement incremental generation and compile-output tests.
-- [ ] Add runtime parity tests against existing update/query behavior.
-- [ ] Add NativeAOT publish and execution verification.
+- [x] Approve the asynchronous client and call-options API in ADR 009.
+- [x] Specify generated source shape and registry integration.
+- [x] Implement incremental generation and compile-output tests.
+- [x] Add runtime parity tests against existing update/query behavior.
+- [x] Add NativeAOT publish and execution verification.
 
 ## Tests
 
