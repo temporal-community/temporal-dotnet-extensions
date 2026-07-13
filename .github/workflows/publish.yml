@@ -28,24 +28,32 @@ jobs:
       - name: Restore tools
         run: dotnet tool restore
 
-      - name: Verify version is not a fallback (requires a release tag on this commit)
+      - name: Install just
+        uses: taiki-e/install-action@just
+
+      - name: Verify an exact release tag is checked out
         run: |
+          tag=$(git describe --tags --exact-match HEAD 2>/dev/null || true)
+          if [[ -z "$tag" ]]; then
+            echo "::error::The selected ref is not an exact release tag."
+            echo "::error::Tag the release commit and dispatch this workflow from that tag."
+            exit 1
+          fi
           version=$(dotnet tool run minver --tag-prefix "" --default-pre-release-identifiers preview)
-          echo "MinVer resolved version: $version"
-          if [[ "$version" == 0.0.0-* ]]; then
-            echo "::error::Version resolved to '$version' — this means no release tag exists on this commit."
-            echo "::error::Tag the commit first: git tag <major>.<minor>.<patch> && git push origin <tag>"
+          echo "Release tag: $tag; MinVer version: $version"
+          if [[ "$version" != "$tag" ]]; then
+            echo "::error::Release tag '$tag' and MinVer version '$version' do not match."
             exit 1
           fi
 
-      - name: Restore packages
-        run: dotnet restore TemporalDurableObjects.slnx
+      - name: Test
+        run: just test
 
-      - name: Build
-        run: dotnet build src/TemporalCommunity.DurableObjects --configuration Release --no-restore --nologo
+      - name: Pack and verify consumers
+        run: just pack-verify
 
-      - name: Pack
-        run: dotnet pack src/TemporalCommunity.DurableObjects --configuration Release --no-build --nologo --output artifacts/packages
+      - name: Verify generated client under NativeAOT
+        run: just aot-verify
 
       # Exchange the GitHub OIDC JWT for a short-lived NuGet API key.
       # NuGet/login hits https://www.nuget.org/api/v2/token with the OIDC token

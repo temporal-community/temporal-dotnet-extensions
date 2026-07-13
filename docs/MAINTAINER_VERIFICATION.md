@@ -31,3 +31,14 @@ hardware and runtime; the repository intentionally has no machine-dependent CI t
 
 `ScenarioP_ConcurrentObjectScale` exercises 50 independent object IDs concurrently and asserts
 state isolation. It is a bounded correctness regression test, not a throughput benchmark.
+
+## Release packages
+
+Run `just pack-verify` before tagging a release. It builds all three NuGet packages, checks their
+assets, and compiles representative consumers. The NuGet publishing workflow must be dispatched
+from an exact release tag; it rejects branches and untagged commits, verifies that MinVer resolves
+the same version, and publishes this package set together:
+
+- `TemporalCommunity.DurableObjects`
+- `TemporalCommunity.Extensions.Analyzers`
+- `TemporalCommunity.DurableObjects.Analyzers`

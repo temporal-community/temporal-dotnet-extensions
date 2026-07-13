@@ -457,9 +457,9 @@ Run `just` with no arguments to list all available recipes.
 |--------|-------------|
 | `just build` | Restore and compile in Release mode. |
 | `just test-unit` | Unit tests only — no Temporal server needed. |
-| `just test-integration` | 15 integration scenarios (uses embedded `WorkflowEnvironment`). |
+| `just test-integration` | Integration and replay suite (uses embedded `WorkflowEnvironment`). |
 | `just test-filter "FullyQualifiedName~ScenarioA"` | Run a specific scenario. |
-| `just pack` | Pack the library; MinVer reads the git tag for the version. |
+| `just pack` | Pack the runtime and both analyzer packages; MinVer reads the git tag for the version. |
 | `just run-sample` | Run the sample app (requires a live Temporal server at `localhost:7233`). |
 | `just ci` | Full CI pipeline: clean → build → unit tests → pack and consumer verification. |
 
