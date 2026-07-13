@@ -41,8 +41,8 @@ clarify their constraints.
 | Correctness guarantees | [002](002-correctness-guarantees.md) | [#3](https://github.com/temporal-community/durable-objects-dotnet/issues/3) | Complete | [6cf07ce](https://github.com/temporal-community/durable-objects-dotnet/commit/6cf07ce) |
 | Strongly typed durable state | [003](003-typed-durable-state.md) | [#4](https://github.com/temporal-community/durable-objects-dotnet/issues/4) | Complete | [e28fd5a](https://github.com/temporal-community/durable-objects-dotnet/commit/e28fd5a) |
 | Temporal analyzer platform | [004](004-temporal-analyzer-platform.md) | [#5](https://github.com/temporal-community/durable-objects-dotnet/issues/5) | In Progress | — |
-| Generated asynchronous clients | Not yet planned | — | Deferred | — |
-| Call context and cancellation | Not yet planned | — | Deferred | — |
+| Generated asynchronous clients | [005](005-generated-async-clients.md) | To be created | Proposed | — |
+| Call context and cancellation | [006](006-durable-object-call-context.md) | To be created | Proposed | — |
 | Object identity and metadata | Not yet planned | — | Deferred | — |
 | Performance, NativeAOT, and scale | Not yet planned | — | Deferred | — |
 

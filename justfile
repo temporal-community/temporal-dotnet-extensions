@@ -13,6 +13,8 @@ unit_tests_dir        := "tests/TemporalCommunity.DurableObjects.Tests"
 integration_tests_dir := "tests/TemporalCommunity.DurableObjects.IntegrationTests"
 general_analyzer_tests_dir := "tests/TemporalCommunity.Extensions.Analyzers.Tests"
 durable_analyzer_tests_dir := "tests/TemporalCommunity.DurableObjects.Analyzers.Tests"
+general_codefix_tests_dir := "tests/TemporalCommunity.Extensions.Analyzers.CodeFixes.Tests"
+durable_codefix_tests_dir := "tests/TemporalCommunity.DurableObjects.Analyzers.CodeFixes.Tests"
 benchmarks_dir        := "benchmarks/TemporalCommunity.DurableObjects.Benchmarks"
 # Runs minver (local tool — .config/dotnet-tools.json) to compute the current version from git tags.
 # The sed/tr reads MinVerDefaultPreReleaseIdentifiers from Directory.Build.props so the pre-release
@@ -102,6 +104,16 @@ test-unit: build
         --no-build \
         --nologo \
         --logger "trx;LogFileName=durable-analyzers.trx"
+    dotnet test "{{general_codefix_tests_dir}}" \
+        --configuration "{{configuration}}" \
+        --no-build \
+        --nologo \
+        --logger "trx;LogFileName=analyzer-codefixes.trx"
+    dotnet test "{{durable_codefix_tests_dir}}" \
+        --configuration "{{configuration}}" \
+        --no-build \
+        --nologo \
+        --logger "trx;LogFileName=durable-analyzer-codefixes.trx"
 
 # Run integration tests (uses WorkflowEnvironment.StartLocalAsync — no external server needed)
 test-integration: build
@@ -234,8 +246,10 @@ pack-verify: pack
     general_analyzer_pkg="{{artifacts_dir}}/TemporalCommunity.Extensions.Analyzers.{{version}}.nupkg"
     durable_analyzer_pkg="{{artifacts_dir}}/TemporalCommunity.DurableObjects.Analyzers.{{version}}.nupkg"
     unzip -Z1 "$general_analyzer_pkg" | grep -Fx 'analyzers/dotnet/cs/TemporalCommunity.Extensions.Analyzers.dll' >/dev/null
+    unzip -Z1 "$general_analyzer_pkg" | grep -Fx 'analyzers/dotnet/cs/TemporalCommunity.Extensions.Analyzers.CodeFixes.dll' >/dev/null
     unzip -Z1 "$durable_analyzer_pkg" | grep -Fx 'analyzers/dotnet/cs/TemporalCommunity.DurableObjects.Analyzers.dll' >/dev/null
-    echo "  ✓ general and DurableObjects analyzer assets present"
+    unzip -Z1 "$durable_analyzer_pkg" | grep -Fx 'analyzers/dotnet/cs/TemporalCommunity.DurableObjects.Analyzers.CodeFixes.dll' >/dev/null
+    echo "  ✓ analyzer and code-fix assets present in both packages"
     echo "==> Consumer compilation test (netstandard2.1)"
     consumer_dir=$(mktemp -d /tmp/ns21-consumer.XXXXXX)
     consumer_packages=$(mktemp -d /tmp/ns21-packages.XXXXXX)

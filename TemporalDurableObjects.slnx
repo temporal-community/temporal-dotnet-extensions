@@ -11,14 +11,18 @@
     <Project Path="samples/06-testing/TemporalCommunity.DurableObjects.Testing.csproj" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/TemporalCommunity.DurableObjects.Analyzers.CodeFixes/TemporalCommunity.DurableObjects.Analyzers.CodeFixes.csproj" />
     <Project Path="src/TemporalCommunity.DurableObjects.Analyzers/TemporalCommunity.DurableObjects.Analyzers.csproj" />
+    <Project Path="src/TemporalCommunity.Extensions.Analyzers.CodeFixes/TemporalCommunity.Extensions.Analyzers.CodeFixes.csproj" />
     <Project Path="src/TemporalCommunity.Extensions.Analyzers/TemporalCommunity.Extensions.Analyzers.csproj" />
     <Project Path="src/TemporalCommunity.DurableObjects/TemporalCommunity.DurableObjects.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/TemporalCommunity.DurableObjects.Analyzers.CodeFixes.Tests/TemporalCommunity.DurableObjects.Analyzers.CodeFixes.Tests.csproj" />
     <Project Path="tests/TemporalCommunity.DurableObjects.Analyzers.Tests/TemporalCommunity.DurableObjects.Analyzers.Tests.csproj" />
     <Project Path="tests/TemporalCommunity.DurableObjects.IntegrationTests/TemporalCommunity.DurableObjects.IntegrationTests.csproj" />
     <Project Path="tests/TemporalCommunity.DurableObjects.Tests/TemporalCommunity.DurableObjects.Tests.csproj" />
+    <Project Path="tests/TemporalCommunity.Extensions.Analyzers.CodeFixes.Tests/TemporalCommunity.Extensions.Analyzers.CodeFixes.Tests.csproj" />
     <Project Path="tests/TemporalCommunity.Extensions.Analyzers.Tests/TemporalCommunity.Extensions.Analyzers.Tests.csproj" />
   </Folder>
 </Solution>

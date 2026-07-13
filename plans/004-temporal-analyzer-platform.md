@@ -40,12 +40,11 @@ reviewed.
 3. [x] Establish Roslyn testing and rule-documentation infrastructure.
 4. [x] Implement the first general analyzer rules (`TEMP001`–`TEMP003`).
 5. [x] Add the first DurableObjects contract rules (`DO0001`–`DO0004`).
-6. [ ] Add generation for boilerplate, registration, and clients only after their public designs
-   are approved.
+6. [x] Add separate code-fix assemblies and package them with their related analyzers.
+7. [ ] Add generation only after Plans 005 and 006 approve the client and call-context APIs.
 
-Roslyn requires code-fix providers that depend on Workspaces to live outside the command-line
-analyzer assembly (`RS1038`). Code fixes are therefore deferred until a companion-assembly/package
-strategy is approved; analyzer validation will not be weakened to combine them.
+ADR 007 records the accepted package structure: one user-facing package contains separate
+compiler-safe analyzer/generator and Workspace-dependent code-fix assemblies.
 
 Initial high-confidence candidates include workflow `ConfigureAwait(false)`, known nondeterministic
 APIs in workflow context, `Task.Delay` in workflows, invalid workflow/query signatures, and missing

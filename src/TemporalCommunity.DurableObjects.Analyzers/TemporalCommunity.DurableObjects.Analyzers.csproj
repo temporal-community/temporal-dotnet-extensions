@@ -2,8 +2,8 @@
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <PackageId>TemporalCommunity.DurableObjects.Analyzers</PackageId>
-    <Description>Compile-time analyzers and generators for TemporalCommunity.DurableObjects.</Description>
-    <PackageTags>temporal;durable-objects;analyzers;roslyn;generator</PackageTags>
+    <Description>Compile-time analyzers, code fixes, and generators for TemporalCommunity.DurableObjects.</Description>
+    <PackageTags>temporal;durable-objects;analyzers;code-fix;roslyn;generator</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <IncludeBuildOutput>false</IncludeBuildOutput>
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
@@ -19,12 +19,14 @@
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.*" PrivateAssets="all" />
     <PackageReference Include="MinVer" Version="6.*" PrivateAssets="all" />
   </ItemGroup>
-
   <ItemGroup>
     <None Include="..\..\docs\ANALYZERS.md" Pack="true" PackagePath="README.md" />
-    <None Include="$(OutputPath)$(AssemblyName).dll"
-          Pack="true"
-          PackagePath="analyzers/dotnet/cs"
-          Visible="false" />
+    <None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    <None Include="..\TemporalCommunity.DurableObjects.Analyzers.CodeFixes\bin\$(Configuration)\netstandard2.0\TemporalCommunity.DurableObjects.Analyzers.CodeFixes.dll"
+          Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
   </ItemGroup>
+  <Target Name="BuildCodeFixesForPack" BeforeTargets="GenerateNuspec" Condition="'$(NoBuild)' != 'true'">
+    <MSBuild Projects="..\TemporalCommunity.DurableObjects.Analyzers.CodeFixes\TemporalCommunity.DurableObjects.Analyzers.CodeFixes.csproj"
+             Targets="Build" Properties="Configuration=$(Configuration)" />
+  </Target>
 </Project>

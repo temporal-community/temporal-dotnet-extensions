@@ -50,3 +50,5 @@ Do not add tests that merely mirror implementation details or documentation that
 - [002 — Correctness guarantees](002-correctness-guarantees.md)
 - [003 — Strongly typed durable state](003-typed-durable-state.md)
 - [004 — Temporal analyzer platform](004-temporal-analyzer-platform.md)
+- [005 — Generated asynchronous clients](005-generated-async-clients.md)
+- [006 — DurableObject call context](006-durable-object-call-context.md)

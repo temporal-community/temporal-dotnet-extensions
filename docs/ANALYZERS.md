@@ -1,6 +1,6 @@
 # Temporal .NET Analyzers
 
-Two opt-in analyzer packages provide compile-time guidance:
+Two opt-in analyzer packages provide compile-time guidance and IDE code fixes:
 
 - `TemporalCommunity.Extensions.Analyzers` applies to vanilla Temporal .NET workflows.
 - `TemporalCommunity.DurableObjects.Analyzers` adds DurableObjects contract checks.
@@ -19,24 +19,26 @@ DurableObjects runtime.
 
 ## General Temporal rules
 
-| ID | Meaning | Supported replacement |
+| ID | Meaning | Code fix |
 |---|---|---|
-| `TEMP001` | `ConfigureAwait(false)` leaves Temporal's workflow task scheduler. | Remove it, or use `ConfigureAwait(true)` when explicit configuration is necessary. |
-| `TEMP002` | `Task.Delay` uses a system timer and is not replay-safe. | `Workflow.DelayAsync` |
-| `TEMP003` | `DateTime` or `DateTimeOffset` system-clock reads are not replay-safe. | `Workflow.UtcNow` |
+| `TEMP001` | `ConfigureAwait(false)` leaves Temporal's workflow task scheduler. | Remove `ConfigureAwait(false)`. |
+| `TEMP002` | `Task.Delay` uses a system timer and is not replay-safe. | Replace it with `Workflow.DelayAsync`. |
+| `TEMP003` | `DateTime` or `DateTimeOffset` system-clock reads are not replay-safe. | Replace it with `Workflow.UtcNow`. |
 
 These diagnostics apply to code lexically contained in a type with `[Workflow]`. They do not
 claim to inspect arbitrary external helper libraries; workflow replay tests remain necessary.
 
 ## DurableObjects rules
 
-| ID | Meaning |
-|---|---|
-| `DO0001` | A contract method is not a Task-returning update or synchronous query. |
-| `DO0002` | A DurableObject declares a signal, which the programming model does not support. |
-| `DO0003` | A concrete DurableObject is missing its declared `[WorkflowRun]` method. |
-| `DO0004` | A typed-state object does not declare matching optional snapshot initializer and run signatures. |
+| ID | Meaning | Code fix |
+|---|---|---|
+| `DO0001` | A contract method is not a Task-returning update or synchronous query. | Add the appropriate update or query attribute. |
+| `DO0002` | A DurableObject declares a signal, which the programming model does not support. | Replace the signal attribute with an update attribute. |
+| `DO0003` | A concrete DurableObject is missing its declared `[WorkflowRun]` method. | None; the correct run signature depends on state shape. |
+| `DO0004` | A typed-state object does not declare matching optional snapshot initializer and run signatures. | None; initializer construction requires an application state decision. |
+
+Each NuGet package contains a compiler-safe analyzer assembly and a separate Workspace-dependent
+code-fix assembly. Consumers still install only the one package shown above.
 
 Suppress a rule only after establishing that the reported code cannot execute in workflow context.
 Project-wide suppression of determinism rules is not recommended.
-

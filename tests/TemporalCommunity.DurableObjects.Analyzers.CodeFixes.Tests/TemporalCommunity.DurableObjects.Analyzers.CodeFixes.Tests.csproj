@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.14.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
+    <PackageReference Include="xunit" Version="2.9.*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.*" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TemporalCommunity.DurableObjects.Analyzers\TemporalCommunity.DurableObjects.Analyzers.csproj" />
+    <ProjectReference Include="..\..\src\TemporalCommunity.DurableObjects.Analyzers.CodeFixes\TemporalCommunity.DurableObjects.Analyzers.CodeFixes.csproj" />
+  </ItemGroup>
+</Project>
+
