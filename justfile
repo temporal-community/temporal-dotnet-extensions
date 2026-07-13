@@ -192,7 +192,7 @@ test-individual: build
     #!/usr/bin/env bash
     set -euo pipefail
     failed=()
-    scenarios=( A B C D E F G H I J K L M N O )
+    scenarios=( A B C D E F G H I J K L M N O P )
     for s in "${scenarios[@]}"; do
         echo "── Scenario $s ──"
         if dotnet test "{{integration_tests_dir}}" \

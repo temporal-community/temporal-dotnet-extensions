@@ -52,3 +52,5 @@ Do not add tests that merely mirror implementation details or documentation that
 - [004 — Temporal analyzer platform](004-temporal-analyzer-platform.md)
 - [005 — Generated asynchronous clients](005-generated-async-clients.md)
 - [006 — DurableObject call context](006-durable-object-call-context.md)
+- [007 — Object identity and visibility](007-object-identity-and-visibility.md)
+- [008 — Performance, replay, NativeAOT, and scale](008-performance-replay-aot-scale.md)

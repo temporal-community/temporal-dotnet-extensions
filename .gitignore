@@ -22,6 +22,7 @@ Thumbs.db
 
 # Build artifacts
 artifacts/
+BenchmarkDotNet.Artifacts/
 
 # Coding agent / project-local tooling
 skills-lock.json

@@ -97,6 +97,7 @@ One-line description of every doc in this repository.
 | [`adr/001-net10-only.md`](../adr/001-net10-only.md) | Why the library ships `net10.0;net8.0;netstandard2.1`, what polyfills make it feasible, and the one method unavailable on .NET Standard. |
 | [`adr/002-dispatchproxy-not-sourcegen.md`](../adr/002-dispatchproxy-not-sourcegen.md) | Historical rationale for the `DispatchProxy` fallback. |
 | [`adr/009-generated-asynchronous-clients.md`](../adr/009-generated-asynchronous-clients.md) | Generated concrete clients, async query API, registry integration, and NativeAOT scope. |
+| [`MAINTAINER_VERIFICATION.md`](MAINTAINER_VERIFICATION.md) | Replay, NativeAOT, benchmark, and bounded-scale verification. |
 | [`adr/003-do-to-do-messaging-deferred.md`](../adr/003-do-to-do-messaging-deferred.md) | Why DurableObject-to-DurableObject messaging is not in v1 and the v1 Activity-mediated workaround. |
 | [`adr/004-versioning-strategy.md`](../adr/004-versioning-strategy.md) | Safe vs. breaking changes for long-lived objects, `Workflow.Patched`, worker deployment strategy, and replay tests. |
 | [`adr/005-signals-banned.md`](../adr/005-signals-banned.md) | Why `[WorkflowSignal]` is banned and the three conditions required to reconsider it in v1.1. |

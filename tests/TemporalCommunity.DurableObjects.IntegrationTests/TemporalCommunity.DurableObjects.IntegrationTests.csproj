@@ -23,4 +23,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\TemporalCommunity.DurableObjects\TemporalCommunity.DurableObjects.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <None Include="TestData\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>
