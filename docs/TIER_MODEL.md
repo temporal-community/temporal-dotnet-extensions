@@ -117,24 +117,22 @@ The `netstandard2.1` package asset does not include the Temporal SDK visibility 
 `PlatformNotSupportedException` when this method is called. Use the `net8.0` or `net10.0` asset
 for visibility enumeration.
 
-**Scheduled-object executions appear in results.** `CreateDurableObjectScheduleAsync<T>` spawns
-fresh executions per tick; these have the same workflow type as canonical objects but carry a
-time-suffixed workflow ID pattern (e.g. `<base-id>-<ISO8601-timestamp>`). This suffix is
-predictable and can be used to filter them out of listing results:
+The legacy `ListDurableObjectsAsync<T>` ID stream preserves its original behavior and includes
+schedule-created executions. Use `ListDurableObjectExecutionsAsync<T>` when classification or
+execution metadata matters. Its default excludes scheduled executions with Temporal's built-in
+`TemporalScheduledById` visibility attribute—no ID parsing or custom Search Attribute is needed:
 
 ```csharp
-await foreach (var id in factory.ListDurableObjectsAsync<IMyObject>())
+await foreach (var execution in factory.ListDurableObjectExecutionsAsync<IMyObject>())
 {
-    // Scheduled one-shots have a time-suffix; canonical objects do not.
-    // Adjust the pattern to match your base ID naming convention.
-    if (!IsTimeSuffixed(id))
-        yield return id;
+    Console.WriteLine($"{execution.ObjectId}: {execution.Status}");
 }
 
-static bool IsTimeSuffixed(string id) =>
-    System.Text.RegularExpressions.Regex.IsMatch(id, @"-\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}");
+await foreach (var execution in factory.ListDurableObjectExecutionsAsync<IMyObject>(
+                   new DurableObjectListOptions(includeScheduled: true)))
+{
+    Console.WriteLine(execution.IsScheduled
+        ? $"Schedule {execution.ScheduleId}: {execution.ObjectId}"
+        : $"Canonical: {execution.ObjectId}");
+}
 ```
-
-Filtering by ID pattern works for most use cases. For stricter separation, attach a custom
-Search Attribute at object creation time and filter on it when listing. A built-in
-attribute-tagging option is planned for v1.1.

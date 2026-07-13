@@ -100,10 +100,11 @@ internal sealed class DemoService : BackgroundService
 
             // Step 5: List all active PageCounter executions.
             Console.WriteLine("Active PageCounter objects:");
-            await foreach (var id in _factory.ListDurableObjectsAsync<IPageCounter>(
+            await foreach (var execution in _factory.ListDurableObjectExecutionsAsync<IPageCounter>(
                 cancellationToken: stoppingToken).ConfigureAwait(false))
             {
-                Console.WriteLine($"  - {id}");
+                Console.WriteLine(
+                    $"  - {execution.ObjectId} ({execution.Status}, run {execution.RunId})");
             }
 
             Console.WriteLine();

@@ -163,7 +163,7 @@ internal sealed class DurableObjectFactory : IDurableObjectFactory
         where T : IDurableObject
     {
 #if NETCOREAPP3_0_OR_GREATER
-        return ListDurableObjectsAsyncCore<T>(runningOnly, cancellationToken);
+        return ListDurableObjectIdsAsyncCore<T>(runningOnly, cancellationToken);
 #else
         // This branch is compiled only into the netstandard2.1 asset. .NET 8+ consumers receive
         // the net8.0 asset, where the SDK's ListWorkflowsAsync API is available.
@@ -174,23 +174,71 @@ internal sealed class DurableObjectFactory : IDurableObjectFactory
     }
 
 #if NETCOREAPP3_0_OR_GREATER
-    private async IAsyncEnumerable<string> ListDurableObjectsAsyncCore<T>(
+    private async IAsyncEnumerable<string> ListDurableObjectIdsAsyncCore<T>(
         bool runningOnly,
         [EnumeratorCancellation] CancellationToken cancellationToken)
         where T : IDurableObject
     {
-        var workflowType = DurableObjectNaming.ResolveWorkflowType(typeof(T));
-        var query = runningOnly
-            ? $"WorkflowType = '{workflowType}' AND ExecutionStatus = 'Running'"
-            : $"WorkflowType = '{workflowType}'";
+        await foreach (var execution in ListDurableObjectExecutionsCoreAsync<T>(
+                           new DurableObjectListOptions(runningOnly, includeScheduled: true),
+                           cancellationToken).ConfigureAwait(false))
+        {
+            yield return execution.ObjectId;
+        }
+    }
+#endif
 
-        // Stream results — no buffering into a list. IAsyncEnumerable is the v1 API contract;
-        // callers that need a snapshot use await foreach with ToListAsync().
-        await foreach (var exec in _client.ListWorkflowsAsync(query)
+    /// <inheritdoc/>
+    public IAsyncEnumerable<DurableObjectExecutionInfo> ListDurableObjectExecutionsAsync<T>(
+        DurableObjectListOptions? options = null,
+        CancellationToken cancellationToken = default)
+        where T : IDurableObject
+    {
+#if NETCOREAPP3_0_OR_GREATER
+        return ListDurableObjectExecutionsCoreAsync<T>(
+            options ?? new DurableObjectListOptions(), cancellationToken);
+#else
+        throw new PlatformNotSupportedException(
+            $"{nameof(ListDurableObjectExecutionsAsync)} is not available in the netstandard2.1 binary. " +
+            "Use the net8.0 asset on .NET 8 or later to enumerate Durable Objects.");
+#endif
+    }
+
+#if NETCOREAPP3_0_OR_GREATER
+    private async IAsyncEnumerable<DurableObjectExecutionInfo> ListDurableObjectExecutionsCoreAsync<T>(
+        DurableObjectListOptions options,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+        where T : IDurableObject
+    {
+        const string scheduleIdAttribute = "TemporalScheduledById";
+        var workflowType = DurableObjectNaming.ResolveWorkflowType(typeof(T));
+        var filters = new List<string> { $"WorkflowType = '{workflowType}'" };
+        if (options.RunningOnly)
+        {
+            filters.Add("ExecutionStatus = 'Running'");
+        }
+
+        if (!options.IncludeScheduled)
+        {
+            filters.Add($"{scheduleIdAttribute} IS NULL");
+        }
+
+        var scheduleIdKey = Temporalio.Common.SearchAttributeKey.CreateKeyword(scheduleIdAttribute);
+        await foreach (var execution in _client.ListWorkflowsAsync(string.Join(" AND ", filters))
                            .WithCancellation(cancellationToken)
                            .ConfigureAwait(false))
         {
-            yield return exec.Id;
+            execution.TypedSearchAttributes.TryGetValue(scheduleIdKey, out var scheduleId);
+            yield return new DurableObjectExecutionInfo(
+                execution.Id,
+                execution.RunId,
+                execution.WorkflowType,
+                execution.Status,
+                execution.TaskQueue,
+                execution.StartTime,
+                execution.CloseTime,
+                execution.HistoryLength,
+                scheduleId);
         }
     }
 #endif

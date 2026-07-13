@@ -249,6 +249,11 @@ initializer. Otherwise mutable fields reset after Continue-as-New.
 > not the caller's queue. Use distinct ID namespacing conventions (e.g., prefixes) to avoid
 > accidental cross-type collisions.
 
+The library never rewrites or prefixes IDs. On .NET 8+, use
+`ListDurableObjectExecutionsAsync<T>()` for run ID, status, task queue, timestamps, history length,
+and schedule origin. It returns running canonical objects by default; pass
+`new DurableObjectListOptions(includeScheduled: true)` to include schedule-created executions.
+
 ### Reminders vs Schedules
 
 Two mechanisms trigger recurring behavior in DurableObjects — they serve different roles:
@@ -336,6 +341,7 @@ has already accepted. Create another proxy when a later call needs different opt
 | `QueryDurableObjectAsync<TResult>(objectId, queryName, args)` | Non-blocking async query. Use on hot paths where thread-parking is unacceptable. |
 | `QueryOrDefaultAsync<TResult>(objectId, queryName, args)` | Same, but returns `default` instead of throwing when the object is absent. |
 | `ListDurableObjectsAsync<T>(runningOnly)` | Async stream of object IDs from Temporal visibility on .NET 8+; unavailable on the .NET Standard fallback. |
+| `ListDurableObjectExecutionsAsync<T>(options)` | Rich visibility metadata; excludes schedule-created executions by default without relying on ID patterns. |
 | `CreateDurableObjectScheduleAsync<T>(...)` | Temporal Schedule that activates a fresh execution per tick. |
 | `CreateDurableObjectReminderAsync<T>(...)` | Temporal Schedule that delivers recurring reminders to a canonical object. |
 

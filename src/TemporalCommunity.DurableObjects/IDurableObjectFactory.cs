@@ -179,6 +179,24 @@ public interface IDurableObjectFactory
         where T : IDurableObject;
 
     /// <summary>
+    /// Streams rich visibility metadata for DurableObject executions of type <typeparamref name="T"/>.
+    /// </summary>
+    /// <remarks>
+    /// By default only running canonical objects are returned. Set
+    /// <see cref="DurableObjectListOptions.IncludeScheduled"/> to include executions created by
+    /// Temporal Schedules. Visibility is eventually consistent. This API is unavailable in the
+    /// <c>netstandard2.1</c> asset.
+    /// </remarks>
+    /// <typeparam name="T">The DurableObject contract type.</typeparam>
+    /// <param name="options">Listing and classification options, or null for defaults.</param>
+    /// <param name="cancellationToken">Token to cancel visibility enumeration.</param>
+    /// <returns>An async stream of execution descriptors.</returns>
+    IAsyncEnumerable<DurableObjectExecutionInfo> ListDurableObjectExecutionsAsync<T>(
+        DurableObjectListOptions? options = null,
+        CancellationToken cancellationToken = default)
+        where T : IDurableObject;
+
+    /// <summary>
     /// Creates a Temporal Schedule that activates a fresh DurableObject execution per tick.
     /// </summary>
     /// <remarks>

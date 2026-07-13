@@ -20,6 +20,7 @@ execution engine instead of an in-process scheduler.
 - How to call activities from workflow code (`DurableObjectBase.ExecuteActivityAsync`)
 - How to wire everything up with `Microsoft.Extensions.Hosting`
 - How to obtain a source-generated client via `IDurableObjectFactory`
+- How to enumerate canonical objects with rich visibility metadata
 
 ## Prerequisites
 

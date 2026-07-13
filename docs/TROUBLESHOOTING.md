@@ -120,7 +120,8 @@ may use `ConfigureAwait(false)`.
 **Cause:** The object does not exist yet, or the task queue configured on the factory does not
 match the task queue the worker polls.
 
-`factory.Get<T>(objectId)` does not issue any RPC — it creates a local dispatch proxy only. The
+`factory.Get<T>(objectId)` does not issue any RPC—it creates a local generated client or proxy
+fallback. The
 exception surfaces on the first actual call (an update or query) when the Temporal server cannot
 find the workflow execution. The mapped exception is `DurableObjectNotFoundException`, which
 wraps either an `RpcException` with gRPC `NOT_FOUND` status or a `WorkflowNotFoundException`

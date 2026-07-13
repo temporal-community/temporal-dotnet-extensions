@@ -50,6 +50,31 @@ public sealed class ScenarioF_SchedulePeriodicActivation : DurableObjectTestBase
             var count = desc.Info.NumActions;
 
             Assert.True(count >= 2, $"Expected >= 2 schedule actions but got {count}");
+
+            DurableObjectExecutionInfo? scheduledExecution = null;
+            for (var attempt = 0; attempt < 20 && scheduledExecution is null; attempt++)
+            {
+                await foreach (var execution in factory.ListDurableObjectExecutionsAsync<IScheduledGreeter>(
+                                   new DurableObjectListOptions(
+                                       runningOnly: false,
+                                       includeScheduled: true)))
+                {
+                    if (execution.ScheduleId == scheduleId)
+                    {
+                        scheduledExecution = execution;
+                        break;
+                    }
+                }
+
+                if (scheduledExecution is null)
+                {
+                    await Task.Delay(250);
+                }
+            }
+
+            Assert.NotNull(scheduledExecution);
+            Assert.True(scheduledExecution.IsScheduled);
+            Assert.Equal(scheduleId, scheduledExecution.ScheduleId);
         }
         finally
         {

@@ -56,6 +56,26 @@ public sealed class ScenarioL_AutoRegistrationVisibility : DurableObjectTestBase
 
             Assert.All(ids, id => Assert.Contains(id, found));
 
+            // The rich API defaults to canonical running objects and uses the built-in
+            // TemporalScheduledById visibility attribute instead of parsing workflow IDs.
+            var executions = new List<DurableObjectExecutionInfo>();
+            await foreach (var execution in
+                           factory.ListDurableObjectExecutionsAsync<IAuditedCounter>())
+            {
+                if (ids.Contains(execution.ObjectId))
+                {
+                    executions.Add(execution);
+                }
+            }
+
+            Assert.Equal(2, executions.Count);
+            Assert.All(executions, execution =>
+            {
+                Assert.False(execution.IsScheduled);
+                Assert.Equal(tq, execution.TaskQueue);
+                Assert.False(string.IsNullOrWhiteSpace(execution.RunId));
+            });
+
             // Clean up.
             foreach (var id in ids)
             {

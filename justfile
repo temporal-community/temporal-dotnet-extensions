@@ -370,6 +370,8 @@ pack-verify: pack
         '    public static Type DurableObjectFactoryType => typeof(IDurableObjectFactory);' \
         '    public static System.Collections.Generic.IAsyncEnumerable<string> List(IDurableObjectFactory factory) =>' \
         '        factory.ListDurableObjectsAsync<IDurableObject>();' \
+        '    public static System.Collections.Generic.IAsyncEnumerable<DurableObjectExecutionInfo> ListRich(IDurableObjectFactory factory) =>' \
+        '        factory.ListDurableObjectExecutionsAsync<IDurableObject>();' \
         '    public static bool AllowsReminders =>' \
         '        DurableObjectWorkerInterceptor.FrameworkUpdateNames.Contains("OnReminder");' \
         '}' \
