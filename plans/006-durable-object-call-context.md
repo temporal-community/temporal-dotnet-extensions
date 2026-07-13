@@ -2,7 +2,7 @@
 
 Status: Proposed
 Depends on: None
-GitHub issue: To be created
+GitHub issue: [#7](https://github.com/temporal-community/durable-objects-dotnet/issues/7)
 Completed by: —
 
 ## Outcome
@@ -45,4 +45,3 @@ Document cancellation semantics and one authenticated-call example when implemen
 - Update and query calls share one coherent options model.
 - Cancellation and headers reach the intended Temporal RPCs.
 - Workflow arguments and existing contracts remain compatible.
-

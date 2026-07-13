@@ -2,7 +2,7 @@
 
 Status: Proposed
 Depends on: Plan 006
-GitHub issue: To be created
+GitHub issue: [#8](https://github.com/temporal-community/durable-objects-dotnet/issues/8)
 Completed by: —
 
 ## Outcome
@@ -47,4 +47,3 @@ Update client usage, migration guidance, and one sample after the generated API 
 - Queries are asynchronous and call options are supported.
 - Existing contracts retain a documented fallback.
 - NativeAOT behavior is proven by an executable test application.
-

@@ -1,10 +1,10 @@
 # Plan 004: Temporal Analyzer Platform
 
-Status: In Progress
+Status: Complete
 Depends on: Initial rule research; Plan 003 for typed-state-specific rules
 GitHub issue: [#5](https://github.com/temporal-community/durable-objects-dotnet/issues/5)
 GitHub epic: [#1](https://github.com/temporal-community/durable-objects-dotnet/issues/1)
-Completed by: —
+Completed by: [9ba5580](https://github.com/temporal-community/durable-objects-dotnet/commit/9ba5580), [9044961](https://github.com/temporal-community/durable-objects-dotnet/commit/9044961)
 
 ## Outcome
 
@@ -41,7 +41,7 @@ reviewed.
 4. [x] Implement the first general analyzer rules (`TEMP001`–`TEMP003`).
 5. [x] Add the first DurableObjects contract rules (`DO0001`–`DO0004`).
 6. [x] Add separate code-fix assemblies and package them with their related analyzers.
-7. [ ] Add generation only after Plans 005 and 006 approve the client and call-context APIs.
+7. [x] Move generation into Plans 005 and 006 so this platform plan remains completable.
 
 ADR 007 records the accepted package structure: one user-facing package contains separate
 compiler-safe analyzer/generator and Workspace-dependent code-fix assemblies.
