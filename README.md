@@ -290,12 +290,35 @@ runtime. A source-generator-based proxy is planned for v1.1. See [ADR 002](adr/0
 
 ## API Reference
 
+### Per-call cancellation, timeouts, and metadata
+
+Use `DurableObjectCallOptions` when an update or query needs a deadline, retry override, or gRPC
+metadata. Options are captured by the local proxy and never become workflow arguments:
+
+```csharp
+var counter = factory.Get<ICounter>(
+    "home",
+    new DurableObjectCallOptions(
+        rpcTimeout: TimeSpan.FromSeconds(5),
+        metadata: new Dictionary<string, string>
+        {
+            ["authorization"] = $"Bearer {accessToken}",
+        },
+        cancellationToken: cancellationToken));
+
+await counter.IncrementAsync();
+```
+
+Cancelling the token stops waiting for the client RPC. It does not cancel an update that Temporal
+has already accepted. Create another proxy when a later call needs different options.
+
 ### `IDurableObjectFactory` methods
 
 | Method | Description |
 |--------|-------------|
 | `Get<T>(objectId)` | Returns a typed proxy. No RPC issued — creation is local. Uses `DefaultTaskQueue`. |
 | `Get<T>(objectId, taskQueue)` | Same, with explicit task queue override. |
+| `Get<T>(objectId, callOptions)` | Returns a proxy whose queries and updates share immutable RPC options. |
 | `GetOrCreateAsync<T>(objectId)` | Guarantees the object exists (starts if not running) then returns a proxy. Issues one RPC. |
 | `GetOrCreateAsync<T>(objectId, taskQueue)` | Same, with explicit task queue override. |
 | `QueryDurableObjectAsync<TResult>(objectId, queryName, args)` | Non-blocking async query. Use on hot paths where thread-parking is unacceptable. |

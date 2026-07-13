@@ -33,6 +33,7 @@ internal class DurableObjectProxy<T> : DispatchProxy
     private string _objectId = null!;
     private string _workflowType = null!;
     private string _taskQueue = null!;
+    private DurableObjectCallOptions _callOptions = null!;
 
     /// <inheritdoc/>
     protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
@@ -99,7 +100,7 @@ internal class DurableObjectProxy<T> : DispatchProxy
         try
         {
             await _client.ExecuteUpdateWithStartWorkflowAsync(
-                updateName, args, new WorkflowUpdateWithStartOptions(BuildStartOperation()))
+                updateName, args, BuildUpdateOptions())
                 .ConfigureAwait(false);
         }
         catch (RpcException ex) when (ex.Code == RpcException.StatusCode.NotFound)
@@ -119,7 +120,7 @@ internal class DurableObjectProxy<T> : DispatchProxy
         try
         {
             return await _client.ExecuteUpdateWithStartWorkflowAsync<TResult>(
-                updateName, args, new WorkflowUpdateWithStartOptions(BuildStartOperation()))
+                updateName, args, BuildUpdateOptions())
                 .ConfigureAwait(false);
         }
         catch (RpcException ex) when (ex.Code == RpcException.StatusCode.NotFound)
@@ -137,8 +138,11 @@ internal class DurableObjectProxy<T> : DispatchProxy
     // DispatchProxy.Invoke synchronously, so this blocks on the shared async query core.
     // Callers that must not park a thread use IDurableObjectFactory.QueryDurableObjectAsync instead.
     private TResult QuerySync<TResult>(string queryName, object?[] args) =>
-        DurableObjectQuery.ExecuteAsync<TResult>(_client, _objectId, queryName, args)
+        DurableObjectQuery.ExecuteAsync<TResult>(_client, _objectId, queryName, args, _callOptions)
             .GetAwaiter().GetResult();
+
+    private WorkflowUpdateWithStartOptions BuildUpdateOptions() =>
+        new(BuildStartOperation()) { Rpc = _callOptions.ToRpcOptions() };
 
     private WithStartWorkflowOperation<WorkflowHandle> BuildStartOperation() =>
         WithStartWorkflowOperation.Create(
@@ -155,12 +159,17 @@ internal class DurableObjectProxy<T> : DispatchProxy
     /// <param name="client">The Temporal client to use for RPC.</param>
     /// <param name="objectId">The workflow ID of the target DurableObject.</param>
     /// <param name="taskQueue">The task queue the target worker polls.</param>
+    /// <param name="callOptions">Optional per-call transport options.</param>
     /// <returns>A typed proxy implementing <typeparamref name="T"/>.</returns>
     /// <exception cref="InvalidOperationException">
     /// Thrown when <typeparamref name="T"/> violates the DurableObject method attribute contract
     /// (e.g., a signal method is present, or a Task-returning method lacks <c>[WorkflowUpdate]</c>).
     /// </exception>
-    internal static T Create(ITemporalClient client, string objectId, string taskQueue)
+    internal static T Create(
+        ITemporalClient client,
+        string objectId,
+        string taskQueue,
+        DurableObjectCallOptions? callOptions = null)
     {
         // Bug 4 fix B — validate at create time, not at first call.
         ValidateInterface();
@@ -173,6 +182,7 @@ internal class DurableObjectProxy<T> : DispatchProxy
         doProxy._objectId = objectId;
         doProxy._taskQueue = taskQueue;
         doProxy._workflowType = DurableObjectNaming.ResolveWorkflowType(typeof(T));
+        doProxy._callOptions = callOptions ?? new DurableObjectCallOptions();
         return proxy;
     }
 

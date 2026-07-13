@@ -42,6 +42,13 @@ public interface IDurableObjectFactory
     /// <returns>A typed proxy implementing <typeparamref name="T"/>.</returns>
     T Get<T>(string objectId, string taskQueue) where T : IDurableObject;
 
+    /// <summary>Returns a typed proxy whose queries and updates use the supplied call options.</summary>
+    T Get<T>(string objectId, DurableObjectCallOptions callOptions) where T : IDurableObject;
+
+    /// <summary>Returns a typed proxy for a task queue using the supplied call options.</summary>
+    T Get<T>(string objectId, string taskQueue, DurableObjectCallOptions callOptions)
+        where T : IDurableObject;
+
     /// <summary>
     /// Ensures a DurableObject execution exists for the given ID (starting one if needed),
     /// then returns a typed proxy. Uses the default task queue.
@@ -72,6 +79,17 @@ public interface IDurableObjectFactory
     Task<T> GetOrCreateAsync<T>(string objectId, string taskQueue, CancellationToken cancellationToken = default)
         where T : IDurableObject;
 
+    /// <summary>Ensures an object exists and returns a proxy using the supplied call options.</summary>
+    Task<T> GetOrCreateAsync<T>(string objectId, DurableObjectCallOptions callOptions)
+        where T : IDurableObject;
+
+    /// <summary>Ensures an object exists on a task queue and returns a proxy using the supplied call options.</summary>
+    Task<T> GetOrCreateAsync<T>(
+        string objectId,
+        string taskQueue,
+        DurableObjectCallOptions callOptions)
+        where T : IDurableObject;
+
     /// <summary>
     /// Executes a named query against a running DurableObject execution and returns the result.
     /// </summary>
@@ -94,12 +112,19 @@ public interface IDurableObjectFactory
         object?[]? args = null,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Executes a named query using immutable per-call transport options.</summary>
+    Task<TResult> QueryDurableObjectAsync<TResult>(
+        string objectId,
+        string queryName,
+        object?[]? args,
+        DurableObjectCallOptions callOptions);
+
     /// <summary>
     /// Executes a named query, returning <see langword="default"/> if the object does not exist
     /// or is not active, rather than throwing.
     /// </summary>
     /// <remarks>
-    /// This is the try-get variant of <see cref="QueryDurableObjectAsync{TResult}"/>. Still
+    /// This is the try-get variant of the named async query API. Still
     /// side-effect-free — never starts a workflow. Use when "no such object" is an expected,
     /// normal outcome rather than an error condition.
     /// </remarks>
@@ -118,6 +143,14 @@ public interface IDurableObjectFactory
         string queryName,
         object?[]? args = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>Executes a named query with call options, returning default when inactive or absent.</summary>
+    [return: MaybeNull]
+    Task<TResult> QueryOrDefaultAsync<TResult>(
+        string objectId,
+        string queryName,
+        object?[]? args,
+        DurableObjectCallOptions callOptions);
 
     /// <summary>
     /// Streams the workflow IDs of all DurableObjects of type <typeparamref name="T"/> by

@@ -31,15 +31,43 @@ internal sealed class DurableObjectFactory : IDurableObjectFactory
         DurableObjectProxy<T>.Create(_client, objectId, taskQueue);
 
     /// <inheritdoc/>
+    public T Get<T>(string objectId, DurableObjectCallOptions callOptions) where T : IDurableObject =>
+        DurableObjectProxy<T>.Create(_client, objectId, _defaultTaskQueue, callOptions);
+
+    /// <inheritdoc/>
+    public T Get<T>(string objectId, string taskQueue, DurableObjectCallOptions callOptions)
+        where T : IDurableObject =>
+        DurableObjectProxy<T>.Create(_client, objectId, taskQueue, callOptions);
+
+    /// <inheritdoc/>
     public Task<T> GetOrCreateAsync<T>(string objectId, CancellationToken cancellationToken = default)
         where T : IDurableObject =>
-        GetOrCreateAsync<T>(objectId, _defaultTaskQueue, cancellationToken);
+        GetOrCreateAsync<T>(
+            objectId,
+            _defaultTaskQueue,
+            new DurableObjectCallOptions(cancellationToken: cancellationToken));
 
     /// <inheritdoc/>
     public async Task<T> GetOrCreateAsync<T>(
         string objectId,
         string taskQueue,
         CancellationToken cancellationToken = default)
+        where T : IDurableObject =>
+        await GetOrCreateAsync<T>(
+            objectId,
+            taskQueue,
+            new DurableObjectCallOptions(cancellationToken: cancellationToken)).ConfigureAwait(false);
+
+    /// <inheritdoc/>
+    public Task<T> GetOrCreateAsync<T>(string objectId, DurableObjectCallOptions callOptions)
+        where T : IDurableObject =>
+        GetOrCreateAsync<T>(objectId, _defaultTaskQueue, callOptions);
+
+    /// <inheritdoc/>
+    public async Task<T> GetOrCreateAsync<T>(
+        string objectId,
+        string taskQueue,
+        DurableObjectCallOptions callOptions)
         where T : IDurableObject
     {
         var workflowType = DurableObjectNaming.ResolveWorkflowType(typeof(T));
@@ -55,10 +83,10 @@ internal sealed class DurableObjectFactory : IDurableObjectFactory
             {
                 IdConflictPolicy = WorkflowIdConflictPolicy.UseExisting,
                 IdReusePolicy = WorkflowIdReusePolicy.AllowDuplicate,
-                Rpc = new RpcOptions { CancellationToken = cancellationToken },
+                Rpc = callOptions.ToRpcOptions(),
             }).ConfigureAwait(false);
 
-        return DurableObjectProxy<T>.Create(_client, objectId, taskQueue);
+        return DurableObjectProxy<T>.Create(_client, objectId, taskQueue, callOptions);
     }
 
     /// <inheritdoc/>
@@ -68,20 +96,50 @@ internal sealed class DurableObjectFactory : IDurableObjectFactory
         object?[]? args = null,
         CancellationToken cancellationToken = default) =>
         DurableObjectQuery.ExecuteAsync<TResult>(
-            _client, objectId, queryName, args ?? [], cancellationToken);
+            _client,
+            objectId,
+            queryName,
+            args ?? [],
+            new DurableObjectCallOptions(cancellationToken: cancellationToken));
+
+    /// <inheritdoc/>
+    public Task<TResult> QueryDurableObjectAsync<TResult>(
+        string objectId,
+        string queryName,
+        object?[]? args,
+        DurableObjectCallOptions callOptions) =>
+        DurableObjectQuery.ExecuteAsync<TResult>(_client, objectId, queryName, args ?? [], callOptions);
+
+    /// <inheritdoc/>
+    [return: MaybeNull]
+    public Task<TResult> QueryOrDefaultAsync<TResult>(
+        string objectId,
+        string queryName,
+        object?[]? args = null,
+        CancellationToken cancellationToken = default)
+        => QueryOrDefaultAsync<TResult>(
+            objectId,
+            queryName,
+            args,
+            new DurableObjectCallOptions(cancellationToken: cancellationToken));
 
     /// <inheritdoc/>
     [return: MaybeNull]
     public async Task<TResult> QueryOrDefaultAsync<TResult>(
         string objectId,
         string queryName,
-        object?[]? args = null,
-        CancellationToken cancellationToken = default)
+        object?[]? args,
+        DurableObjectCallOptions callOptions)
     {
         try
         {
             return await DurableObjectQuery
-                .ExecuteAsync<TResult>(_client, objectId, queryName, args ?? [], cancellationToken)
+                .ExecuteAsync<TResult>(
+                    _client,
+                    objectId,
+                    queryName,
+                    args ?? [],
+                    callOptions)
                 .ConfigureAwait(false);
         }
         catch (DurableObjectNotFoundException)
