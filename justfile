@@ -16,6 +16,7 @@ durable_analyzer_tests_dir := "tests/TemporalCommunity.DurableObjects.Analyzers.
 general_codefix_tests_dir := "tests/TemporalCommunity.Extensions.Analyzers.CodeFixes.Tests"
 durable_codefix_tests_dir := "tests/TemporalCommunity.DurableObjects.Analyzers.CodeFixes.Tests"
 benchmarks_dir        := "benchmarks/TemporalCommunity.DurableObjects.Benchmarks"
+aot_smoke_dir         := "tests/smoke/GeneratedClientAot"
 # Runs minver (local tool — .config/dotnet-tools.json) to compute the current version from git tags.
 # The sed/tr reads MinVerDefaultPreReleaseIdentifiers from Directory.Build.props so the pre-release
 # label has a single source of truth; minver-cli must be installed via `dotnet tool restore`.
@@ -46,6 +47,12 @@ doctor:
     -temporal workflow list --namespace default --limit 1 2>&1 || echo "⚠  Temporal server not reachable (required to run SAMPLES; integration tests use an embedded server via WorkflowEnvironment.StartLocalAsync)"
     @echo "==> minver-cli (local tool)"
     dotnet tool run minver --version
+
+# Publish and execute the generated-client smoke application under NativeAOT.
+[unix]
+aot-verify:
+    dotnet publish "{{aot_smoke_dir}}/GeneratedClientAot.csproj" --configuration Release --nologo --output "{{aot_smoke_dir}}/bin/aot-publish"
+    "{{aot_smoke_dir}}/bin/aot-publish/GeneratedClientAot"
 
 # ── Clean ─────────────────────────────────────────────────
 
@@ -320,12 +327,17 @@ pack-verify: pack
         '{' \
         '    [WorkflowUpdate] Task IncrementAsync();' \
         '}' \
+        '' \
+        'public static class GeneratedClientCheck' \
+        '{' \
+        '    public static Type ClientType => typeof(ValidObjectDurableObjectClient);' \
+        '}' \
         > "$analyzer_consumer_dir/Consumer.cs"
     NUGET_PACKAGES="$consumer_packages" dotnet build "$analyzer_consumer_dir/analyzer-consumer.csproj" \
         --nologo \
         --no-restore \
         -p:RestoreAdditionalProjectSources="$local_source"
-    echo "  ✓ valid packed-analyzer consumer compiled without loader warnings"
+    echo "  ✓ valid packed-analyzer consumer compiled and referenced its generated client"
     # printf avoids a heredoc whose body would start with '<' at column 1 — just's parser
     # treats '<' at column 1 as an unknown token and rejects the recipe before it runs.
     printf '%s\n' \

@@ -14,12 +14,14 @@ Temporal SDK surface.
 > **Requires Temporal Server v1.28.0 or later** (Update-with-Start GA).
 > **Targets .NET 10.0, .NET 8.0, and .NET Standard 2.1.** .NET 8+ receives the full feature set;
 > the .NET Standard fallback does not support `ListDurableObjectsAsync`.
-> **NativeAOT is not supported in v1** — see [ADR 002](adr/002-dispatchproxy-not-sourcegen.md).
+> **NativeAOT client dispatch requires the generated client package.** Ungenerated contracts still
+> fall back to `DispatchProxy`, which is not NativeAOT-compatible.
 
 ## Installation
 
 ```
 dotnet add package TemporalCommunity.DurableObjects
+dotnet add package TemporalCommunity.DurableObjects.Analyzers
 ```
 
 ## Quick Start
@@ -280,11 +282,20 @@ All methods on a DurableObject interface must be `[WorkflowUpdate]` or `[Workflo
 the authorization hook, give callers no confirmation, and offer no rollback on partial state
 mutation. See [ADR 005](adr/005-signals-banned.md).
 
-### NativeAOT limitation
+### Generated asynchronous clients and NativeAOT
 
-`DispatchProxy` (used internally for the typed proxy) uses `Reflection.Emit`. NativeAOT strips
-this at publish time. Publishing a DurableObject worker with `PublishAot=true` will fail at
-runtime. A source-generator-based proxy is planned for v1.1. See [ADR 002](adr/002-dispatchproxy-not-sourcegen.md).
+Installing `TemporalCommunity.DurableObjects.Analyzers` generates a concrete client for every
+public, non-generic DurableObject contract. For `ICounter`, call
+`factory.GetCounterClient("counter-id")`; updates keep their contract names and queries gain
+asynchronous methods such as `GetCountAsync()`. Every generated method also has an overload that
+accepts `DurableObjectCallOptions`.
+
+The factory registry automatically prefers the generated concrete implementation even when code
+continues to call `factory.Get<ICounter>()`. Contracts the generator cannot handle produce
+`DO0005`; contracts compiled without the generator retain the documented `DispatchProxy`
+fallback. Only the generated client path is NativeAOT-compatible—this does not claim that every
+worker-discovery feature in the Temporal SDK is reflection-free. See
+[ADR 009](adr/009-generated-asynchronous-clients.md).
 
 ---
 
@@ -293,10 +304,10 @@ runtime. A source-generator-based proxy is planned for v1.1. See [ADR 002](adr/0
 ### Per-call cancellation, timeouts, and metadata
 
 Use `DurableObjectCallOptions` when an update or query needs a deadline, retry override, or gRPC
-metadata. Options are captured by the local proxy and never become workflow arguments:
+metadata. Options are captured by the local client and never become workflow arguments:
 
 ```csharp
-var counter = factory.Get<ICounter>(
+var counter = factory.GetCounterClient(
     "home",
     new DurableObjectCallOptions(
         rpcTimeout: TimeSpan.FromSeconds(5),

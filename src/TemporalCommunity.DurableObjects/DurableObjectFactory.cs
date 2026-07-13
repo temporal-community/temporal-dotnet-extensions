@@ -24,20 +24,20 @@ internal sealed class DurableObjectFactory : IDurableObjectFactory
 
     /// <inheritdoc/>
     public T Get<T>(string objectId) where T : IDurableObject =>
-        DurableObjectProxy<T>.Create(_client, objectId, _defaultTaskQueue);
+        GetClient<T>(objectId, _defaultTaskQueue, null);
 
     /// <inheritdoc/>
     public T Get<T>(string objectId, string taskQueue) where T : IDurableObject =>
-        DurableObjectProxy<T>.Create(_client, objectId, taskQueue);
+        GetClient<T>(objectId, taskQueue, null);
 
     /// <inheritdoc/>
     public T Get<T>(string objectId, DurableObjectCallOptions callOptions) where T : IDurableObject =>
-        DurableObjectProxy<T>.Create(_client, objectId, _defaultTaskQueue, callOptions);
+        GetClient<T>(objectId, _defaultTaskQueue, callOptions);
 
     /// <inheritdoc/>
     public T Get<T>(string objectId, string taskQueue, DurableObjectCallOptions callOptions)
         where T : IDurableObject =>
-        DurableObjectProxy<T>.Create(_client, objectId, taskQueue, callOptions);
+        GetClient<T>(objectId, taskQueue, callOptions);
 
     /// <inheritdoc/>
     public Task<T> GetOrCreateAsync<T>(string objectId, CancellationToken cancellationToken = default)
@@ -86,7 +86,7 @@ internal sealed class DurableObjectFactory : IDurableObjectFactory
                 Rpc = callOptions.ToRpcOptions(),
             }).ConfigureAwait(false);
 
-        return DurableObjectProxy<T>.Create(_client, objectId, taskQueue, callOptions);
+        return GetClient<T>(objectId, taskQueue, callOptions);
     }
 
     /// <inheritdoc/>
@@ -221,4 +221,18 @@ internal sealed class DurableObjectFactory : IDurableObjectFactory
         where T : IReminderReceiver =>
         _client.CreateDurableObjectReminderAsync<T>(
             scheduleId, targetObjectId, reminderName, spec, taskQueue, overlap, scheduleOptions, cancellationToken);
+
+    private T GetClient<T>(
+        string objectId,
+        string taskQueue,
+        DurableObjectCallOptions? callOptions)
+        where T : IDurableObject
+    {
+        var workflowType = DurableObjectNaming.ResolveWorkflowType(typeof(T));
+        var invoker = new DurableObjectClientInvoker(
+            _client, objectId, workflowType, taskQueue, callOptions);
+        return DurableObjectGeneratedClientRegistry.TryCreate<T>(invoker, out var generated)
+            ? generated!
+            : DurableObjectProxy<T>.Create(_client, objectId, taskQueue, callOptions);
+    }
 }

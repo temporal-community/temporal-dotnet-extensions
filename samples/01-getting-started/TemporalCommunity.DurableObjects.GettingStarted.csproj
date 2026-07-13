@@ -18,5 +18,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\TemporalCommunity.DurableObjects\TemporalCommunity.DurableObjects.csproj" />
+    <ProjectReference Include="..\..\src\TemporalCommunity.DurableObjects.Analyzers\TemporalCommunity.DurableObjects.Analyzers.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>

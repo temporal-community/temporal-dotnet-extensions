@@ -1,11 +1,11 @@
 # ADR 002 — DispatchProxy for v1; Source Generator Deferred to v1.1
 
-**Status:** ACCEPTED
+**Status:** SUPERSEDED FOR GENERATED CLIENTS by [ADR 009](009-generated-asynchronous-clients.md)
 
-> **NativeAOT is NOT supported in v1.** `DispatchProxy` uses `Reflection.Emit`, which the AOT
+> **The compatibility fallback is not NativeAOT-compatible.** `DispatchProxy` uses `Reflection.Emit`, which the AOT
 > compiler trims. Publishing a DurableObject worker with `PublishAot=true` will fail at runtime
 > with no compile-time warning. A source-generator-based proxy that eliminates this limitation
-> is planned for v1.1.
+> is replaced for supported contracts by the generated client path in ADR 009.
 
 ---
 

@@ -70,14 +70,16 @@ internal sealed class DemoService : BackgroundService
             Console.WriteLine("=== Getting Started: PageCounter Demo ===");
             Console.WriteLine();
 
-            // Step 1: Get a typed proxy — no RPC issued here.
-            // The factory knows the task queue from AddDurableObjects(taskQueue).
-            var proxy = _factory.Get<IPageCounter>("home");
-            Console.WriteLine($"Got proxy for object id 'home' (no RPC yet).");
+            // Step 1: Get the source-generated concrete client — no RPC issued here.
+            // It avoids DispatchProxy and adds asynchronous query methods.
+            var client = _factory.GetPageCounterClient(
+                "home",
+                new DurableObjectCallOptions(cancellationToken: stoppingToken));
+            Console.WriteLine($"Got generated client for object id 'home' (no RPC yet).");
 
             // Step 2: Ensure the object exists. GetOrCreateAsync atomically starts the
             // execution if it is not already running, then returns a proxy.
-            var counter = await _factory.GetOrCreateAsync<IPageCounter>("home", stoppingToken)
+            await _factory.GetOrCreateAsync<IPageCounter>("home", stoppingToken)
                 .ConfigureAwait(false);
             Console.WriteLine($"Ensured 'home' counter exists.");
             Console.WriteLine();
@@ -85,15 +87,14 @@ internal sealed class DemoService : BackgroundService
             // Step 3: Send three increments. Each is a WorkflowUpdate RPC.
             for (var i = 1; i <= 3; i++)
             {
-                await counter.IncrementAsync().ConfigureAwait(false);
+                await client.IncrementAsync().ConfigureAwait(false);
                 Console.WriteLine($"  Increment {i} complete.");
             }
 
             Console.WriteLine();
 
-            // Step 4: Query the count using the async factory method (avoids blocking a thread).
-            var count = await _factory.QueryDurableObjectAsync<int>("home", "GetCount",
-                cancellationToken: stoppingToken).ConfigureAwait(false);
+            // Step 4: Query through the generated asynchronous method.
+            var count = await client.GetCountAsync().ConfigureAwait(false);
             Console.WriteLine($"Current view count for 'home': {count}");
             Console.WriteLine();
 

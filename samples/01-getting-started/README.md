@@ -19,7 +19,7 @@ execution engine instead of an in-process scheduler.
 - The required `[WorkflowRun]` boilerplate on the concrete class
 - How to call activities from workflow code (`DurableObjectBase.ExecuteActivityAsync`)
 - How to wire everything up with `Microsoft.Extensions.Hosting`
-- How to obtain a proxy via `IDurableObjectFactory`
+- How to obtain a source-generated client via `IDurableObjectFactory`
 
 ## Prerequisites
 
@@ -39,11 +39,11 @@ dotnet run
 
 ## Key patterns
 
-### Proxy vs. GetOrCreateAsync
+### Generated client vs. GetOrCreateAsync
 
 ```csharp
-// No RPC — just a local dispatch facade.
-var proxy = factory.Get<IPageCounter>("home");
+// No RPC — creates a concrete, NativeAOT-compatible client with async queries.
+var client = factory.GetPageCounterClient("home");
 
 // Atomically starts the execution if it is not already running, then returns a proxy.
 var counter = await factory.GetOrCreateAsync<IPageCounter>("home");
@@ -81,5 +81,5 @@ public Task RunAsync(DurableObjectSnapshot<PageCounterState>? snapshot = null) =
 ### Querying asynchronously
 
 ```csharp
-var count = await factory.QueryDurableObjectAsync<int>("home", "GetCount");
+var count = await client.GetCountAsync();
 ```

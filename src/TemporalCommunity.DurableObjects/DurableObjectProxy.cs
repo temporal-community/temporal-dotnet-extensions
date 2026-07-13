@@ -40,13 +40,17 @@ internal class DurableObjectProxy<T> : DispatchProxy
     {
         Throw.IfNull(targetMethod, nameof(targetMethod));
 
-        var isQuery = targetMethod.GetCustomAttribute<WorkflowQueryAttribute>() is not null;
+        var queryAttribute = targetMethod.GetCustomAttribute<WorkflowQueryAttribute>();
+        var updateAttribute = targetMethod.GetCustomAttribute<WorkflowUpdateAttribute>();
+        var isQuery = queryAttribute is not null;
         var callArgs = args ?? Array.Empty<object?>();
 
         // The SDK trims a trailing "Async" from update names (WorkflowUpdateDefinition.cs:156-161)
         // but NOT from query names. Mirror that convention here.
-        var rpcName = targetMethod.Name;
-        if (!isQuery && rpcName.EndsWith("Async", StringComparison.Ordinal))
+        var rpcName = isQuery ? queryAttribute!.Name : updateAttribute?.Name;
+        rpcName ??= targetMethod.Name;
+        if (!isQuery && updateAttribute?.Name is null &&
+            rpcName.EndsWith("Async", StringComparison.Ordinal))
             rpcName = rpcName[..^"Async".Length];
 
         // Task (void update)

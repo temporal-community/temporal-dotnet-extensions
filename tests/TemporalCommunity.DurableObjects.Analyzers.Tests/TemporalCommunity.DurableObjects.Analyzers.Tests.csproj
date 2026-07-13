@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
+    <PackageReference Include="Temporalio" Version="1.16.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
     <PackageReference Include="xunit" Version="2.9.*" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.*" PrivateAssets="all" />
@@ -13,6 +14,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\TemporalCommunity.DurableObjects.Analyzers\TemporalCommunity.DurableObjects.Analyzers.csproj" />
+    <ProjectReference Include="..\..\src\TemporalCommunity.DurableObjects\TemporalCommunity.DurableObjects.csproj" />
   </ItemGroup>
 </Project>
-

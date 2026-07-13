@@ -36,6 +36,19 @@ claim to inspect arbitrary external helper libraries; workflow replay tests rema
 | `DO0002` | A DurableObject declares a signal, which the programming model does not support. | Replace the signal attribute with an update attribute. |
 | `DO0003` | A concrete DurableObject is missing its declared `[WorkflowRun]` method. | None; the correct run signature depends on state shape. |
 | `DO0004` | A typed-state object does not declare matching optional snapshot initializer and run signatures. | None; initializer construction requires an application state decision. |
+| `DO0005` | A contract uses a shape that cannot produce a generated client. | None; make the contract public and non-generic, and avoid generic/ref/dynamic handlers or generated-name collisions. |
+
+## Generated DurableObject clients
+
+`TemporalCommunity.DurableObjects.Analyzers` also generates one concrete client per supported
+contract. A contract such as `ICounter` produces `CounterDurableObjectClient` and a
+`GetCounterClient` factory extension. Synchronous contract queries remain available for source
+compatibility, while the concrete client adds asynchronous query methods and call-options
+overloads. A module initializer registers the concrete implementation so ordinary `Get<ICounter>`
+calls avoid `DispatchProxy` too.
+
+Generation currently requires a public, top-level, non-generic contract. Existing applications
+that do not install the analyzer package continue to use the runtime proxy fallback.
 
 Each NuGet package contains a compiler-safe analyzer assembly and a separate Workspace-dependent
 code-fix assembly. Consumers still install only the one package shown above.
