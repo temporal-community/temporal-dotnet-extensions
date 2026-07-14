@@ -62,7 +62,9 @@ jobs:
         id: login
         uses: NuGet/login@v1
         with:
-          user: TemporalCommunity
+          # NuGet requires the username that created the Trusted Publishing policy,
+          # not the package-owner organization name.
+          user: cecilphillip
           token-service-url: https://www.nuget.org/api/v2/token
 
       - name: Publish to NuGet.org

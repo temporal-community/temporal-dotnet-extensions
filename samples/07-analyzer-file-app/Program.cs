@@ -3,7 +3,7 @@
 #:property NoWarn=CS1591
 #:package Temporalio@1.15.0
 // Replace the package version below with the version you want to evaluate.
-#:package TemporalCommunity.Extensions.Analyzers@0.3.1
+#:package TemporalCommunity.Extensions.Analyzers@0.3.2
 
 using Temporalio.Workflows;
 
