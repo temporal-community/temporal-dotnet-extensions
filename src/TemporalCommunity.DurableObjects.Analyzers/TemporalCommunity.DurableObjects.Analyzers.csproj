@@ -9,6 +9,7 @@
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <IncludeSymbols>false</IncludeSymbols>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>icon.png</PackageIcon>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
     <NoWarn>$(NoWarn);RS2008</NoWarn>
@@ -21,6 +22,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\docs\ANALYZERS.md" Pack="true" PackagePath="README.md" />
+    <None Include="..\TemporalCommunity.DurableObjects\icon.png" Pack="true" PackagePath="/" />
     <None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     <None Include="..\TemporalCommunity.DurableObjects.Analyzers.CodeFixes\bin\$(Configuration)\netstandard2.0\TemporalCommunity.DurableObjects.Analyzers.CodeFixes.dll"
           Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />

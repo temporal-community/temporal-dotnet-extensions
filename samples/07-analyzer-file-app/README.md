@@ -22,7 +22,7 @@ var id = Guid.NewGuid();                         // TEMP008
 _ = Random.Shared;                               // TEMP008
 ```
 
-The compiler reports diagnostics during the file-app build. The sample targets the `0.3.0`
+The compiler reports diagnostics during the file-app build. The sample targets the `0.3.1`
 analyzer package and reports `TEMP001`–`TEMP004`, `TEMP007`, and `TEMP008`. Opening the file in an
 IDE with the package installed also exposes code fixes for
 `ConfigureAwait(false)`, `Task.Delay`, system-clock reads, `Task.Run`, `Guid.NewGuid`, and

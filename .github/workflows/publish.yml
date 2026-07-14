@@ -62,7 +62,7 @@ jobs:
         id: login
         uses: NuGet/login@v1
         with:
-          user: cecilphillip
+          user: TemporalCommunity
           token-service-url: https://www.nuget.org/api/v2/token
 
       - name: Publish to NuGet.org
