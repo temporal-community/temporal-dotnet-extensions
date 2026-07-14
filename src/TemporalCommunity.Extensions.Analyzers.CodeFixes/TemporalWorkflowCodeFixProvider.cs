@@ -157,7 +157,7 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
         var delay = argumentType?.ToDisplayString() == "System.TimeSpan"
             ? argument
             : SyntaxFactory.InvocationExpression(
-                SyntaxFactory.ParseExpression("global::System.TimeSpan.FromMilliseconds"),
+                SyntaxFactory.ParseExpression("TimeSpan.FromMilliseconds"),
                 SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Argument(argument))));
 
         return SyntaxFactory.AwaitExpression(

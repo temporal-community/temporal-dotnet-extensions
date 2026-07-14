@@ -12,6 +12,7 @@ namespace TemporalCommunity.Extensions.Analyzers.CodeFixes.Tests;
 public sealed class TemporalWorkflowCodeFixProviderTests
 {
     private const string Framework = """
+        global using System;
         namespace Temporalio.Workflows
         {
             public sealed class WorkflowAttribute : System.Attribute { }
@@ -38,7 +39,7 @@ public sealed class TemporalWorkflowCodeFixProviderTests
     [InlineData("_ = System.Guid.NewGuid();", "_ = global::Temporalio.Workflows.Workflow.NewGuid();")]
     [InlineData("_ = System.Random.Shared;", "_ = global::Temporalio.Workflows.Workflow.Random;")]
     [InlineData("_ = new System.Random();", "_ = global::Temporalio.Workflows.Workflow.Random;")]
-    [InlineData("System.Threading.Thread.Sleep(100);", "await global::Temporalio.Workflows.Workflow.DelayAsync(global::System.TimeSpan.FromMilliseconds(100));")]
+    [InlineData("System.Threading.Thread.Sleep(100);", "await global::Temporalio.Workflows.Workflow.DelayAsync(TimeSpan.FromMilliseconds(100));")]
     [InlineData("System.Threading.Thread.Sleep(System.TimeSpan.FromSeconds(1));", "await global::Temporalio.Workflows.Workflow.DelayAsync(System.TimeSpan.FromSeconds(1));")]
     public async Task AppliesFixAndResultCompiles(string statement, string expected)
     {
