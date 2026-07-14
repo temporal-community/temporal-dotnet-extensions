@@ -15,7 +15,9 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
     public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create(
         TemporalWorkflowAnalyzer.ConfigureAwaitFalseId,
         TemporalWorkflowAnalyzer.TaskDelayId,
-        TemporalWorkflowAnalyzer.SystemClockId);
+        TemporalWorkflowAnalyzer.SystemClockId,
+        TemporalWorkflowAnalyzer.TaskRunId,
+        TemporalWorkflowAnalyzer.NonDeterministicRandomId);
 
     public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 
@@ -36,6 +38,8 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
                 TemporalWorkflowAnalyzer.ConfigureAwaitFalseId => "Remove ConfigureAwait(false)",
                 TemporalWorkflowAnalyzer.TaskDelayId => "Use Workflow.DelayAsync",
                 TemporalWorkflowAnalyzer.SystemClockId => "Use Workflow.UtcNow",
+                TemporalWorkflowAnalyzer.TaskRunId => "Use Workflow.RunTaskAsync",
+                TemporalWorkflowAnalyzer.NonDeterministicRandomId => "Use Temporal workflow randomness",
                 _ => null,
             };
             if (title is null)
@@ -74,6 +78,8 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
             TemporalWorkflowAnalyzer.TaskDelayId => ReplaceTaskDelay(node),
             TemporalWorkflowAnalyzer.SystemClockId => SyntaxFactory.ParseExpression(
                 "global::Temporalio.Workflows.Workflow.UtcNow"),
+            TemporalWorkflowAnalyzer.TaskRunId => ReplaceMemberExpression(node, "RunTaskAsync"),
+            TemporalWorkflowAnalyzer.NonDeterministicRandomId => ReplaceRandom(node),
             _ => null,
         };
         if (replacement is null)
@@ -100,5 +106,24 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
             ? invocation.WithExpression(SyntaxFactory.ParseExpression(
                 "global::Temporalio.Workflows.Workflow.DelayAsync"))
             : null;
-}
 
+    private static InvocationExpressionSyntax? ReplaceMemberExpression(SyntaxNode node, string memberName) =>
+        node is InvocationExpressionSyntax invocation &&
+        invocation.Expression is MemberAccessExpressionSyntax memberAccess
+            ? invocation.WithExpression(memberAccess.WithExpression(
+                    SyntaxFactory.ParseExpression("global::Temporalio.Workflows.Workflow"))
+                .WithName(SyntaxFactory.IdentifierName(memberName)))
+            : null;
+
+    private static ExpressionSyntax? ReplaceRandom(SyntaxNode node) => node switch
+    {
+        InvocationExpressionSyntax invocation when invocation.Expression is MemberAccessExpressionSyntax memberAccess =>
+            memberAccess.Name.Identifier.Text == "NewGuid"
+                ? SyntaxFactory.ParseExpression("global::Temporalio.Workflows.Workflow.NewGuid()")
+                : null,
+        MemberAccessExpressionSyntax => SyntaxFactory.ParseExpression("global::Temporalio.Workflows.Workflow.Random"),
+        ObjectCreationExpressionSyntax creation when creation.ArgumentList?.Arguments.Count is null or 0 =>
+            SyntaxFactory.ParseExpression("global::Temporalio.Workflows.Workflow.Random"),
+        _ => null,
+    };
+}

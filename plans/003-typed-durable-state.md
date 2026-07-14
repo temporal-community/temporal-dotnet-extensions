@@ -2,8 +2,8 @@
 
 Status: Complete
 Depends on: Plan 002
-GitHub issue: [#4](https://github.com/temporal-community/durable-objects-dotnet/issues/4)
-Completed by: [e28fd5a](https://github.com/temporal-community/durable-objects-dotnet/commit/e28fd5a)
+GitHub issue: [#4](https://github.com/temporal-community/temporal-dotnet-extensions/issues/4)
+Completed by: [e28fd5a](https://github.com/temporal-community/temporal-dotnet-extensions/commit/e28fd5a)
 
 ## Outcome
 

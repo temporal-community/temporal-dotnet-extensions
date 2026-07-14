@@ -3,7 +3,7 @@
 Status: Accepted
 Date: 2026-07-12
 Related plan: `plans/004-temporal-analyzer-platform.md`
-Related issue: https://github.com/temporal-community/durable-objects-dotnet/issues/5
+Related issue: https://github.com/temporal-community/temporal-dotnet-extensions/issues/5
 
 ## Context
 
@@ -35,4 +35,3 @@ not depend on Workspaces.
 - Analyzer and code-fix tests remain separate.
 - Packaging tests must assert both assemblies are present in each NuGet package.
 - Generated clients remain deferred until their public API and call-context design are approved.
-

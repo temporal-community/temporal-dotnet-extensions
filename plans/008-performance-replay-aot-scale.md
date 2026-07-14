@@ -2,8 +2,8 @@
 
 Status: Complete
 Depends on: Plans 003 and 005
-GitHub issue: [#10](https://github.com/temporal-community/durable-objects-dotnet/issues/10)
-Completed by: [f76abfa](https://github.com/temporal-community/durable-objects-dotnet/commit/f76abfa)
+GitHub issue: [#10](https://github.com/temporal-community/temporal-dotnet-extensions/issues/10)
+Completed by: [f76abfa](https://github.com/temporal-community/temporal-dotnet-extensions/commit/f76abfa)
 
 ## Outcome
 

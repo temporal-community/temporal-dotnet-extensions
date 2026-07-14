@@ -2,8 +2,8 @@
 
 Status: Complete
 Depends on: None
-GitHub issue: [#7](https://github.com/temporal-community/durable-objects-dotnet/issues/7)
-Completed by: [f980640](https://github.com/temporal-community/durable-objects-dotnet/commit/f980640)
+GitHub issue: [#7](https://github.com/temporal-community/temporal-dotnet-extensions/issues/7)
+Completed by: [f980640](https://github.com/temporal-community/temporal-dotnet-extensions/commit/f980640)
 
 ## Outcome
 

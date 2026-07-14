@@ -123,5 +123,5 @@ One-line description of every doc in this repository.
 - Durable Objects API overview: [`docs/DURABLE_OBJECTS.md#api-overview`](DURABLE_OBJECTS.md#api-overview)
 - Required patterns explained: [`docs/BOILERPLATE.md`](BOILERPLATE.md)
 - Troubleshooting: [`docs/TROUBLESHOOTING.md`](TROUBLESHOOTING.md)
-- Report a bug: [GitHub Issues](https://github.com/temporal-community/durable-objects-dotnet/issues)
+- Report a bug: [GitHub Issues](https://github.com/temporal-community/temporal-dotnet-extensions/issues)
 - Temporal .NET SDK: [github.com/temporalio/sdk-dotnet](https://github.com/temporalio/sdk-dotnet)

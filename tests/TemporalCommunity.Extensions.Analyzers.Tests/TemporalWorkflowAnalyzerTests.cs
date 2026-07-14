@@ -19,6 +19,10 @@ public sealed class TemporalWorkflowAnalyzerTests
                 public static System.DateTime UtcNow => default;
                 public static System.Threading.Tasks.Task DelayAsync(System.TimeSpan delay) =>
                     System.Threading.Tasks.Task.CompletedTask;
+                public static System.Threading.Tasks.Task RunTaskAsync(System.Func<System.Threading.Tasks.Task> func) =>
+                    func();
+                public static System.Guid NewGuid() => default;
+                public static System.Random Random => new System.Random();
             }
         }
         """;
@@ -69,6 +73,30 @@ public sealed class TemporalWorkflowAnalyzerTests
             """);
 
         Assert.Single(diagnostics, diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.SystemClockId);
+    }
+
+    [Fact]
+    public async Task ReportsTaskRunBlockingAndRandomApisInsideWorkflow()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            [Temporalio.Workflows.Workflow]
+            public sealed class MyWorkflow
+            {
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    await System.Threading.Tasks.Task.Run(() => System.Threading.Tasks.Task.CompletedTask);
+                    System.Threading.Thread.Sleep(10);
+                    using var source = new System.Threading.CancellationTokenSource(10);
+                    _ = System.Guid.NewGuid();
+                    _ = new System.Random();
+                    _ = System.Random.Shared;
+                }
+            }
+            """);
+
+        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.TaskRunId);
+        Assert.Equal(2, diagnostics.Count(diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.BlockingWaitId));
+        Assert.Equal(3, diagnostics.Count(diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.NonDeterministicRandomId));
     }
 
     [Fact]

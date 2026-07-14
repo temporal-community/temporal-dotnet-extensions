@@ -2,8 +2,8 @@
 
 Status: Complete
 Depends on: Plan 001 for final terminology
-GitHub issue: [#3](https://github.com/temporal-community/durable-objects-dotnet/issues/3)
-Completed by: [6cf07ce](https://github.com/temporal-community/durable-objects-dotnet/commit/6cf07ce)
+GitHub issue: [#3](https://github.com/temporal-community/temporal-dotnet-extensions/issues/3)
+Completed by: [6cf07ce](https://github.com/temporal-community/temporal-dotnet-extensions/commit/6cf07ce)
 
 ## Outcome
 

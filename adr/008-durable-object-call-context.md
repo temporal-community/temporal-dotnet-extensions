@@ -3,7 +3,7 @@
 Status: Accepted
 Date: 2026-07-12
 Related plan: `plans/006-durable-object-call-context.md`
-Related issue: https://github.com/temporal-community/durable-objects-dotnet/issues/7
+Related issue: https://github.com/temporal-community/temporal-dotnet-extensions/issues/7
 
 ## Context
 

@@ -43,7 +43,13 @@ Do not add tests that merely mirror implementation details or documentation that
 - Pull requests should identify the epic, plan, issue, compatibility impact, and verification.
 - Update the epic progress table when a plan changes status.
 
-## Active initiative
+## Active plans
+
+- [009 — Analyzer and code-fix roadmap](009-analyzer-roadmap.md)
+
+## Archived plans
+
+The following plans are complete and kept here as implementation history:
 
 - [Durable actor platform](durable-actor-platform.md)
 - [001 — Product positioning](001-product-positioning.md)
@@ -54,3 +60,7 @@ Do not add tests that merely mirror implementation details or documentation that
 - [006 — DurableObject call context](006-durable-object-call-context.md)
 - [007 — Object identity and visibility](007-object-identity-and-visibility.md)
 - [008 — Performance, replay, NativeAOT, and scale](008-performance-replay-aot-scale.md)
+
+Add new work here only when it is actively being planned or implemented. Once a plan is complete,
+keep it here for historical context unless it is superseded by a newer plan or architectural
+decision.

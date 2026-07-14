@@ -7,6 +7,12 @@ Two opt-in analyzer packages provide compile-time guidance and IDE code fixes:
 
 Both packages include their IDE code fixes. There are no separate code-fix packages to install.
 
+For a minimal consumer experiment without a project file, see the [.NET 10 file-based app
+sample](../samples/07-analyzer-file-app/). It can be run with `dotnet run --file Program.cs` and
+reports analyzer diagnostics during the file-app build.
+
+The sample is pinned to the `0.3.0` analyzer package release and demonstrates the Phase 1 rules.
+
 Install the package appropriate for the project that declares workflows:
 
 ```bash
@@ -34,6 +40,9 @@ dotnet add package TemporalCommunity.DurableObjects.Analyzers
 | `TEMP001` | `ConfigureAwait(false)` leaves Temporal's workflow task scheduler. | Remove `ConfigureAwait(false)`. |
 | `TEMP002` | `Task.Delay` uses a system timer and is not replay-safe. | Replace it with `Workflow.DelayAsync`. |
 | `TEMP003` | `DateTime` or `DateTimeOffset` system-clock reads are not replay-safe. | Replace it with `Workflow.UtcNow`. |
+| `TEMP004` | `Task.Run` uses the system task scheduler and is not replay-safe. | Replace it with `Workflow.RunTaskAsync`. |
+| `TEMP007` | `Thread.Sleep`, `Task.Wait`, and timeout-based cancellation sources use system timing. | None; choose the appropriate Temporal timer or cancellation pattern. |
+| `TEMP008` | System random and GUID APIs are not replay-safe. | Replace them with `Workflow.NewGuid` or `Workflow.Random` where the fix is applicable. |
 
 These diagnostics apply to code lexically contained in a type with `[Workflow]`. They do not
 claim to inspect arbitrary external helper libraries; workflow replay tests remain necessary.

@@ -11,8 +11,9 @@ Reviewed against Temporal .NET SDK 1.16.0 on 2026-07-12.
   https://github.com/temporalio/samples-dotnet
 - DurableObjects policies backed by this repository's runtime and integration tests.
 
-No Temporal-specific agent skill was installed or present in the workspace during this review.
-Skill guidance must be evaluated and added as an authority if such a vetted skill becomes available.
+The local Temporal developer skill at `/Users/cecilphillip/Dev/workspace/skill-temporal-developer/`
+was reviewed after this catalog was first drafted. Its .NET determinism, testing, error-handling,
+and observability references are now treated as supplemental guidance alongside the SDK sources.
 
 ## Confidence levels
 
@@ -30,11 +31,11 @@ Skill guidance must be evaluated and added as an authority if such a vetted skil
 | TEMP001 | Do not use `ConfigureAwait(false)` in workflow types | Error | A | Implemented |
 | TEMP002 | Do not use `Task.Delay` in workflow types | Error | A | Implemented |
 | TEMP003 | Do not access `DateTime.Now`, `DateTime.UtcNow`, `DateTimeOffset.Now`, or `DateTimeOffset.UtcNow` in workflow types | Error | A | Implemented |
-| TEMP004 | Do not use `Task.Run` in workflow types | Error | A | Candidate |
+| TEMP004 | Do not use `Task.Run` in workflow types | Error | A | Implemented |
 | TEMP005 | Prefer `Workflow.WhenAnyAsync` over unsafe `Task.WhenAny` overloads | Warning | B | Research |
 | TEMP006 | Prefer `Workflow.WhenAllAsync` over `Task.WhenAll` | Info | B | Research |
-| TEMP007 | Do not use `Thread.Sleep`, `Task.Wait`, or timeout-based `CancellationTokenSource` | Error | B | Candidate |
-| TEMP008 | Do not use non-workflow random or GUID APIs | Error | B | Candidate |
+| TEMP007 | Do not use `Thread.Sleep`, `Task.Wait`, or timeout-based `CancellationTokenSource` | Error | B | Implemented |
+| TEMP008 | Do not use non-workflow random or GUID APIs | Error | B | Implemented |
 | TEMP009 | Activity options require `StartToCloseTimeout` or `ScheduleToCloseTimeout` | Error | B | Candidate |
 | TEMP010 | Do not use `CancellationTokenSource.CancelAsync` in workflows | Error | A | Candidate |
 | TEMP011 | Do not use thread synchronization primitives in workflows | Error | B | Candidate |
@@ -53,7 +54,7 @@ capability.
 | DO0002 | DurableObjects must not declare workflow signals | Error | A | Implemented |
 | DO0003 | Concrete DurableObjects require a valid `[WorkflowRun]` declaration | Error | A | Implemented |
 | DO0004 | Generic typed-state initializer and run snapshot signatures must match | Error | A | Implemented |
-| DO0005 | A scheduled one-shot object must self-deactivate | Warning | C | Research |
+| DO0005 | A contract uses a shape that cannot produce a generated client | Error | A | Implemented |
 | DO0006 | A live non-generic object cannot adopt typed snapshot state without migration | Warning | D | Documentation/replay |
 
 ## Deferred guidance

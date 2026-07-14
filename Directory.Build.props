@@ -2,6 +2,8 @@
   <PropertyGroup>
     <MinVerTagPrefix></MinVerTagPrefix>
     <MinVerDefaultPreReleaseIdentifiers>preview</MinVerDefaultPreReleaseIdentifiers>
+    <RepositoryUrl>https://github.com/temporal-community/temporal-dotnet-extensions</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
     <!-- Default TFM for test/sample/benchmark projects. The library clears this inherited value
          and declares net10.0;net8.0;netstandard2.1 explicitly in its own project file. -->
     <TargetFramework Condition="'$(TargetFrameworks)' == ''">net10.0</TargetFramework>

@@ -20,6 +20,10 @@ public sealed class TemporalWorkflowCodeFixProviderTests
                 public static System.DateTime UtcNow => default;
                 public static System.Threading.Tasks.Task DelayAsync(int delay) =>
                     System.Threading.Tasks.Task.CompletedTask;
+                public static System.Threading.Tasks.Task RunTaskAsync(System.Func<System.Threading.Tasks.Task> func) =>
+                    func();
+                public static System.Guid NewGuid() => default;
+                public static System.Random Random => new System.Random();
             }
         }
         """;
@@ -28,6 +32,10 @@ public sealed class TemporalWorkflowCodeFixProviderTests
     [InlineData("await System.Threading.Tasks.Task.CompletedTask.ConfigureAwait(false);", "await System.Threading.Tasks.Task.CompletedTask;")]
     [InlineData("await System.Threading.Tasks.Task.Delay(10);", "await global::Temporalio.Workflows.Workflow.DelayAsync(10);")]
     [InlineData("_ = System.DateTime.UtcNow;", "_ = global::Temporalio.Workflows.Workflow.UtcNow;")]
+    [InlineData("await System.Threading.Tasks.Task.Run(() => System.Threading.Tasks.Task.CompletedTask);", "await global::Temporalio.Workflows.Workflow.RunTaskAsync(() => System.Threading.Tasks.Task.CompletedTask);")]
+    [InlineData("_ = System.Guid.NewGuid();", "_ = global::Temporalio.Workflows.Workflow.NewGuid();")]
+    [InlineData("_ = System.Random.Shared;", "_ = global::Temporalio.Workflows.Workflow.Random;")]
+    [InlineData("_ = new System.Random();", "_ = global::Temporalio.Workflows.Workflow.Random;")]
     public async Task AppliesFixAndResultCompiles(string statement, string expected)
     {
         var source = $$"""
