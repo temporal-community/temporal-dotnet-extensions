@@ -18,6 +18,7 @@ Each sample is independently runnable. Prerequisites: .NET 10 SDK and a running 
 | [05-observability](05-observability/) | `TemperatureSensor` | OpenTelemetry tracing, `TracingInterceptor`, Temporal Web UI | `just run-sample 05-observability` |
 | [06-testing](06-testing/) | `TodoList` | `WorkflowEnvironment.StartLocalAsync()`, xUnit patterns, test isolation | `dotnet test samples/06-testing` |
 | [07-analyzer-file-app](07-analyzer-file-app/) | `AnalyzerSampleWorkflow` | File-based app, analyzer diagnostics, deterministic workflow APIs | `dotnet run --file Program.cs` |
+| [08-analyzer-project](08-analyzer-project/) | `AnalyzerSampleWorkflow` | IDE diagnostics, code fixes, conventional project restore | `dotnet build` |
 
 ## Suggested Reading Order
 
