@@ -41,7 +41,7 @@ dotnet add package TemporalCommunity.DurableObjects.Analyzers
 | `TEMP002` | `Task.Delay` uses a system timer and is not replay-safe. | Replace it with `Workflow.DelayAsync`. |
 | `TEMP003` | `DateTime` or `DateTimeOffset` system-clock reads are not replay-safe. | Replace it with `Workflow.UtcNow`. |
 | `TEMP004` | `Task.Run` uses the system task scheduler and is not replay-safe. | Replace it with `Workflow.RunTaskAsync`. |
-| `TEMP007` | `Thread.Sleep`, `Task.Wait`, and timeout-based cancellation sources use system timing. | None; choose the appropriate Temporal timer or cancellation pattern. |
+| `TEMP007` | `Thread.Sleep`, `Task.Wait`, and timeout-based cancellation sources use system timing. | `Thread.Sleep` becomes `await Workflow.DelayAsync(...)`; choose the appropriate pattern for `Task.Wait` and timeout-based cancellation sources. |
 | `TEMP008` | System random and GUID APIs are not replay-safe. | Replace them with `Workflow.NewGuid` or `Workflow.Random` where the fix is applicable. |
 
 These diagnostics apply to code lexically contained in a type with `[Workflow]`. They do not

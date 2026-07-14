@@ -5,9 +5,9 @@ Depends on: Plan 004 (Complete); current analyzer and code-fix baseline
 GitHub issue: TBD
 
 Progress: Phase 1 diagnostics TEMP004, TEMP007, and TEMP008 are implemented and covered by
-focused analyzer tests. Mechanical fixes are provided for Task.Run and supported random/GUID
-replacement cases; blocking/timer diagnostics remain diagnostic-only where an automatic rewrite
-would require application-specific intent.
+focused analyzer tests. Mechanical fixes are provided for Task.Run, Thread.Sleep, and supported
+random/GUID replacement cases; Task.Wait and timeout-based cancellation diagnostics remain
+diagnostic-only where an automatic rewrite would require application-specific intent.
 
 ## Outcome
 
