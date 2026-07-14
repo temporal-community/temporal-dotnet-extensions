@@ -96,6 +96,34 @@ public sealed class TemporalWorkflowCodeFixProviderTests
         }
     }
 
+    [Fact]
+    public async Task UsesWorkflowTypeWhenWorkflowNamespaceIsImported()
+    {
+        var source = """
+            using Temporalio.Workflows;
+
+            [Workflow]
+            public sealed class MyWorkflow
+            {
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    await System.Threading.Tasks.Task.Run(() => System.Threading.Tasks.Task.CompletedTask);
+                }
+            }
+            """;
+        var (workspace, document) = CreateDocument(source);
+        using (workspace)
+        {
+            var fixedDocument = await ApplyFirstFixAsync(document).ConfigureAwait(true);
+            var text = (await fixedDocument.GetTextAsync().ConfigureAwait(true)).ToString();
+
+            Assert.Contains("Workflow.RunTaskAsync", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("global::Temporalio.Workflows.Workflow", text, StringComparison.Ordinal);
+            Assert.Empty((await fixedDocument.Project.GetCompilationAsync().ConfigureAwait(true))!
+                .GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
+        }
+    }
+
     private static (AdhocWorkspace Workspace, Document Document) CreateDocument(string source)
     {
         var workspace = new AdhocWorkspace();

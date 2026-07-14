@@ -80,15 +80,19 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
             return document;
         }
 
+        var workflowTypeName = HasWorkflowUsing(root)
+            ? "Workflow"
+            : "global::Temporalio.Workflows.Workflow";
+
         ExpressionSyntax? replacement = diagnosticId switch
         {
             TemporalWorkflowAnalyzer.ConfigureAwaitFalseId => RemoveConfigureAwait(node),
-            TemporalWorkflowAnalyzer.TaskDelayId => ReplaceTaskDelay(node),
+            TemporalWorkflowAnalyzer.TaskDelayId => ReplaceTaskDelay(node, workflowTypeName),
             TemporalWorkflowAnalyzer.SystemClockId => SyntaxFactory.ParseExpression(
-                "global::Temporalio.Workflows.Workflow.UtcNow"),
-            TemporalWorkflowAnalyzer.TaskRunId => ReplaceMemberExpression(node, "RunTaskAsync"),
-            TemporalWorkflowAnalyzer.NonDeterministicRandomId => ReplaceRandom(node),
-            TemporalWorkflowAnalyzer.BlockingWaitId => ReplaceThreadSleep(node, semanticModel),
+                $"{workflowTypeName}.UtcNow"),
+            TemporalWorkflowAnalyzer.TaskRunId => ReplaceMemberExpression(node, "RunTaskAsync", workflowTypeName),
+            TemporalWorkflowAnalyzer.NonDeterministicRandomId => ReplaceRandom(node, workflowTypeName),
+            TemporalWorkflowAnalyzer.BlockingWaitId => ReplaceThreadSleep(node, semanticModel, workflowTypeName),
             _ => null,
         };
         if (replacement is null)
@@ -110,29 +114,32 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
             ? memberAccess.Expression
             : null;
 
-    private static InvocationExpressionSyntax? ReplaceTaskDelay(SyntaxNode node) =>
+    private static InvocationExpressionSyntax? ReplaceTaskDelay(SyntaxNode node, string workflowTypeName) =>
         node is InvocationExpressionSyntax invocation
             ? invocation.WithExpression(SyntaxFactory.ParseExpression(
-                "global::Temporalio.Workflows.Workflow.DelayAsync"))
+                $"{workflowTypeName}.DelayAsync"))
             : null;
 
-    private static InvocationExpressionSyntax? ReplaceMemberExpression(SyntaxNode node, string memberName) =>
+    private static InvocationExpressionSyntax? ReplaceMemberExpression(
+        SyntaxNode node,
+        string memberName,
+        string workflowTypeName) =>
         node is InvocationExpressionSyntax invocation &&
         invocation.Expression is MemberAccessExpressionSyntax memberAccess
             ? invocation.WithExpression(memberAccess.WithExpression(
-                    SyntaxFactory.ParseExpression("global::Temporalio.Workflows.Workflow"))
+                    SyntaxFactory.ParseExpression(workflowTypeName))
                 .WithName(SyntaxFactory.IdentifierName(memberName)))
             : null;
 
-    private static ExpressionSyntax? ReplaceRandom(SyntaxNode node) => node switch
+    private static ExpressionSyntax? ReplaceRandom(SyntaxNode node, string workflowTypeName) => node switch
     {
         InvocationExpressionSyntax invocation when invocation.Expression is MemberAccessExpressionSyntax memberAccess =>
             memberAccess.Name.Identifier.Text == "NewGuid"
-                ? SyntaxFactory.ParseExpression("global::Temporalio.Workflows.Workflow.NewGuid()")
+                ? SyntaxFactory.ParseExpression($"{workflowTypeName}.NewGuid()")
                 : null,
-        MemberAccessExpressionSyntax => SyntaxFactory.ParseExpression("global::Temporalio.Workflows.Workflow.Random"),
+        MemberAccessExpressionSyntax => SyntaxFactory.ParseExpression($"{workflowTypeName}.Random"),
         ObjectCreationExpressionSyntax creation when creation.ArgumentList?.Arguments.Count is null or 0 =>
-            SyntaxFactory.ParseExpression("global::Temporalio.Workflows.Workflow.Random"),
+            SyntaxFactory.ParseExpression($"{workflowTypeName}.Random"),
         _ => null,
     };
 
@@ -142,17 +149,24 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
             Expression: MemberAccessExpressionSyntax { Name.Identifier.Text: "Sleep" },
         };
 
-    private static AwaitExpressionSyntax? ReplaceThreadSleep(SyntaxNode node, SemanticModel semanticModel) =>
+    private static AwaitExpressionSyntax? ReplaceThreadSleep(
+        SyntaxNode node,
+        SemanticModel semanticModel,
+        string workflowTypeName) =>
         node is InvocationExpressionSyntax invocation &&
         invocation.Expression is MemberAccessExpressionSyntax memberAccess &&
         memberAccess.Name.Identifier.Text == "Sleep" &&
         invocation.ArgumentList.Arguments.Count == 1
             ? CreateDelayAwait(
                 invocation.ArgumentList.Arguments[0].Expression,
-                semanticModel.GetTypeInfo(invocation.ArgumentList.Arguments[0].Expression).Type)
+                semanticModel.GetTypeInfo(invocation.ArgumentList.Arguments[0].Expression).Type,
+                workflowTypeName)
             : null;
 
-    private static AwaitExpressionSyntax CreateDelayAwait(ExpressionSyntax argument, ITypeSymbol? argumentType)
+    private static AwaitExpressionSyntax CreateDelayAwait(
+        ExpressionSyntax argument,
+        ITypeSymbol? argumentType,
+        string workflowTypeName)
     {
         var delay = argumentType?.ToDisplayString() == "System.TimeSpan"
             ? argument
@@ -162,7 +176,11 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
 
         return SyntaxFactory.AwaitExpression(
             SyntaxFactory.InvocationExpression(
-                SyntaxFactory.ParseExpression("global::Temporalio.Workflows.Workflow.DelayAsync"),
+                SyntaxFactory.ParseExpression($"{workflowTypeName}.DelayAsync"),
                 SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Argument(delay)))));
     }
+
+    private static bool HasWorkflowUsing(SyntaxNode root) => root.DescendantNodes()
+        .OfType<UsingDirectiveSyntax>()
+        .Any(usingDirective => usingDirective.Name?.ToString() == "Temporalio.Workflows");
 }
