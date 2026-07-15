@@ -38,9 +38,14 @@ assertions that would be unstable in CI.
 - The implementation duplicates a minimal direct-rule predicate rather than calling private
   production analyzer helpers; production extraction should happen only after the design is accepted.
 
+The cross-assembly prototype test emits a helper assembly, exports a method summary keyed by its
+fully qualified symbol name, and consumes that summary while analyzing a separate workflow
+compilation. This is a stand-in for persisted analyzer facts and confirms that symbol identity can
+be the summary key. It does not yet implement Roslyn's analyzer-fact serialization protocol.
+
 ## Recommendation
 
 Do not enable transitive diagnostics in the production analyzer yet. The next research increment
-should compare a `CompilationStartAction` implementation with Roslyn analyzer facts across two test
-assemblies, measure analysis latency on a representative solution, and define dispatch/override and
-generated-code policies. Promote only after false-positive and performance thresholds are agreed.
+should replace the stand-in summary with Roslyn analyzer facts across two test assemblies, measure
+analysis latency on a representative solution, and define dispatch/override and generated-code
+policies. Promote only after false-positive and performance thresholds are agreed.
