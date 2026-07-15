@@ -87,7 +87,7 @@ that only assert private helper structure or duplicate existing TEMP001–TEMP00
 
 The research pass produced the following outcomes:
 
-1. **Transitive workflow nondeterminism analysis** — [#11](https://github.com/temporal-community/temporal-dotnet-extensions/issues/11) (open; prototype required)
+1. **Transitive workflow nondeterminism analysis** — [#11](https://github.com/temporal-community/temporal-dotnet-extensions/issues/11) (prototype documented; cross-assembly design remains open)
    Evaluate Roslyn call-graph analysis, cross-assembly behavior, caching, recursion, generated code,
    and hierarchical diagnostics. Start with a prototype and false-positive benchmark; do not change
    existing lexical rule behavior until the prototype is accepted.
