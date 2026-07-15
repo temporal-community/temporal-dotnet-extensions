@@ -21,6 +21,7 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
     public const string CancellationTokenSourceCancelAsyncId = "TEMP010";
     public const string ActivityTimeoutId = "TEMP009";
     public const string UnsafeTaskWhenAnyId = "TEMP005";
+    public const string WorkflowQueryAsyncId = "TEMP015";
 
     private static readonly DiagnosticDescriptor s_configureAwaitFalse = new(
         ConfigureAwaitFalseId,
@@ -130,6 +131,15 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "The Temporal wrapper preserves workflow scheduler compatibility across target frameworks.");
 
+    private static readonly DiagnosticDescriptor s_workflowQueryAsync = new(
+        WorkflowQueryAsyncId,
+        "Workflow queries must be synchronous",
+        "WorkflowQuery methods cannot return Task; return a value synchronously",
+        "Temporal.WorkflowShape",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Temporal query handlers must return a value without asynchronous Task execution.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
         ImmutableArray.Create(
             s_configureAwaitFalse,
@@ -143,7 +153,8 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
             s_unorderedCollection,
             s_cancelAsync,
             s_activityTimeout,
-            s_unsafeTaskWhenAny);
+            s_unsafeTaskWhenAny,
+            s_workflowQueryAsync);
 
     public override void Initialize(AnalysisContext context)
     {
@@ -160,6 +171,7 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
         context.RegisterSyntaxNodeAction(AnalyzeLockStatement, SyntaxKind.LockStatement);
         context.RegisterSyntaxNodeAction(AnalyzeForEach, SyntaxKind.ForEachStatement);
         context.RegisterSyntaxNodeAction(AnalyzeForEachVariable, SyntaxKind.ForEachVariableStatement);
+        context.RegisterSyntaxNodeAction(AnalyzeMethodDeclaration, SyntaxKind.MethodDeclaration);
     }
 
     private static void AnalyzeInvocation(SyntaxNodeAnalysisContext context)
@@ -433,6 +445,29 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
 
         var forEach = (ForEachVariableStatementSyntax)context.Node;
         AnalyzeForEachExpression(context, forEach.Expression);
+    }
+
+    private static void AnalyzeMethodDeclaration(SyntaxNodeAnalysisContext context)
+    {
+        if (!IsInWorkflowType(context) ||
+            context.Node is not MethodDeclarationSyntax methodDeclaration ||
+            context.SemanticModel.GetDeclaredSymbol(methodDeclaration, context.CancellationToken) is not IMethodSymbol method)
+        {
+            return;
+        }
+
+        if (!method.GetAttributes().Any(attribute =>
+                attribute.AttributeClass?.ToDisplayString() == "Temporalio.Workflows.WorkflowQueryAttribute"))
+        {
+            return;
+        }
+
+        if (method.ReturnType is INamedTypeSymbol returnType && IsTaskLike(returnType))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                s_workflowQueryAsync,
+                methodDeclaration.ReturnType.GetLocation()));
+        }
     }
 
     private static void AnalyzeForEachExpression(

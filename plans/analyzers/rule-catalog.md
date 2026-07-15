@@ -41,6 +41,7 @@ and observability references are now treated as supplemental guidance alongside 
 | TEMP011 | Do not use thread synchronization primitives in workflows | Error | B | Implemented |
 | TEMP013 | Do not write directly to the console in workflows | Warning | A | Implemented |
 | TEMP014 | Do not iterate over unordered collections in workflows | Error | B | Implemented |
+| TEMP015 | Workflow query methods must not return task-like types | Error | A | Implemented |
 | TEMP012 | Suppress incompatible platform diagnostics for workflow source | Info | C | Research |
 
 The first implementation recognizes code lexically contained in a type carrying

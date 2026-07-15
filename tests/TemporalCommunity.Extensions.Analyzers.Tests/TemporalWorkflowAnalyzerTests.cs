@@ -14,6 +14,8 @@ public sealed class TemporalWorkflowAnalyzerTests
         {
             [System.AttributeUsage(System.AttributeTargets.Class)]
             public sealed class WorkflowAttribute : System.Attribute { }
+            [System.AttributeUsage(System.AttributeTargets.Method | System.AttributeTargets.Property)]
+            public sealed class WorkflowQueryAttribute : System.Attribute { }
 
             public static class Workflow
             {
@@ -234,6 +236,59 @@ public sealed class TemporalWorkflowAnalyzerTests
             """);
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.UnsafeTaskWhenAnyId);
+    }
+
+    [Fact]
+    public async Task ReportsAsyncWorkflowQueryMethods()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            [Temporalio.Workflows.Workflow]
+            public sealed class MyWorkflow
+            {
+                [Temporalio.Workflows.WorkflowQuery]
+                public System.Threading.Tasks.Task<string> GetValueAsync() =>
+                    System.Threading.Tasks.Task.FromResult("value");
+
+                [Temporalio.Workflows.WorkflowQuery]
+                public System.Threading.Tasks.Task GetEmptyAsync() =>
+                    System.Threading.Tasks.Task.CompletedTask;
+
+                [Temporalio.Workflows.WorkflowQuery]
+                public System.Threading.Tasks.ValueTask<string> GetValueTaskAsync() =>
+                    new("value");
+
+                [Temporalio.Workflows.WorkflowQuery]
+                public System.Threading.Tasks.ValueTask GetEmptyValueTaskAsync() =>
+                    System.Threading.Tasks.ValueTask.CompletedTask;
+            }
+            """);
+
+        Assert.Equal(4, diagnostics.Count(diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.WorkflowQueryAsyncId));
+    }
+
+    [Fact]
+    public async Task AllowsSynchronousWorkflowQueriesAndIgnoresPropertiesAndNonWorkflows()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            [Temporalio.Workflows.Workflow]
+            public sealed class MyWorkflow
+            {
+                [Temporalio.Workflows.WorkflowQuery]
+                public string GetValue() => "value";
+
+                [Temporalio.Workflows.WorkflowQuery]
+                public string Value => "value";
+            }
+
+            public sealed class ActivityCode
+            {
+                [Temporalio.Workflows.WorkflowQuery]
+                public System.Threading.Tasks.Task<string> GetValueAsync() =>
+                    System.Threading.Tasks.Task.FromResult("value");
+            }
+            """);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.WorkflowQueryAsyncId);
     }
 
     [Fact]

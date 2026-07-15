@@ -51,6 +51,7 @@ dotnet add package TemporalCommunity.DurableObjects.Analyzers
 | `TEMP011` | `lock` and selected `Monitor` synchronization calls depend on the system scheduler and are not replay-safe. | None; choose the appropriate Temporal coordination primitive. |
 | `TEMP013` | Direct `Console` I/O bypasses Temporal workflow logging. | None; use `Workflow.Logger` with the supported Temporal logging API. |
 | `TEMP014` | `Dictionary`, `HashSet`, and `ConcurrentDictionary` enumeration order is not guaranteed across replay. | None; use an ordered collection or sort values before iterating. |
+| `TEMP015` | `[WorkflowQuery]` methods cannot return task-like types (`Task`, `Task<T>`, `ValueTask`, or `ValueTask<T>`). | None; queries must compute and return a value synchronously. |
 
 These diagnostics apply to code lexically contained in a type with `[Workflow]`. They do not
 claim to inspect arbitrary external helper libraries; workflow replay tests remain necessary.
