@@ -15,6 +15,14 @@ internal sealed class AnalyzerSampleWorkflow
         Thread.Sleep(100);                               // TEMP007
         var id = Guid.NewGuid();                         // TEMP008
         _ = Random.Shared;                               // TEMP008
+        lock (this)                                      // TEMP011
+        {
+            if (Monitor.TryEnter(this))                 // TEMP011
+            {
+                Monitor.Exit(this);                      // TEMP011
+            }
+        }
+        Console.WriteLine("workflow output");           // TEMP013
         return id.ToString();
     }
 }

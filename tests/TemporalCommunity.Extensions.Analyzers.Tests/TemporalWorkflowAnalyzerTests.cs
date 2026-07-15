@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Globalization;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
@@ -100,6 +101,67 @@ public sealed class TemporalWorkflowAnalyzerTests
     }
 
     [Fact]
+    public async Task ReportsSynchronizationAndConsoleIoInsideWorkflow()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            [Temporalio.Workflows.Workflow]
+            public sealed class MyWorkflow
+            {
+                public void Run()
+                {
+                    lock (this)
+                    {
+                        System.Threading.Monitor.Enter(this);
+                        System.Threading.Monitor.TryEnter(this);
+                        System.Threading.Monitor.Exit(this);
+                        System.Threading.Monitor.Wait(this);
+                        System.Threading.Monitor.Pulse(this);
+                        System.Threading.Monitor.PulseAll(this);
+                    }
+
+                    System.Console.Write("hello");
+                    System.Console.WriteLine("world");
+                    _ = System.Console.In;
+                    _ = System.Console.Out;
+                    _ = System.Console.Error;
+                }
+            }
+            """);
+
+        Assert.Equal(7, diagnostics.Count(diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.SynchronizationId));
+        Assert.Equal(5, diagnostics.Count(diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.ConsoleIoId));
+
+        var consoleDiagnostic = Assert.Single(
+            diagnostics.Where(diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.ConsoleIoId &&
+                diagnostic.GetMessage(CultureInfo.InvariantCulture).Contains("Console.WriteLine", StringComparison.Ordinal)));
+        Assert.Equal(DiagnosticSeverity.Warning, consoleDiagnostic.Severity);
+        Assert.Equal("Temporal.Observability", consoleDiagnostic.Descriptor.Category);
+    }
+
+    [Fact]
+    public async Task DoesNotReportSynchronizationOrConsoleIoOutsideWorkflow()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            public sealed class ActivityCode
+            {
+                public void Run()
+                {
+                    lock (this)
+                    {
+                        System.Threading.Monitor.TryEnter(this);
+                        System.Threading.Monitor.Exit(this);
+                    }
+
+                    System.Console.WriteLine("hello");
+                    _ = System.Console.Error;
+                }
+            }
+            """);
+
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
     public async Task AllowsTemporalAlternativesAndNonWorkflowCode()
     {
         var diagnostics = await AnalyzeAsync("""
@@ -154,7 +216,7 @@ public sealed class TemporalWorkflowAnalyzerTests
             .ConfigureAwait(true);
         Assert.All(diagnostics, diagnostic =>
         {
-            Assert.Equal(DiagnosticSeverity.Error, diagnostic.Severity);
+            Assert.Contains(diagnostic.Severity, new[] { DiagnosticSeverity.Error, DiagnosticSeverity.Warning });
             Assert.True(diagnostic.Location.IsInSource);
         });
         return diagnostics;

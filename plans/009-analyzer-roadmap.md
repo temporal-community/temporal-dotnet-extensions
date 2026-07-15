@@ -35,15 +35,13 @@ This roadmap extends the existing rule catalog rather than minting duplicate IDs
   we confirm the overload-sensitive analysis and code-fix shape.
 - `DO0005` is already implemented in the generator and should be treated as shipped behavior, not
   new roadmap work.
-- `Console.WriteLine` in workflow types is a new candidate that is not yet cataloged. If we keep it
-  in scope, it needs its own rule entry and confidence review before implementation.
+- `TEMP011` and `TEMP013` are cataloged and implemented as focused synchronization and console
+  I/O diagnostics.
 
 ## Follow-on candidates (after Phase 1)
 
 - `TEMP005`: `Task.WhenAny` overloads with unsafe semantics.
 - `TEMP006`: `Task.WhenAll` in workflow types.
-- `Console.WriteLine` in workflow types, treated as a separate observability rule rather than a
-  determinism rule.
 
 ## Suggested roadmap
 
@@ -90,7 +88,9 @@ Use buckets to keep the rules understandable and easy to suppress when needed:
 
 - `Temporal.Determinism` for workflow replay safety;
 - `Temporal.WorkflowShape` for query/update validator boundaries;
-- `Temporal.DurableObjects` for object-model rules and generated-client eligibility.
+- `Temporal.DurableObjects` for object-model rules and generated-client eligibility;
+- `Temporal.Observability` for direct logging and console-I/O guidance that is not itself a
+  determinism violation.
 
 ## Tests
 
@@ -118,8 +118,7 @@ Keep design research and unshipped rule notes in `plans/`, not `docs/`.
 - Replay-testing guidance
 - Versioning and patching policy
 - Activity idempotency guidance
-- Observability guidance beyond workflow logging, except for the separate `Console.WriteLine`
-  candidate noted above
+- Observability guidance beyond the focused TEMP013 console I/O rule
 - Payload-size guidance
 - Child workflow, saga, and schedule design guidance
 - Generated-client eligibility redesign or new contract-shape work; that belongs in the generated

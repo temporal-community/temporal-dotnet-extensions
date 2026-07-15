@@ -26,7 +26,9 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
     {
         var root = await context.Document.GetSyntaxRootAsync(context.CancellationToken)
             .ConfigureAwait(false);
-        if (root is null)
+        var semanticModel = await context.Document.GetSemanticModelAsync(context.CancellationToken)
+            .ConfigureAwait(false);
+        if (root is null || semanticModel is null)
         {
             return;
         }
@@ -34,7 +36,8 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
         foreach (var diagnostic in context.Diagnostics)
         {
             var node = root.FindNode(diagnostic.Location.SourceSpan);
-            if (diagnostic.Id == TemporalWorkflowAnalyzer.BlockingWaitId && !IsThreadSleep(node))
+            if (diagnostic.Id == TemporalWorkflowAnalyzer.BlockingWaitId &&
+                (!IsThreadSleep(node) || !IsAsyncContext(node)))
             {
                 continue;
             }
@@ -80,9 +83,12 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
             return document;
         }
 
-        var workflowTypeName = HasWorkflowUsing(root)
+        var workflowTypeName = CanResolveType(semanticModel, node.SpanStart, "Workflow", "Temporalio.Workflows.Workflow")
             ? "Workflow"
             : "global::Temporalio.Workflows.Workflow";
+        var timeSpanTypeName = CanResolveType(semanticModel, node.SpanStart, "TimeSpan", "System.TimeSpan")
+            ? "TimeSpan"
+            : "global::System.TimeSpan";
 
         ExpressionSyntax? replacement = diagnosticId switch
         {
@@ -92,7 +98,11 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
                 $"{workflowTypeName}.UtcNow"),
             TemporalWorkflowAnalyzer.TaskRunId => ReplaceMemberExpression(node, "RunTaskAsync", workflowTypeName),
             TemporalWorkflowAnalyzer.NonDeterministicRandomId => ReplaceRandom(node, workflowTypeName),
-            TemporalWorkflowAnalyzer.BlockingWaitId => ReplaceThreadSleep(node, semanticModel, workflowTypeName),
+            TemporalWorkflowAnalyzer.BlockingWaitId => ReplaceThreadSleep(
+                node,
+                semanticModel,
+                workflowTypeName,
+                timeSpanTypeName),
             _ => null,
         };
         if (replacement is null)
@@ -152,7 +162,8 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
     private static AwaitExpressionSyntax? ReplaceThreadSleep(
         SyntaxNode node,
         SemanticModel semanticModel,
-        string workflowTypeName) =>
+        string workflowTypeName,
+        string timeSpanTypeName) =>
         node is InvocationExpressionSyntax invocation &&
         invocation.Expression is MemberAccessExpressionSyntax memberAccess &&
         memberAccess.Name.Identifier.Text == "Sleep" &&
@@ -160,18 +171,20 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
             ? CreateDelayAwait(
                 invocation.ArgumentList.Arguments[0].Expression,
                 semanticModel.GetTypeInfo(invocation.ArgumentList.Arguments[0].Expression).Type,
-                workflowTypeName)
+                workflowTypeName,
+                timeSpanTypeName)
             : null;
 
     private static AwaitExpressionSyntax CreateDelayAwait(
         ExpressionSyntax argument,
         ITypeSymbol? argumentType,
-        string workflowTypeName)
+        string workflowTypeName,
+        string timeSpanTypeName)
     {
         var delay = argumentType?.ToDisplayString() == "System.TimeSpan"
             ? argument
             : SyntaxFactory.InvocationExpression(
-                SyntaxFactory.ParseExpression("TimeSpan.FromMilliseconds"),
+                SyntaxFactory.ParseExpression($"{timeSpanTypeName}.FromMilliseconds"),
                 SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Argument(argument))));
 
         return SyntaxFactory.AwaitExpression(
@@ -180,7 +193,32 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
                 SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Argument(delay)))));
     }
 
-    private static bool HasWorkflowUsing(SyntaxNode root) => root.DescendantNodes()
-        .OfType<UsingDirectiveSyntax>()
-        .Any(usingDirective => usingDirective.Name?.ToString() == "Temporalio.Workflows");
+    private static bool IsAsyncContext(SyntaxNode node)
+    {
+        for (var current = node.Parent; current is not null; current = current.Parent)
+        {
+            switch (current)
+            {
+                case MethodDeclarationSyntax method:
+                    return method.Modifiers.Any(SyntaxKind.AsyncKeyword);
+                case LocalFunctionStatementSyntax localFunction:
+                    return localFunction.Modifiers.Any(SyntaxKind.AsyncKeyword);
+                case AnonymousFunctionExpressionSyntax anonymousFunction:
+                    return anonymousFunction.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword);
+            }
+        }
+
+        return false;
+    }
+
+    private static bool CanResolveType(
+        SemanticModel semanticModel,
+        int position,
+        string name,
+        string metadataName)
+    {
+        var expectedType = semanticModel.Compilation.GetTypeByMetadataName(metadataName);
+        return expectedType is not null && semanticModel.LookupSymbols(position, name: name)
+            .Any(symbol => SymbolEqualityComparer.Default.Equals(symbol, expectedType));
+    }
 }

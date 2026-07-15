@@ -12,6 +12,8 @@ sample](../samples/07-analyzer-file-app/). It can be run with `dotnet run --file
 reports analyzer diagnostics during the file-app build.
 
 The sample is pinned to the `0.3.2` analyzer package release and demonstrates the Phase 1 rules.
+The latest source also includes TEMP011 and TEMP013; those diagnostics appear for consumers after
+the package containing them is released.
 
 Install the package appropriate for the project that declares workflows:
 
@@ -43,6 +45,8 @@ dotnet add package TemporalCommunity.DurableObjects.Analyzers
 | `TEMP004` | `Task.Run` uses the system task scheduler and is not replay-safe. | Replace it with `Workflow.RunTaskAsync`. |
 | `TEMP007` | `Thread.Sleep`, `Task.Wait`, and timeout-based cancellation sources use system timing. | `Thread.Sleep` becomes `await Workflow.DelayAsync(...)`; choose the appropriate pattern for `Task.Wait` and timeout-based cancellation sources. |
 | `TEMP008` | System random and GUID APIs are not replay-safe. | Replace them with `Workflow.NewGuid` or `Workflow.Random` where the fix is applicable. |
+| `TEMP011` | `lock` and selected `Monitor` synchronization calls depend on the system scheduler and are not replay-safe. | None; choose the appropriate Temporal coordination primitive. |
+| `TEMP013` | Direct `Console` I/O bypasses Temporal workflow logging. | None; use `Workflow.Logger` with the supported Temporal logging API. |
 
 These diagnostics apply to code lexically contained in a type with `[Workflow]`. They do not
 claim to inspect arbitrary external helper libraries; workflow replay tests remain necessary.

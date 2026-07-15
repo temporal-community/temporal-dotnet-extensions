@@ -15,6 +15,8 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
     public const string TaskRunId = "TEMP004";
     public const string BlockingWaitId = "TEMP007";
     public const string NonDeterministicRandomId = "TEMP008";
+    public const string SynchronizationId = "TEMP011";
+    public const string ConsoleIoId = "TEMP013";
 
     private static readonly DiagnosticDescriptor s_configureAwaitFalse = new(
         ConfigureAwaitFalseId,
@@ -70,6 +72,24 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "System random and GUID APIs are not deterministic under workflow replay.");
 
+    private static readonly DiagnosticDescriptor s_synchronization = new(
+        SynchronizationId,
+        "Do not use thread synchronization primitives in Temporal workflows",
+        "Use Temporal workflow coordination instead of {0} in workflow code",
+        "Temporal.Determinism",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Thread synchronization primitives depend on the system scheduler and are not replay-safe.");
+
+    private static readonly DiagnosticDescriptor s_consoleIo = new(
+        ConsoleIoId,
+        "Do not write directly to the console in Temporal workflows",
+        "Use Workflow.Logger instead of {0} in workflow code",
+        "Temporal.Observability",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "Direct console I/O bypasses Temporal workflow logging and can produce misleading replay output.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
         ImmutableArray.Create(
             s_configureAwaitFalse,
@@ -77,7 +97,9 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
             s_systemClock,
             s_taskRun,
             s_blockingWait,
-            s_random);
+            s_random,
+            s_synchronization,
+            s_consoleIo);
 
     public override void Initialize(AnalysisContext context)
     {
@@ -91,6 +113,7 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
         context.RegisterSyntaxNodeAction(AnalyzeInvocation, SyntaxKind.InvocationExpression);
         context.RegisterSyntaxNodeAction(AnalyzeMemberAccess, SyntaxKind.SimpleMemberAccessExpression);
         context.RegisterSyntaxNodeAction(AnalyzeObjectCreation, SyntaxKind.ObjectCreationExpression);
+        context.RegisterSyntaxNodeAction(AnalyzeLockStatement, SyntaxKind.LockStatement);
     }
 
     private static void AnalyzeInvocation(SyntaxNodeAnalysisContext context)
@@ -143,6 +166,24 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
             context.ReportDiagnostic(Diagnostic.Create(s_blockingWait, invocation.GetLocation(), "Task.Wait"));
         }
 
+        if (method.ContainingType.ToDisplayString() == "System.Threading.Monitor" &&
+            method.Name is "Enter" or "TryEnter" or "Exit" or "Wait" or "Pulse" or "PulseAll")
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                s_synchronization,
+                invocation.GetLocation(),
+                $"Monitor.{method.Name}"));
+        }
+
+        if (method.ContainingType.ToDisplayString() == "System.Console" &&
+            method.Name is "Write" or "WriteLine")
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                s_consoleIo,
+                invocation.GetLocation(),
+                $"Console.{method.Name}"));
+        }
+
         if (method.Name == "NewGuid" &&
             method.ContainingType.ToDisplayString() == "System.Guid")
         {
@@ -168,6 +209,15 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
         if (property.Name == "Shared" && containingType == "System.Random")
         {
             context.ReportDiagnostic(Diagnostic.Create(s_random, memberAccess.GetLocation(), "Random.Shared"));
+            return;
+        }
+
+        if (containingType == "System.Console" && property.Name is "In" or "Out" or "Error")
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                s_consoleIo,
+                memberAccess.GetLocation(),
+                $"Console.{property.Name}"));
             return;
         }
 
@@ -212,6 +262,14 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
                 s_blockingWait,
                 creation.GetLocation(),
                 "a timeout-based CancellationTokenSource"));
+        }
+    }
+
+    private static void AnalyzeLockStatement(SyntaxNodeAnalysisContext context)
+    {
+        if (IsInWorkflowType(context))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(s_synchronization, context.Node.GetLocation(), "lock"));
         }
     }
 

@@ -45,7 +45,11 @@ Do not add tests that merely mirror implementation details or documentation that
 
 ## Active plans
 
+This list includes Proposed plans that are actively being reviewed, in addition to plans already
+approved or in progress.
+
 - [009 — Analyzer and code-fix roadmap](009-analyzer-roadmap.md)
+- [010 — Actionable analyzer rules and research backlog](010-analyzer-actionable-work.md)
 
 ## Archived plans
 
