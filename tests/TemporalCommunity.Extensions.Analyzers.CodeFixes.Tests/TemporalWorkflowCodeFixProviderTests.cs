@@ -24,6 +24,10 @@ public sealed class TemporalWorkflowCodeFixProviderTests
                     System.Threading.Tasks.Task.CompletedTask;
                 public static System.Threading.Tasks.Task RunTaskAsync(System.Func<System.Threading.Tasks.Task> func) =>
                     func();
+                public static System.Threading.Tasks.Task<System.Threading.Tasks.Task<T>> WhenAnyAsync<T>(
+                    params System.Threading.Tasks.Task<T>[] tasks) => default!;
+                public static System.Threading.Tasks.Task<System.Threading.Tasks.Task<T>> WhenAnyAsync<T>(
+                    System.Collections.Generic.IEnumerable<System.Threading.Tasks.Task<T>> tasks) => default!;
                 public static System.Guid NewGuid() => default;
                 public static System.Random Random => new System.Random();
             }
@@ -38,6 +42,7 @@ public sealed class TemporalWorkflowCodeFixProviderTests
         Assert.DoesNotContain(TemporalWorkflowAnalyzer.SynchronizationId, provider.FixableDiagnosticIds);
         Assert.DoesNotContain(TemporalWorkflowAnalyzer.ConsoleIoId, provider.FixableDiagnosticIds);
         Assert.DoesNotContain(TemporalWorkflowAnalyzer.UnorderedCollectionId, provider.FixableDiagnosticIds);
+        Assert.DoesNotContain(TemporalWorkflowAnalyzer.ActivityTimeoutId, provider.FixableDiagnosticIds);
     }
 
     [Theory]
@@ -50,6 +55,9 @@ public sealed class TemporalWorkflowCodeFixProviderTests
     [InlineData("_ = new System.Random();", "_ = global::Temporalio.Workflows.Workflow.Random;")]
     [InlineData("System.Threading.Thread.Sleep(100);", "await global::Temporalio.Workflows.Workflow.DelayAsync(global::System.TimeSpan.FromMilliseconds(100));")]
     [InlineData("System.Threading.Thread.Sleep(System.TimeSpan.FromSeconds(1));", "await global::Temporalio.Workflows.Workflow.DelayAsync(System.TimeSpan.FromSeconds(1));")]
+    [InlineData("await source.CancelAsync();", "source.Cancel();")]
+    [InlineData("source.CancelAsync();", "source.Cancel();")]
+    [InlineData("await System.Threading.Tasks.Task.WhenAny(System.Threading.Tasks.Task.FromResult(1), System.Threading.Tasks.Task.FromResult(2), System.Threading.Tasks.Task.FromResult(3));", "await global::Temporalio.Workflows.Workflow.WhenAnyAsync(System.Threading.Tasks.Task.FromResult(1), System.Threading.Tasks.Task.FromResult(2), System.Threading.Tasks.Task.FromResult(3));")]
     public async Task AppliesFixAndResultCompiles(string statement, string expected)
     {
         var source = $$"""
@@ -58,6 +66,7 @@ public sealed class TemporalWorkflowCodeFixProviderTests
             {
                 public async System.Threading.Tasks.Task RunAsync()
                 {
+                    using var source = new System.Threading.CancellationTokenSource();
                     {{statement}}
                 }
             }
@@ -165,6 +174,53 @@ public sealed class TemporalWorkflowCodeFixProviderTests
                 public void Run()
                 {
                     _ = System.Security.Cryptography.RandomNumberGenerator.GetInt32(10);
+                }
+            }
+            """;
+        var (workspace, document) = CreateDocument(source);
+        using (workspace)
+        {
+            var actions = await GetCodeFixActionsAsync(document).ConfigureAwait(true);
+
+            Assert.Empty(actions);
+        }
+    }
+
+    [Fact]
+    public async Task DoesNotOfferCancelAsyncFixInsideExpression()
+    {
+        var source = """
+            [Temporalio.Workflows.Workflow]
+            public sealed class MyWorkflow
+            {
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    _ = source.CancelAsync();
+                }
+
+                private readonly System.Threading.CancellationTokenSource source = new();
+            }
+            """;
+        var (workspace, document) = CreateDocument(source);
+        using (workspace)
+        {
+            var actions = await GetCodeFixActionsAsync(document).ConfigureAwait(true);
+
+            Assert.Empty(actions);
+        }
+    }
+
+    [Fact]
+    public async Task DoesNotOfferCancelAsyncFixWhenAwaitedInsideExpression()
+    {
+        var source = """
+            [Temporalio.Workflows.Workflow]
+            public sealed class MyWorkflow
+            {
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    using var source = new System.Threading.CancellationTokenSource();
+                    _ = await source.CancelAsync();
                 }
             }
             """;

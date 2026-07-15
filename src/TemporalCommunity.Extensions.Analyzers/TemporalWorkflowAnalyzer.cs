@@ -18,6 +18,9 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
     public const string SynchronizationId = "TEMP011";
     public const string ConsoleIoId = "TEMP013";
     public const string UnorderedCollectionId = "TEMP014";
+    public const string CancellationTokenSourceCancelAsyncId = "TEMP010";
+    public const string ActivityTimeoutId = "TEMP009";
+    public const string UnsafeTaskWhenAnyId = "TEMP005";
 
     private static readonly DiagnosticDescriptor s_configureAwaitFalse = new(
         ConfigureAwaitFalseId,
@@ -100,6 +103,33 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "Dictionary, HashSet, and concurrent dictionary enumeration order is not guaranteed across workflow replay.");
 
+    private static readonly DiagnosticDescriptor s_cancelAsync = new(
+        CancellationTokenSourceCancelAsyncId,
+        "Do not use CancellationTokenSource.CancelAsync in Temporal workflows",
+        "Use CancellationTokenSource.Cancel instead of CancelAsync in workflow code",
+        "Temporal.Determinism",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Temporal workflows must use the synchronous CancellationTokenSource.Cancel operation.");
+
+    private static readonly DiagnosticDescriptor s_activityTimeout = new(
+        ActivityTimeoutId,
+        "Activity options require a timeout",
+        "Set StartToCloseTimeout or ScheduleToCloseTimeout on activity options",
+        "Temporal.WorkflowShape",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Temporal activity and local activity options must specify a start-to-close or schedule-to-close timeout.");
+
+    private static readonly DiagnosticDescriptor s_unsafeTaskWhenAny = new(
+        UnsafeTaskWhenAnyId,
+        "Prefer Workflow.WhenAnyAsync for generic Task.WhenAny",
+        "Use Workflow.WhenAnyAsync for generic Task.WhenAny calls with multiple result tasks",
+        "Temporal.Determinism",
+        DiagnosticSeverity.Warning,
+        isEnabledByDefault: true,
+        description: "The Temporal wrapper preserves workflow scheduler compatibility across target frameworks.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
         ImmutableArray.Create(
             s_configureAwaitFalse,
@@ -110,7 +140,10 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
             s_random,
             s_synchronization,
             s_consoleIo,
-            s_unorderedCollection);
+            s_unorderedCollection,
+            s_cancelAsync,
+            s_activityTimeout,
+            s_unsafeTaskWhenAny);
 
     public override void Initialize(AnalysisContext context)
     {
@@ -126,6 +159,7 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
         context.RegisterSyntaxNodeAction(AnalyzeObjectCreation, SyntaxKind.ObjectCreationExpression);
         context.RegisterSyntaxNodeAction(AnalyzeLockStatement, SyntaxKind.LockStatement);
         context.RegisterSyntaxNodeAction(AnalyzeForEach, SyntaxKind.ForEachStatement);
+        context.RegisterSyntaxNodeAction(AnalyzeForEachVariable, SyntaxKind.ForEachVariableStatement);
     }
 
     private static void AnalyzeInvocation(SyntaxNodeAnalysisContext context)
@@ -178,6 +212,13 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
             context.ReportDiagnostic(Diagnostic.Create(s_blockingWait, invocation.GetLocation(), "Task.Wait"));
         }
 
+        if (method.Name == "WhenAny" &&
+            method.ContainingType.ToDisplayString() == "System.Threading.Tasks.Task" &&
+            IsUnsafeGenericWhenAny(invocation, method))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(s_unsafeTaskWhenAny, invocation.GetLocation()));
+        }
+
         if (method.ContainingType.ToDisplayString() == "System.Threading.Monitor" &&
             method.Name is "Enter" or "TryEnter" or "Exit" or "Wait" or "Pulse" or "PulseAll")
         {
@@ -202,6 +243,19 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
             context.ReportDiagnostic(Diagnostic.Create(s_random, invocation.GetLocation(), "Guid.NewGuid"));
         }
 
+        if (method.Name == "CancelAsync" &&
+            method.ContainingType.ToDisplayString() == "System.Threading.CancellationTokenSource" &&
+            method.Parameters.Length == 0)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(s_cancelAsync, invocation.GetLocation()));
+        }
+
+        if (method.ContainingType.ToDisplayString() == "Temporalio.Workflows.Workflow" &&
+            method.Name is "ExecuteActivityAsync" or "ExecuteLocalActivityAsync")
+        {
+            AnalyzeInlineActivityOptions(context, invocation);
+        }
+
         if (method.ContainingType.ToDisplayString() == "System.Security.Cryptography.RandomNumberGenerator" &&
             method.Name is "Create" or "Fill" or "GetBytes" or "GetNonZeroBytes" or "GetInt32" or "GetHexString")
         {
@@ -210,6 +264,71 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
                 invocation.GetLocation(),
                 $"RandomNumberGenerator.{method.Name}"));
         }
+    }
+
+    private static void AnalyzeInlineActivityOptions(
+        SyntaxNodeAnalysisContext context,
+        InvocationExpressionSyntax invocation)
+    {
+        var optionsExpression = invocation.ArgumentList.Arguments.LastOrDefault()?.Expression;
+        if (optionsExpression is null)
+        {
+            return;
+        }
+
+        var optionsType = context.SemanticModel.GetTypeInfo(
+            optionsExpression,
+            context.CancellationToken).Type?.ToDisplayString();
+        if (optionsType is not "Temporalio.Workflows.ActivityOptions" and
+            not "Temporalio.Workflows.LocalActivityOptions")
+        {
+            return;
+        }
+
+        var initializer = optionsExpression switch
+        {
+            ObjectCreationExpressionSyntax creation => creation.Initializer,
+            ImplicitObjectCreationExpressionSyntax creation => creation.Initializer,
+            _ => null,
+        };
+        if (optionsExpression is not ObjectCreationExpressionSyntax &&
+            optionsExpression is not ImplicitObjectCreationExpressionSyntax)
+        {
+            return;
+        }
+
+        if (initializer is null || !initializer.Expressions.Any(expression =>
+                expression is AssignmentExpressionSyntax assignment &&
+                assignment.Left is IdentifierNameSyntax identifier &&
+                identifier.Identifier.Text is "StartToCloseTimeout" or "ScheduleToCloseTimeout"))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(s_activityTimeout, optionsExpression.GetLocation()));
+        }
+    }
+
+    private static bool IsUnsafeGenericWhenAny(
+        InvocationExpressionSyntax invocation,
+        IMethodSymbol method)
+    {
+        if (!method.IsGenericMethod || method.TypeArguments.Length != 1)
+        {
+            return false;
+        }
+
+        // The enumerable generic overload is the known unsafe shape on older target frameworks.
+        if (method.Parameters.Length == 1 &&
+            method.Parameters[0].Type.ToDisplayString().StartsWith(
+                "System.Collections.Generic.IEnumerable<System.Threading.Tasks.Task<",
+                StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // For the params overload, only flag calls with more than two direct result tasks. Calls
+        // with two tasks are safe even on the older runtimes supported by the SDK.
+        return method.Parameters.Length == 1 &&
+            method.Parameters[0].IsParams &&
+            invocation.ArgumentList.Arguments.Count > 2;
     }
 
     private static void AnalyzeMemberAccess(SyntaxNodeAnalysisContext context)
@@ -302,7 +421,24 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
         }
 
         var forEach = (ForEachStatementSyntax)context.Node;
-        var expression = forEach.Expression;
+        AnalyzeForEachExpression(context, forEach.Expression);
+    }
+
+    private static void AnalyzeForEachVariable(SyntaxNodeAnalysisContext context)
+    {
+        if (!IsInWorkflowType(context))
+        {
+            return;
+        }
+
+        var forEach = (ForEachVariableStatementSyntax)context.Node;
+        AnalyzeForEachExpression(context, forEach.Expression);
+    }
+
+    private static void AnalyzeForEachExpression(
+        SyntaxNodeAnalysisContext context,
+        ExpressionSyntax expression)
+    {
         var type = context.SemanticModel.GetTypeInfo(expression, context.CancellationToken).Type;
         if (IsUnorderedCollection(type) || IsUnorderedDictionaryProperty(expression, context))
         {
@@ -341,8 +477,9 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
             memberAccess.Expression,
             context.CancellationToken).Type;
         return receiverType is INamedTypeSymbol namedType &&
-            namedType.OriginalDefinition.ToDisplayString() ==
-                "System.Collections.Generic.Dictionary<TKey, TValue>";
+            namedType.OriginalDefinition.ToDisplayString() is
+                "System.Collections.Generic.Dictionary<TKey, TValue>" or
+                "System.Collections.Concurrent.ConcurrentDictionary<TKey, TValue>";
     }
 
     private static bool IsInWorkflowType(SyntaxNodeAnalysisContext context)

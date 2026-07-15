@@ -24,6 +24,26 @@ public sealed class TemporalWorkflowAnalyzerTests
                     func();
                 public static System.Guid NewGuid() => default;
                 public static System.Random Random => new System.Random();
+                public static System.Threading.Tasks.Task ExecuteActivityAsync(
+                    object call, ActivityOptions options) => System.Threading.Tasks.Task.CompletedTask;
+                public static System.Threading.Tasks.Task ExecuteLocalActivityAsync(
+                    object call, LocalActivityOptions options) => System.Threading.Tasks.Task.CompletedTask;
+                public static System.Threading.Tasks.Task<System.Threading.Tasks.Task<T>> WhenAny<T>(
+                    params System.Threading.Tasks.Task<T>[] tasks) => default!;
+                public static System.Threading.Tasks.Task<System.Threading.Tasks.Task<T>> WhenAny<T>(
+                    System.Collections.Generic.IEnumerable<System.Threading.Tasks.Task<T>> tasks) => default!;
+            }
+
+            public sealed class ActivityOptions
+            {
+                public System.TimeSpan? StartToCloseTimeout { get; set; }
+                public System.TimeSpan? ScheduleToCloseTimeout { get; set; }
+                public System.TimeSpan? HeartbeatTimeout { get; set; }
+            }
+            public sealed class LocalActivityOptions
+            {
+                public System.TimeSpan? StartToCloseTimeout { get; set; }
+                public System.TimeSpan? ScheduleToCloseTimeout { get; set; }
             }
         }
         """;
@@ -101,6 +121,139 @@ public sealed class TemporalWorkflowAnalyzerTests
     }
 
     [Fact]
+    public async Task ReportsCancellationTokenSourceCancelAsyncInsideWorkflow()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            [Temporalio.Workflows.Workflow]
+            public sealed class MyWorkflow
+            {
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    using var source = new System.Threading.CancellationTokenSource();
+                    await source.CancelAsync();
+                    source.CancelAsync();
+                }
+            }
+            """);
+
+        Assert.Equal(2, diagnostics.Count(diagnostic =>
+            diagnostic.Id == TemporalWorkflowAnalyzer.CancellationTokenSourceCancelAsyncId));
+    }
+
+    [Fact]
+    public async Task ReportsInlineActivityOptionsWithoutRequiredTimeout()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            [Temporalio.Workflows.Workflow]
+            public sealed class MyWorkflow
+            {
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    await Temporalio.Workflows.Workflow.ExecuteActivityAsync(
+                        null, new Temporalio.Workflows.ActivityOptions());
+                    await Temporalio.Workflows.Workflow.ExecuteLocalActivityAsync(
+                        null, new Temporalio.Workflows.LocalActivityOptions());
+                }
+            }
+            """);
+
+        Assert.Equal(2, diagnostics.Count(diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.ActivityTimeoutId));
+    }
+
+    [Fact]
+    public async Task AllowsInlineActivityTimeoutsAndNonInlineOptions()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            [Temporalio.Workflows.Workflow]
+            public sealed class MyWorkflow
+            {
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    await Temporalio.Workflows.Workflow.ExecuteActivityAsync(
+                        null, new Temporalio.Workflows.ActivityOptions
+                        {
+                            StartToCloseTimeout = System.TimeSpan.FromSeconds(1)
+                        });
+                    await Temporalio.Workflows.Workflow.ExecuteLocalActivityAsync(
+                        null, new Temporalio.Workflows.LocalActivityOptions
+                        {
+                            ScheduleToCloseTimeout = System.TimeSpan.FromSeconds(1)
+                        });
+                    var options = new Temporalio.Workflows.ActivityOptions();
+                    await Temporalio.Workflows.Workflow.ExecuteActivityAsync(null, options);
+                }
+            }
+            """);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.ActivityTimeoutId);
+    }
+
+    [Fact]
+    public async Task ReportsUnsafeGenericTaskWhenAnyShapes()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            [Temporalio.Workflows.Workflow]
+            public sealed class MyWorkflow
+            {
+                public async System.Threading.Tasks.Task RunAsync(
+                    System.Collections.Generic.IEnumerable<System.Threading.Tasks.Task<string>> tasks)
+                {
+                    await System.Threading.Tasks.Task.WhenAny(
+                        System.Threading.Tasks.Task.FromResult("a"),
+                        System.Threading.Tasks.Task.FromResult("b"),
+                        System.Threading.Tasks.Task.FromResult("c"));
+                    await System.Threading.Tasks.Task.WhenAny(tasks);
+                }
+            }
+            """);
+
+        Assert.Equal(2, diagnostics.Count(diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.UnsafeTaskWhenAnyId));
+    }
+
+    [Fact]
+    public async Task AllowsSafeTaskWhenAnyShapesAndTaskWhenAll()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            [Temporalio.Workflows.Workflow]
+            public sealed class MyWorkflow
+            {
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    await System.Threading.Tasks.Task.WhenAny(
+                        System.Threading.Tasks.Task.FromResult("a"),
+                        System.Threading.Tasks.Task.FromResult("b"));
+                    await System.Threading.Tasks.Task.WhenAny(
+                        System.Threading.Tasks.Task.CompletedTask,
+                        System.Threading.Tasks.Task.CompletedTask,
+                        System.Threading.Tasks.Task.CompletedTask);
+                    await System.Threading.Tasks.Task.WhenAll(
+                        System.Threading.Tasks.Task.FromResult("a"),
+                        System.Threading.Tasks.Task.FromResult("b"));
+                }
+            }
+            """);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.UnsafeTaskWhenAnyId);
+    }
+
+    [Fact]
+    public async Task DoesNotReportCancellationTokenSourceCancelAsyncOutsideWorkflow()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            public sealed class ActivityCode
+            {
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    using var source = new System.Threading.CancellationTokenSource();
+                    await source.CancelAsync();
+                }
+            }
+            """);
+
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
     public async Task ReportsCryptographicRandomApisInsideWorkflow()
     {
         var diagnostics = await AnalyzeAsync("""
@@ -157,11 +310,14 @@ public sealed class TemporalWorkflowAnalyzerTests
                     foreach (var item in dictionary.Values) { _ = item; }
                     foreach (var item in hashSet) { _ = item; }
                     foreach (var item in concurrent) { _ = item; }
+                    foreach (var item in concurrent.Keys) { _ = item; }
+                    foreach (var item in concurrent.Values) { _ = item; }
+                    foreach (var (key, value) in dictionary) { _ = key; _ = value; }
                 }
             }
             """);
 
-        Assert.Equal(5, diagnostics.Count(diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.UnorderedCollectionId));
+        Assert.Equal(8, diagnostics.Count(diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.UnorderedCollectionId));
     }
 
     [Fact]

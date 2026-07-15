@@ -43,8 +43,11 @@ dotnet add package TemporalCommunity.DurableObjects.Analyzers
 | `TEMP002` | `Task.Delay` uses a system timer and is not replay-safe. | Replace it with `Workflow.DelayAsync`. |
 | `TEMP003` | `DateTime` or `DateTimeOffset` system-clock reads are not replay-safe. | Replace it with `Workflow.UtcNow`. |
 | `TEMP004` | `Task.Run` uses the system task scheduler and is not replay-safe. | Replace it with `Workflow.RunTaskAsync`. |
+| `TEMP005` | Higher-risk generic `Task.WhenAny<TResult>` overloads may not preserve workflow scheduler compatibility on older target frameworks. | Replace the flagged call with `Workflow.WhenAnyAsync`; two-result and non-generic forms are not flagged. |
 | `TEMP007` | `Thread.Sleep`, `Task.Wait`, and timeout-based cancellation sources use system timing. | `Thread.Sleep` becomes `await Workflow.DelayAsync(...)`; choose the appropriate pattern for `Task.Wait` and timeout-based cancellation sources. |
 | `TEMP008` | System, cryptographic random, and GUID APIs are not replay-safe. | Replace them with `Workflow.NewGuid` or `Workflow.Random` where the fix is applicable; cryptographic APIs are diagnostic-only because security semantics differ. |
+| `TEMP009` | Inline activity options omit both required timeout properties. | None; choose an application-specific `StartToCloseTimeout` or `ScheduleToCloseTimeout`. Variables and factory-created options are intentionally not analyzed. |
+| `TEMP010` | `CancellationTokenSource.CancelAsync` is not supported in workflow code. | Replace a standalone call with `CancellationTokenSource.Cancel`; expression-context calls remain diagnostic-only. |
 | `TEMP011` | `lock` and selected `Monitor` synchronization calls depend on the system scheduler and are not replay-safe. | None; choose the appropriate Temporal coordination primitive. |
 | `TEMP013` | Direct `Console` I/O bypasses Temporal workflow logging. | None; use `Workflow.Logger` with the supported Temporal logging API. |
 | `TEMP014` | `Dictionary`, `HashSet`, and `ConcurrentDictionary` enumeration order is not guaranteed across replay. | None; use an ordered collection or sort values before iterating. |

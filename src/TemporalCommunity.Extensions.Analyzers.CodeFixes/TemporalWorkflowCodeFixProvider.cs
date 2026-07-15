@@ -18,7 +18,9 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
         TemporalWorkflowAnalyzer.SystemClockId,
         TemporalWorkflowAnalyzer.TaskRunId,
         TemporalWorkflowAnalyzer.NonDeterministicRandomId,
-        TemporalWorkflowAnalyzer.BlockingWaitId);
+        TemporalWorkflowAnalyzer.BlockingWaitId,
+        TemporalWorkflowAnalyzer.CancellationTokenSourceCancelAsyncId,
+        TemporalWorkflowAnalyzer.UnsafeTaskWhenAnyId);
 
     public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 
@@ -47,6 +49,12 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
                 continue;
             }
 
+            if (diagnostic.Id == TemporalWorkflowAnalyzer.CancellationTokenSourceCancelAsyncId &&
+                !IsCancelAsyncFixCandidate(node))
+            {
+                continue;
+            }
+
             var title = diagnostic.Id switch
             {
                 TemporalWorkflowAnalyzer.ConfigureAwaitFalseId => "Remove ConfigureAwait(false)",
@@ -55,6 +63,8 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
                 TemporalWorkflowAnalyzer.TaskRunId => "Use Workflow.RunTaskAsync",
                 TemporalWorkflowAnalyzer.NonDeterministicRandomId => "Use Temporal workflow randomness",
                 TemporalWorkflowAnalyzer.BlockingWaitId => "Use Workflow.DelayAsync",
+                TemporalWorkflowAnalyzer.CancellationTokenSourceCancelAsyncId => "Use CancellationTokenSource.Cancel",
+                TemporalWorkflowAnalyzer.UnsafeTaskWhenAnyId => "Use Workflow.WhenAnyAsync",
                 _ => null,
             };
             if (title is null)
@@ -95,7 +105,7 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
             ? "TimeSpan"
             : "global::System.TimeSpan";
 
-        ExpressionSyntax? replacement = diagnosticId switch
+        SyntaxNode? replacement = diagnosticId switch
         {
             TemporalWorkflowAnalyzer.ConfigureAwaitFalseId => RemoveConfigureAwait(node),
             TemporalWorkflowAnalyzer.TaskDelayId => ReplaceTaskDelay(node, workflowTypeName),
@@ -108,6 +118,8 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
                 semanticModel,
                 workflowTypeName,
                 timeSpanTypeName),
+            TemporalWorkflowAnalyzer.CancellationTokenSourceCancelAsyncId => ReplaceCancelAsync(node),
+            TemporalWorkflowAnalyzer.UnsafeTaskWhenAnyId => ReplaceMemberExpression(node, "WhenAnyAsync", workflowTypeName),
             _ => null,
         };
         if (replacement is null)
@@ -118,7 +130,11 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
         replacement = replacement
             .WithTriviaFrom(node)
             .WithAdditionalAnnotations(Formatter.Annotation);
-        return document.WithSyntaxRoot(root.ReplaceNode(node, replacement));
+        var target = diagnosticId == TemporalWorkflowAnalyzer.CancellationTokenSourceCancelAsyncId &&
+            node.Parent is AwaitExpressionSyntax awaitExpression
+                ? awaitExpression
+                : node;
+        return document.WithSyntaxRoot(root.ReplaceNode(target, replacement));
     }
 
     private static ExpressionSyntax? RemoveConfigureAwait(SyntaxNode node) =>
@@ -166,6 +182,24 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
         ObjectCreationExpressionSyntax creation when creation.ArgumentList?.Arguments.Count is null or 0 => true,
         _ => false,
     };
+
+    private static bool IsCancelAsyncFixCandidate(SyntaxNode node) =>
+        node is InvocationExpressionSyntax invocation &&
+        (invocation.Parent is ExpressionStatementSyntax ||
+            invocation.Parent is AwaitExpressionSyntax { Parent: ExpressionStatementSyntax });
+
+    private static InvocationExpressionSyntax? ReplaceCancelAsync(SyntaxNode node)
+    {
+        if (node is not InvocationExpressionSyntax invocation ||
+            invocation.Expression is not MemberAccessExpressionSyntax memberAccess)
+        {
+            return null;
+        }
+
+        return invocation.WithExpression(
+                memberAccess.WithName(SyntaxFactory.IdentifierName("Cancel")))
+            .WithTriviaFrom(invocation);
+    }
 
     private static bool IsThreadSleep(SyntaxNode node) =>
         node is InvocationExpressionSyntax
