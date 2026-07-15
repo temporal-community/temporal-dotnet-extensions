@@ -64,6 +64,7 @@ The following plans are complete and kept here as implementation history:
 - [006 — DurableObject call context](006-durable-object-call-context.md)
 - [007 — Object identity and visibility](007-object-identity-and-visibility.md)
 - [008 — Performance, replay, NativeAOT, and scale](008-performance-replay-aot-scale.md)
+- [Workflow update-validator shape](analyzers/update-validator-shape.md)
 
 Add new work here only when it is actively being planned or implemented. Once a plan is complete,
 keep it here for historical context unless it is superseded by a newer plan or architectural

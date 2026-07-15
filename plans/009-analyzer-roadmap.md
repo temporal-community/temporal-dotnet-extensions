@@ -63,6 +63,8 @@ Add diagnostics for patterns that are legal C# but violate Temporal workflow rul
 workflow best practices:
 
 - query handlers must remain read-only;
+- `TEMP016`–`TEMP019`: update validators must have a `void` return, match the associated update
+  parameters, name an existing `[WorkflowUpdate]` method, and be unique per update;
 - update validators must remain read-only and non-blocking;
 - workflow methods should prefer Temporal abstractions over raw .NET scheduling helpers;
 
@@ -110,6 +112,9 @@ Update only the user-facing docs that describe shipped rules:
 - `docs/ANALYZERS.md` for the diagnostic catalog and install guidance;
 - `README.md` only for package-level entry-point changes;
 - sample or troubleshooting docs only when a shipped diagnostic changes the recommended code shape.
+- Update-validator work must add its four diagnostics to `docs/ANALYZERS.md` and explain that
+  validators are synchronous, read-only gates that reject updates by throwing. No sample change is
+  required unless a sample introduces or demonstrates an update validator.
 
 Keep design research and unshipped rule notes in `plans/`, not `docs/`.
 

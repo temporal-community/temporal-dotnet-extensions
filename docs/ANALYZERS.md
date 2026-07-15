@@ -52,9 +52,28 @@ dotnet add package TemporalCommunity.DurableObjects.Analyzers
 | `TEMP013` | Direct `Console` I/O bypasses Temporal workflow logging. | None; use `Workflow.Logger` with the supported Temporal logging API. |
 | `TEMP014` | `Dictionary`, `HashSet`, and `ConcurrentDictionary` enumeration order is not guaranteed across replay. | None; use an ordered collection or sort values before iterating. |
 | `TEMP015` | `[WorkflowQuery]` methods cannot return task-like types (`Task`, `Task<T>`, `ValueTask`, or `ValueTask<T>`). | None; queries must compute and return a value synchronously. |
+| `TEMP016` | `[WorkflowUpdateValidator]` methods must return `void`. | None; validator failures should be reported by throwing an application-specific exception. |
+| `TEMP017` | A validator's parameter count and parameter types must match its associated `[WorkflowUpdate]` method. | None; change the validator signature to match the update contract. |
+| `TEMP018` | A validator must name an existing `[WorkflowUpdate]` method on the same workflow type. | None; use the update method's CLR name in `WorkflowUpdateValidatorAttribute`. |
+| `TEMP019` | Each workflow update may have at most one validator. | None; choose the single validator that owns the update validation policy. |
 
 These diagnostics apply to code lexically contained in a type with `[Workflow]`. They do not
 claim to inspect arbitrary external helper libraries; workflow replay tests remain necessary.
+
+Update validators are synchronous and read-only. They validate the proposed arguments and reject
+an update by throwing; they must not issue workflow commands:
+
+```csharp
+[WorkflowUpdate]
+public Task<int> AddAsync(int value) => Task.FromResult(value);
+
+[WorkflowUpdateValidator(nameof(AddAsync))]
+public void ValidateAdd(int value)
+{
+    if (value < 0)
+        throw new ArgumentOutOfRangeException(nameof(value));
+}
+```
 
 ## DurableObjects rules
 

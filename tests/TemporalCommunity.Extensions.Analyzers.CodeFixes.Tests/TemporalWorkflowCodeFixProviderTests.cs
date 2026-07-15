@@ -43,6 +43,10 @@ public sealed class TemporalWorkflowCodeFixProviderTests
         Assert.DoesNotContain(TemporalWorkflowAnalyzer.ConsoleIoId, provider.FixableDiagnosticIds);
         Assert.DoesNotContain(TemporalWorkflowAnalyzer.UnorderedCollectionId, provider.FixableDiagnosticIds);
         Assert.DoesNotContain(TemporalWorkflowAnalyzer.ActivityTimeoutId, provider.FixableDiagnosticIds);
+        Assert.DoesNotContain(TemporalWorkflowAnalyzer.WorkflowUpdateValidatorReturnId, provider.FixableDiagnosticIds);
+        Assert.DoesNotContain(TemporalWorkflowAnalyzer.WorkflowUpdateValidatorParametersId, provider.FixableDiagnosticIds);
+        Assert.DoesNotContain(TemporalWorkflowAnalyzer.WorkflowUpdateValidatorTargetId, provider.FixableDiagnosticIds);
+        Assert.DoesNotContain(TemporalWorkflowAnalyzer.WorkflowUpdateValidatorDuplicateId, provider.FixableDiagnosticIds);
     }
 
     [Theory]

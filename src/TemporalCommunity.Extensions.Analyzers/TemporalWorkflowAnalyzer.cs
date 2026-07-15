@@ -22,6 +22,10 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
     public const string ActivityTimeoutId = "TEMP009";
     public const string UnsafeTaskWhenAnyId = "TEMP005";
     public const string WorkflowQueryAsyncId = "TEMP015";
+    public const string WorkflowUpdateValidatorReturnId = "TEMP016";
+    public const string WorkflowUpdateValidatorParametersId = "TEMP017";
+    public const string WorkflowUpdateValidatorTargetId = "TEMP018";
+    public const string WorkflowUpdateValidatorDuplicateId = "TEMP019";
 
     private static readonly DiagnosticDescriptor s_configureAwaitFalse = new(
         ConfigureAwaitFalseId,
@@ -140,6 +144,42 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "Temporal query handlers must return a value without asynchronous Task execution.");
 
+    private static readonly DiagnosticDescriptor s_validatorReturn = new(
+        WorkflowUpdateValidatorReturnId,
+        "Workflow update validators must return void",
+        "WorkflowUpdateValidator methods must return void",
+        "Temporal.WorkflowShape",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Temporal update validators reject updates by throwing and must not return a value.");
+
+    private static readonly DiagnosticDescriptor s_validatorParameters = new(
+        WorkflowUpdateValidatorParametersId,
+        "Workflow update validator parameters must match",
+        "WorkflowUpdateValidator parameters must match the associated WorkflowUpdate method",
+        "Temporal.WorkflowShape",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Temporal update validators must receive the same parameter types as their update method.");
+
+    private static readonly DiagnosticDescriptor s_validatorTarget = new(
+        WorkflowUpdateValidatorTargetId,
+        "Workflow update validator target was not found",
+        "WorkflowUpdateValidator must name a method with WorkflowUpdate",
+        "Temporal.WorkflowShape",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "The validator attribute names the CLR update method, which must be present on the same workflow type.");
+
+    private static readonly DiagnosticDescriptor s_validatorDuplicate = new(
+        WorkflowUpdateValidatorDuplicateId,
+        "Workflow update validators must be unique",
+        "Only one WorkflowUpdateValidator may target this update method",
+        "Temporal.WorkflowShape",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Temporal workflow definition discovery permits one validator per CLR update method name.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
         ImmutableArray.Create(
             s_configureAwaitFalse,
@@ -154,7 +194,11 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
             s_cancelAsync,
             s_activityTimeout,
             s_unsafeTaskWhenAny,
-            s_workflowQueryAsync);
+            s_workflowQueryAsync,
+            s_validatorReturn,
+            s_validatorParameters,
+            s_validatorTarget,
+            s_validatorDuplicate);
 
     public override void Initialize(AnalysisContext context)
     {
@@ -456,19 +500,75 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        if (!method.GetAttributes().Any(attribute =>
-                attribute.AttributeClass?.ToDisplayString() == "Temporalio.Workflows.WorkflowQueryAttribute"))
-        {
-            return;
-        }
-
-        if (method.ReturnType is INamedTypeSymbol returnType && IsTaskLike(returnType))
+        var isWorkflowQuery = method.GetAttributes().Any(attribute =>
+            attribute.AttributeClass?.ToDisplayString() == "Temporalio.Workflows.WorkflowQueryAttribute");
+        if (isWorkflowQuery && method.ReturnType is INamedTypeSymbol returnType && IsTaskLike(returnType))
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 s_workflowQueryAsync,
                 methodDeclaration.ReturnType.GetLocation()));
         }
+
+        var validatorTarget = GetWorkflowUpdateValidatorTarget(method);
+        if (validatorTarget is null)
+        {
+            return;
+        }
+
+        var containingType = method.ContainingType;
+        var validators = containingType.GetMembers()
+            .OfType<IMethodSymbol>()
+            .Where(candidate => GetWorkflowUpdateValidatorTarget(candidate) == validatorTarget)
+            .ToArray();
+        if (validators.Length > 1)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                s_validatorDuplicate,
+                methodDeclaration.Identifier.GetLocation()));
+        }
+
+        if (!method.ReturnsVoid)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                s_validatorReturn,
+                methodDeclaration.ReturnType.GetLocation()));
+        }
+
+        var updateMethods = containingType.GetMembers(validatorTarget)
+            .OfType<IMethodSymbol>()
+            .Where(IsWorkflowUpdateMethod)
+            .ToArray();
+        if (updateMethods.Length == 0)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                s_validatorTarget,
+                methodDeclaration.Identifier.GetLocation()));
+            return;
+        }
+
+        if (updateMethods.Length == 1 && !HaveMatchingParameterTypes(method, updateMethods[0]))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                s_validatorParameters,
+                methodDeclaration.ParameterList.GetLocation()));
+        }
     }
+
+    private static string? GetWorkflowUpdateValidatorTarget(IMethodSymbol method) =>
+        method.GetAttributes()
+            .FirstOrDefault(attribute =>
+                attribute.AttributeClass?.ToDisplayString() ==
+                    "Temporalio.Workflows.WorkflowUpdateValidatorAttribute")?
+            .ConstructorArguments.FirstOrDefault().Value as string;
+
+    private static bool IsWorkflowUpdateMethod(IMethodSymbol method) =>
+        method.GetAttributes().Any(attribute =>
+            attribute.AttributeClass?.ToDisplayString() == "Temporalio.Workflows.WorkflowUpdateAttribute");
+
+    private static bool HaveMatchingParameterTypes(IMethodSymbol validator, IMethodSymbol update) =>
+        validator.Parameters.Length == update.Parameters.Length &&
+        validator.Parameters.Select((parameter, index) =>
+            SymbolEqualityComparer.Default.Equals(parameter.Type, update.Parameters[index].Type)).All(matches => matches);
 
     private static void AnalyzeForEachExpression(
         SyntaxNodeAnalysisContext context,

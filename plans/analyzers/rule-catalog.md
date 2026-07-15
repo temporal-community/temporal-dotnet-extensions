@@ -42,6 +42,10 @@ and observability references are now treated as supplemental guidance alongside 
 | TEMP013 | Do not write directly to the console in workflows | Warning | A | Implemented |
 | TEMP014 | Do not iterate over unordered collections in workflows | Error | B | Implemented |
 | TEMP015 | Workflow query methods must not return task-like types | Error | A | Implemented |
+| TEMP016 | Workflow update validators must return `void` | Error | A | Implemented |
+| TEMP017 | Workflow update validator parameter count and `ParameterType` values must match the associated update | Error | A | Implemented |
+| TEMP018 | Workflow update validator targets must resolve to an existing `[WorkflowUpdate]` method on the same workflow type | Error | A | Implemented |
+| TEMP019 | Each workflow update may have at most one validator per workflow type | Error | A | Implemented |
 | TEMP012 | Suppress incompatible platform diagnostics for workflow source | Info | C | Research |
 
 The first implementation recognizes code lexically contained in a type carrying

@@ -16,6 +16,17 @@ public sealed class TemporalWorkflowAnalyzerTests
             public sealed class WorkflowAttribute : System.Attribute { }
             [System.AttributeUsage(System.AttributeTargets.Method | System.AttributeTargets.Property)]
             public sealed class WorkflowQueryAttribute : System.Attribute { }
+            [System.AttributeUsage(System.AttributeTargets.Method)]
+            public sealed class WorkflowUpdateAttribute : System.Attribute
+            {
+                public WorkflowUpdateAttribute() { }
+                public WorkflowUpdateAttribute(string name) { }
+            }
+            [System.AttributeUsage(System.AttributeTargets.Method)]
+            public sealed class WorkflowUpdateValidatorAttribute : System.Attribute
+            {
+                public WorkflowUpdateValidatorAttribute(string updateMethod) { }
+            }
 
             public static class Workflow
             {
@@ -289,6 +300,70 @@ public sealed class TemporalWorkflowAnalyzerTests
             """);
 
         Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.WorkflowQueryAsyncId);
+    }
+
+    [Fact]
+    public async Task ReportsInvalidWorkflowUpdateValidatorShapes()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            [Temporalio.Workflows.Workflow]
+            public sealed class MyWorkflow
+            {
+                [Temporalio.Workflows.WorkflowUpdate("custom-name")]
+                public System.Threading.Tasks.Task UpdateAsync(string value, int count) =>
+                    System.Threading.Tasks.Task.CompletedTask;
+
+                [Temporalio.Workflows.WorkflowUpdateValidator(nameof(UpdateAsync))]
+                public string ValidateReturn(string value, int count) => "invalid";
+
+                [Temporalio.Workflows.WorkflowUpdateValidator(nameof(UpdateAsync))]
+                public void ValidateParameters(int count, string value) { }
+
+                [Temporalio.Workflows.WorkflowUpdateValidator("MissingUpdate")]
+                public void ValidateMissing() { }
+
+                [Temporalio.Workflows.WorkflowUpdateValidator(nameof(UpdateAsync))]
+                public void ValidateDuplicateOne(string value, int count) { }
+
+                [Temporalio.Workflows.WorkflowUpdateValidator(nameof(UpdateAsync))]
+                public void ValidateDuplicateTwo(string value, int count) { }
+            }
+
+            [Temporalio.Workflows.Workflow]
+            public sealed class OtherWorkflow
+            {
+                [Temporalio.Workflows.WorkflowUpdateValidator("UpdateAsync")]
+                public void ValidateOther() { }
+            }
+            """);
+
+        Assert.Equal(1, diagnostics.Count(diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.WorkflowUpdateValidatorReturnId));
+        Assert.Equal(1, diagnostics.Count(diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.WorkflowUpdateValidatorParametersId));
+        Assert.Equal(2, diagnostics.Count(diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.WorkflowUpdateValidatorTargetId));
+        Assert.Equal(4, diagnostics.Count(diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.WorkflowUpdateValidatorDuplicateId));
+    }
+
+    [Fact]
+    public async Task AllowsMatchingWorkflowUpdateValidator()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            [Temporalio.Workflows.Workflow]
+            public sealed class MyWorkflow
+            {
+                [Temporalio.Workflows.WorkflowUpdate]
+                public System.Threading.Tasks.Task UpdateAsync(string value, int count) =>
+                    System.Threading.Tasks.Task.CompletedTask;
+
+                [Temporalio.Workflows.WorkflowUpdateValidator(nameof(UpdateAsync))]
+                public void ValidateUpdate(string value, int count) { }
+            }
+            """);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id is
+            TemporalWorkflowAnalyzer.WorkflowUpdateValidatorReturnId or
+            TemporalWorkflowAnalyzer.WorkflowUpdateValidatorParametersId or
+            TemporalWorkflowAnalyzer.WorkflowUpdateValidatorTargetId or
+            TemporalWorkflowAnalyzer.WorkflowUpdateValidatorDuplicateId);
     }
 
     [Fact]
