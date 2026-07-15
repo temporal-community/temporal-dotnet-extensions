@@ -35,7 +35,7 @@ and observability references are now treated as supplemental guidance alongside 
 | TEMP005 | Prefer `Workflow.WhenAnyAsync` over unsafe `Task.WhenAny` overloads | Warning | B | Research |
 | TEMP006 | Prefer `Workflow.WhenAllAsync` over `Task.WhenAll` | Info | B | Research |
 | TEMP007 | Do not use `Thread.Sleep`, `Task.Wait`, or timeout-based `CancellationTokenSource` | Error | B | Implemented |
-| TEMP008 | Do not use non-workflow random or GUID APIs | Error | B | Implemented |
+| TEMP008 | Do not use non-workflow, cryptographic random, or GUID APIs | Error | B | Implemented |
 | TEMP009 | Activity options require `StartToCloseTimeout` or `ScheduleToCloseTimeout` | Error | B | Candidate |
 | TEMP010 | Do not use `CancellationTokenSource.CancelAsync` in workflows | Error | A | Candidate |
 | TEMP011 | Do not use thread synchronization primitives in workflows | Error | B | Implemented |

@@ -92,7 +92,7 @@ The research pass produced the following outcomes:
    and hierarchical diagnostics. Start with a prototype and false-positive benchmark; do not change
    existing lexical rule behavior until the prototype is accepted.
 
-2. **Cryptographic randomness in workflows** — [#12](https://github.com/temporal-community/temporal-dotnet-extensions/issues/12) (open; extend TEMP008 diagnostically after API matrix)
+2. **Cryptographic randomness in workflows** — [#12](https://github.com/temporal-community/temporal-dotnet-extensions/issues/12) (implemented in TEMP008; diagnostic-only, no code fix)
    Inventory `RandomNumberGenerator` and related APIs across supported target frameworks, confirm the
    Temporal .NET deterministic alternative, and decide whether this extends TEMP008 or needs a new ID.
    Include an API matrix and code-fix feasibility decision.

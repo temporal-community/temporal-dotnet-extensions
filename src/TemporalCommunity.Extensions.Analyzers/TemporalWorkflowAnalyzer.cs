@@ -70,7 +70,7 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
         "Temporal.Determinism",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "System random and GUID APIs are not deterministic under workflow replay.");
+        description: "System, cryptographic, random, and GUID APIs are not deterministic under workflow replay.");
 
     private static readonly DiagnosticDescriptor s_synchronization = new(
         SynchronizationId,
@@ -188,6 +188,15 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
             method.ContainingType.ToDisplayString() == "System.Guid")
         {
             context.ReportDiagnostic(Diagnostic.Create(s_random, invocation.GetLocation(), "Guid.NewGuid"));
+        }
+
+        if (method.ContainingType.ToDisplayString() == "System.Security.Cryptography.RandomNumberGenerator" &&
+            method.Name is "Create" or "Fill" or "GetBytes" or "GetNonZeroBytes" or "GetInt32" or "GetHexString")
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                s_random,
+                invocation.GetLocation(),
+                $"RandomNumberGenerator.{method.Name}"));
         }
     }
 

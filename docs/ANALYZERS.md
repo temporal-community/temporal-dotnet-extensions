@@ -44,7 +44,7 @@ dotnet add package TemporalCommunity.DurableObjects.Analyzers
 | `TEMP003` | `DateTime` or `DateTimeOffset` system-clock reads are not replay-safe. | Replace it with `Workflow.UtcNow`. |
 | `TEMP004` | `Task.Run` uses the system task scheduler and is not replay-safe. | Replace it with `Workflow.RunTaskAsync`. |
 | `TEMP007` | `Thread.Sleep`, `Task.Wait`, and timeout-based cancellation sources use system timing. | `Thread.Sleep` becomes `await Workflow.DelayAsync(...)`; choose the appropriate pattern for `Task.Wait` and timeout-based cancellation sources. |
-| `TEMP008` | System random and GUID APIs are not replay-safe. | Replace them with `Workflow.NewGuid` or `Workflow.Random` where the fix is applicable. |
+| `TEMP008` | System, cryptographic random, and GUID APIs are not replay-safe. | Replace them with `Workflow.NewGuid` or `Workflow.Random` where the fix is applicable; cryptographic APIs are diagnostic-only because security semantics differ. |
 | `TEMP011` | `lock` and selected `Monitor` synchronization calls depend on the system scheduler and are not replay-safe. | None; choose the appropriate Temporal coordination primitive. |
 | `TEMP013` | Direct `Console` I/O bypasses Temporal workflow logging. | None; use `Workflow.Logger` with the supported Temporal logging API. |
 

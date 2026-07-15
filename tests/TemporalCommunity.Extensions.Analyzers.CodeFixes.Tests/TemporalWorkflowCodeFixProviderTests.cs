@@ -155,6 +155,28 @@ public sealed class TemporalWorkflowCodeFixProviderTests
     }
 
     [Fact]
+    public async Task DoesNotOfferFixForCryptographicRandomness()
+    {
+        var source = """
+            [Temporalio.Workflows.Workflow]
+            public sealed class MyWorkflow
+            {
+                public void Run()
+                {
+                    _ = System.Security.Cryptography.RandomNumberGenerator.GetInt32(10);
+                }
+            }
+            """;
+        var (workspace, document) = CreateDocument(source);
+        using (workspace)
+        {
+            var actions = await GetCodeFixActionsAsync(document).ConfigureAwait(true);
+
+            Assert.Empty(actions);
+        }
+    }
+
+    [Fact]
     public async Task UsesGlobalWorkflowNameForAliasedWorkflowNamespace()
     {
         var source = """

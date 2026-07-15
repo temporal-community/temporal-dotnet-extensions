@@ -101,6 +101,45 @@ public sealed class TemporalWorkflowAnalyzerTests
     }
 
     [Fact]
+    public async Task ReportsCryptographicRandomApisInsideWorkflow()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            [Temporalio.Workflows.Workflow]
+            public sealed class MyWorkflow
+            {
+                public void Run()
+                {
+                    using var generator = System.Security.Cryptography.RandomNumberGenerator.Create();
+                    generator.GetBytes(new byte[4]);
+                    generator.GetNonZeroBytes(new byte[4]);
+                    System.Security.Cryptography.RandomNumberGenerator.Fill(new byte[4]);
+                    _ = System.Security.Cryptography.RandomNumberGenerator.GetInt32(10);
+                }
+            }
+            """);
+
+        Assert.Equal(5, diagnostics.Count(diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.NonDeterministicRandomId));
+    }
+
+    [Fact]
+    public async Task DoesNotReportCryptographicRandomApisOutsideWorkflow()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            public sealed class ActivityCode
+            {
+                public void Run()
+                {
+                    using var generator = System.Security.Cryptography.RandomNumberGenerator.Create();
+                    generator.GetBytes(new byte[4]);
+                    _ = System.Security.Cryptography.RandomNumberGenerator.GetInt32(10);
+                }
+            }
+            """);
+
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
     public async Task ReportsSynchronizationAndConsoleIoInsideWorkflow()
     {
         var diagnostics = await AnalyzeAsync("""

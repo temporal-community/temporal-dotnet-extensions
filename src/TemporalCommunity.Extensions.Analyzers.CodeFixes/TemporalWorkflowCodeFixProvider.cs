@@ -42,6 +42,11 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
                 continue;
             }
 
+            if (diagnostic.Id == TemporalWorkflowAnalyzer.NonDeterministicRandomId && !IsRandomFixCandidate(node))
+            {
+                continue;
+            }
+
             var title = diagnostic.Id switch
             {
                 TemporalWorkflowAnalyzer.ConfigureAwaitFalseId => "Remove ConfigureAwait(false)",
@@ -151,6 +156,15 @@ public sealed class TemporalWorkflowCodeFixProvider : CodeFixProvider
         ObjectCreationExpressionSyntax creation when creation.ArgumentList?.Arguments.Count is null or 0 =>
             SyntaxFactory.ParseExpression($"{workflowTypeName}.Random"),
         _ => null,
+    };
+
+    private static bool IsRandomFixCandidate(SyntaxNode node) => node switch
+    {
+        InvocationExpressionSyntax invocation when invocation.Expression is MemberAccessExpressionSyntax memberAccess =>
+            memberAccess.Name.Identifier.Text == "NewGuid",
+        MemberAccessExpressionSyntax => true,
+        ObjectCreationExpressionSyntax creation when creation.ArgumentList?.Arguments.Count is null or 0 => true,
+        _ => false,
     };
 
     private static bool IsThreadSleep(SyntaxNode node) =>
