@@ -26,9 +26,9 @@ Add compile-time checks to any Temporal .NET workflow project:
 dotnet add package TemporalCommunity.Extensions.Analyzers
 ```
 
-The package currently detects workflow use of `ConfigureAwait(false)`, `Task.Delay`, and system
-clock reads, with code fixes for each rule. These diagnostics also work in projects that do not
-reference the Durable Objects runtime.
+The package detects replay-safety and workflow-shape misuse in ordinary Temporal workflows, with
+IDE code fixes where a deterministic replacement is safe. These diagnostics also work in projects
+that do not reference the Durable Objects runtime.
 
 See [Temporal .NET Analyzers](docs/ANALYZERS.md) for installation details, the full rule catalog,
 code-fix behavior, limitations, and Durable Objects generator requirements.

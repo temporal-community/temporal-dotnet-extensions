@@ -11,9 +11,9 @@ For a minimal consumer experiment without a project file, see the [.NET 10 file-
 sample](../samples/07-analyzer-file-app/). It can be run with `dotnet run --file Program.cs` and
 reports analyzer diagnostics during the file-app build.
 
-The sample is pinned to the `0.3.2` analyzer package release and demonstrates the Phase 1 rules.
-The latest source also includes TEMP011 and TEMP013; those diagnostics appear for consumers after
-the package containing them is released.
+The file-based sample is pinned to the `0.3.2` analyzer package release and deliberately
+demonstrates the Phase 1 rules. Change its package directive to evaluate another release; the
+catalog below describes the rules in this source tree.
 
 Install the package appropriate for the project that declares workflows:
 
