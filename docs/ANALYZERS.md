@@ -47,6 +47,7 @@ dotnet add package TemporalCommunity.DurableObjects.Analyzers
 | `TEMP008` | System, cryptographic random, and GUID APIs are not replay-safe. | Replace them with `Workflow.NewGuid` or `Workflow.Random` where the fix is applicable; cryptographic APIs are diagnostic-only because security semantics differ. |
 | `TEMP011` | `lock` and selected `Monitor` synchronization calls depend on the system scheduler and are not replay-safe. | None; choose the appropriate Temporal coordination primitive. |
 | `TEMP013` | Direct `Console` I/O bypasses Temporal workflow logging. | None; use `Workflow.Logger` with the supported Temporal logging API. |
+| `TEMP014` | `Dictionary`, `HashSet`, and `ConcurrentDictionary` enumeration order is not guaranteed across replay. | None; use an ordered collection or sort values before iterating. |
 
 These diagnostics apply to code lexically contained in a type with `[Workflow]`. They do not
 claim to inspect arbitrary external helper libraries; workflow replay tests remain necessary.

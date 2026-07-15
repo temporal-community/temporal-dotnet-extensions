@@ -40,6 +40,7 @@ and observability references are now treated as supplemental guidance alongside 
 | TEMP010 | Do not use `CancellationTokenSource.CancelAsync` in workflows | Error | A | Candidate |
 | TEMP011 | Do not use thread synchronization primitives in workflows | Error | B | Implemented |
 | TEMP013 | Do not write directly to the console in workflows | Warning | A | Implemented |
+| TEMP014 | Do not iterate over unordered collections in workflows | Error | B | Implemented |
 | TEMP012 | Suppress incompatible platform diagnostics for workflow source | Info | C | Research |
 
 The first implementation recognizes code lexically contained in a type carrying

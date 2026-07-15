@@ -101,7 +101,7 @@ The research pass produced the following outcomes:
    Verify the supported .NET `SideEffect`/mutable-side-effect APIs and define how future transitive
    analysis treats callbacks passed to them. Include replay-safety tests and false-positive examples.
 
-4. **Collection iteration determinism** — [#14](https://github.com/temporal-community/temporal-dotnet-extensions/issues/14) (open; symbol-based rule design required)
+4. **Collection iteration determinism** — [#14](https://github.com/temporal-community/temporal-dotnet-extensions/issues/14) (implemented as TEMP014 for concrete unordered collections)
    Determine which .NET collection/enumeration patterns can change workflow history across replay.
    Compare `Dictionary`, `HashSet`, concurrent collections, and explicitly ordered alternatives before
    proposing a diagnostic.

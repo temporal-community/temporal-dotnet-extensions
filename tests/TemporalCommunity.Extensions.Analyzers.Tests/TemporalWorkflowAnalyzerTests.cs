@@ -140,6 +140,65 @@ public sealed class TemporalWorkflowAnalyzerTests
     }
 
     [Fact]
+    public async Task ReportsUnorderedCollectionEnumerationInsideWorkflow()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            [Temporalio.Workflows.Workflow]
+            public sealed class MyWorkflow
+            {
+                public void Run()
+                {
+                    var dictionary = new System.Collections.Generic.Dictionary<string, int>();
+                    var hashSet = new System.Collections.Generic.HashSet<int>();
+                    var concurrent = new System.Collections.Concurrent.ConcurrentDictionary<string, int>();
+
+                    foreach (var item in dictionary) { _ = item; }
+                    foreach (var item in dictionary.Keys) { _ = item; }
+                    foreach (var item in dictionary.Values) { _ = item; }
+                    foreach (var item in hashSet) { _ = item; }
+                    foreach (var item in concurrent) { _ = item; }
+                }
+            }
+            """);
+
+        Assert.Equal(5, diagnostics.Count(diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.UnorderedCollectionId));
+    }
+
+    [Fact]
+    public async Task AllowsOrderedCollectionEnumerationAndNonWorkflowCode()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            [Temporalio.Workflows.Workflow]
+            public sealed class MyWorkflow
+            {
+                public void Run()
+                {
+                    var array = new[] { 1, 2, 3 };
+                    var list = new System.Collections.Generic.List<int>();
+                    var sortedDictionary = new System.Collections.Generic.SortedDictionary<string, int>();
+                    var sortedSet = new System.Collections.Generic.SortedSet<int>();
+
+                    foreach (var item in array) { _ = item; }
+                    foreach (var item in list) { _ = item; }
+                    foreach (var item in sortedDictionary) { _ = item; }
+                    foreach (var item in sortedSet) { _ = item; }
+                }
+            }
+
+            public sealed class ActivityCode
+            {
+                public void Run()
+                {
+                    var dictionary = new System.Collections.Generic.Dictionary<string, int>();
+                    foreach (var item in dictionary) { _ = item; }
+                }
+            }
+            """);
+
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
     public async Task ReportsSynchronizationAndConsoleIoInsideWorkflow()
     {
         var diagnostics = await AnalyzeAsync("""

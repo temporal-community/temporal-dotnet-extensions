@@ -17,6 +17,7 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
     public const string NonDeterministicRandomId = "TEMP008";
     public const string SynchronizationId = "TEMP011";
     public const string ConsoleIoId = "TEMP013";
+    public const string UnorderedCollectionId = "TEMP014";
 
     private static readonly DiagnosticDescriptor s_configureAwaitFalse = new(
         ConfigureAwaitFalseId,
@@ -90,6 +91,15 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
         isEnabledByDefault: true,
         description: "Direct console I/O bypasses Temporal workflow logging and can produce misleading replay output.");
 
+    private static readonly DiagnosticDescriptor s_unorderedCollection = new(
+        UnorderedCollectionId,
+        "Do not iterate over unordered collections in Temporal workflows",
+        "Use an ordered collection or sort the values before iterating instead of {0} in workflow code",
+        "Temporal.Determinism",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Dictionary, HashSet, and concurrent dictionary enumeration order is not guaranteed across workflow replay.");
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
         ImmutableArray.Create(
             s_configureAwaitFalse,
@@ -99,7 +109,8 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
             s_blockingWait,
             s_random,
             s_synchronization,
-            s_consoleIo);
+            s_consoleIo,
+            s_unorderedCollection);
 
     public override void Initialize(AnalysisContext context)
     {
@@ -114,6 +125,7 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
         context.RegisterSyntaxNodeAction(AnalyzeMemberAccess, SyntaxKind.SimpleMemberAccessExpression);
         context.RegisterSyntaxNodeAction(AnalyzeObjectCreation, SyntaxKind.ObjectCreationExpression);
         context.RegisterSyntaxNodeAction(AnalyzeLockStatement, SyntaxKind.LockStatement);
+        context.RegisterSyntaxNodeAction(AnalyzeForEach, SyntaxKind.ForEachStatement);
     }
 
     private static void AnalyzeInvocation(SyntaxNodeAnalysisContext context)
@@ -280,6 +292,57 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
         {
             context.ReportDiagnostic(Diagnostic.Create(s_synchronization, context.Node.GetLocation(), "lock"));
         }
+    }
+
+    private static void AnalyzeForEach(SyntaxNodeAnalysisContext context)
+    {
+        if (!IsInWorkflowType(context))
+        {
+            return;
+        }
+
+        var forEach = (ForEachStatementSyntax)context.Node;
+        var expression = forEach.Expression;
+        var type = context.SemanticModel.GetTypeInfo(expression, context.CancellationToken).Type;
+        if (IsUnorderedCollection(type) || IsUnorderedDictionaryProperty(expression, context))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                s_unorderedCollection,
+                expression.GetLocation(),
+                type?.Name ?? "an unordered collection"));
+        }
+    }
+
+    private static bool IsUnorderedCollection(ITypeSymbol? type)
+    {
+        if (type is not INamedTypeSymbol namedType)
+        {
+            return false;
+        }
+
+        var definition = namedType.OriginalDefinition.ToDisplayString();
+        return definition is
+            "System.Collections.Generic.Dictionary<TKey, TValue>" or
+            "System.Collections.Generic.HashSet<T>" or
+            "System.Collections.Concurrent.ConcurrentDictionary<TKey, TValue>";
+    }
+
+    private static bool IsUnorderedDictionaryProperty(
+        ExpressionSyntax expression,
+        SyntaxNodeAnalysisContext context)
+    {
+        if (expression is not MemberAccessExpressionSyntax memberAccess ||
+            memberAccess.Name.Identifier.Text is not ("Keys" or "Values"))
+        {
+            return false;
+        }
+
+        var receiverType = context.SemanticModel.GetTypeInfo(
+            memberAccess.Expression,
+            context.CancellationToken).Type;
+        return receiverType is INamedTypeSymbol namedType &&
+            namedType.OriginalDefinition.ToDisplayString() ==
+                "System.Collections.Generic.Dictionary<TKey, TValue>";
     }
 
     private static bool IsInWorkflowType(SyntaxNodeAnalysisContext context)

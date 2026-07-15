@@ -23,6 +23,11 @@ internal sealed class AnalyzerSampleWorkflow
             }
         }
         Console.WriteLine("workflow output");           // TEMP013
+        var values = new Dictionary<string, int>();
+        foreach (var value in values)                   // TEMP014
+        {
+            _ = value;
+        }
         return id.ToString();
     }
 }
