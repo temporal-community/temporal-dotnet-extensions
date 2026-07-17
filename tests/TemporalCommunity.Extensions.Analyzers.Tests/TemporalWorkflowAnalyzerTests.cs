@@ -27,6 +27,21 @@ public sealed class TemporalWorkflowAnalyzerTests
             {
                 public WorkflowUpdateValidatorAttribute(string updateMethod) { }
             }
+            public sealed class Semaphore
+            {
+                public Semaphore(int initialCount) { }
+                public System.Threading.Tasks.Task WaitAsync(
+                    System.Threading.CancellationToken? cancellationToken = null) =>
+                    System.Threading.Tasks.Task.CompletedTask;
+                public void Release() { }
+            }
+            public sealed class Mutex
+            {
+                public System.Threading.Tasks.Task WaitOneAsync(
+                    System.Threading.CancellationToken? cancellationToken = null) =>
+                    System.Threading.Tasks.Task.CompletedTask;
+                public void ReleaseMutex() { }
+            }
 
             public static class Workflow
             {
@@ -538,6 +553,114 @@ public sealed class TemporalWorkflowAnalyzerTests
 
                     System.Console.WriteLine("hello");
                     _ = System.Console.Error;
+                }
+            }
+            """);
+
+        Assert.Empty(diagnostics);
+    }
+
+    [Fact]
+    public async Task ReportsBclSemaphoreAndMutexPrimitivesInsideWorkflow()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            using SystemSemaphoreSlim = System.Threading.SemaphoreSlim;
+
+            [Temporalio.Workflows.Workflow]
+            public sealed class MyWorkflow
+            {
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    var semaphore = new System.Threading.Semaphore(1, 1);
+                    var slim = new SystemSemaphoreSlim(1);
+                    var mutex = new System.Threading.Mutex();
+
+                    semaphore.WaitOne();
+                    semaphore.Release();
+                    await slim.WaitAsync();
+                    slim.Release();
+                    mutex.WaitOne();
+                    mutex.ReleaseMutex();
+                }
+            }
+            """);
+
+        var synchronizationDiagnostics = diagnostics
+            .Where(diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.SynchronizationId)
+            .ToArray();
+
+        Assert.Equal(9, synchronizationDiagnostics.Length);
+        Assert.Contains(synchronizationDiagnostics, diagnostic =>
+            diagnostic.GetMessage(CultureInfo.InvariantCulture).Contains("new Semaphore", StringComparison.Ordinal));
+        Assert.Contains(synchronizationDiagnostics, diagnostic =>
+            diagnostic.GetMessage(CultureInfo.InvariantCulture).Contains("new SemaphoreSlim", StringComparison.Ordinal));
+        Assert.Contains(synchronizationDiagnostics, diagnostic =>
+            diagnostic.GetMessage(CultureInfo.InvariantCulture).Contains("new Mutex", StringComparison.Ordinal));
+        Assert.Contains(synchronizationDiagnostics, diagnostic =>
+            diagnostic.GetMessage(CultureInfo.InvariantCulture).Contains("Semaphore.WaitOne", StringComparison.Ordinal));
+        Assert.Contains(synchronizationDiagnostics, diagnostic =>
+            diagnostic.GetMessage(CultureInfo.InvariantCulture).Contains("SemaphoreSlim.WaitAsync", StringComparison.Ordinal));
+        Assert.Contains(synchronizationDiagnostics, diagnostic =>
+            diagnostic.GetMessage(CultureInfo.InvariantCulture).Contains("Mutex.WaitOne", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ReportsTheNarrowSemaphoreSlimPatternInsideWorkflow()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            [Temporalio.Workflows.Workflow]
+            public sealed class MyWorkflow
+            {
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    var semaphore = new System.Threading.SemaphoreSlim(1);
+                    await semaphore.WaitAsync();
+                    semaphore.Release();
+                }
+            }
+            """);
+
+        Assert.Equal(3, diagnostics.Count(diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.SynchronizationId));
+    }
+
+    [Fact]
+    public async Task AllowsTemporalSemaphoreAndMutexInsideWorkflow()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            [Temporalio.Workflows.Workflow]
+            public sealed class MyWorkflow
+            {
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    var semaphore = new Temporalio.Workflows.Semaphore(1);
+                    await semaphore.WaitAsync();
+                    semaphore.Release();
+
+                    var mutex = new Temporalio.Workflows.Mutex();
+                    await mutex.WaitOneAsync();
+                    mutex.ReleaseMutex();
+                }
+            }
+            """);
+
+        Assert.DoesNotContain(diagnostics, diagnostic => diagnostic.Id == TemporalWorkflowAnalyzer.SynchronizationId);
+    }
+
+    [Fact]
+    public async Task DoesNotReportBclSemaphoreAndMutexPrimitivesOutsideWorkflow()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            public sealed class ActivityCode
+            {
+                public async System.Threading.Tasks.Task RunAsync()
+                {
+                    var semaphore = new System.Threading.Semaphore(1, 1);
+                    var slim = new System.Threading.SemaphoreSlim(1);
+                    var mutex = new System.Threading.Mutex();
+
+                    semaphore.WaitOne();
+                    await slim.WaitAsync();
+                    mutex.WaitOne();
                 }
             }
             """);

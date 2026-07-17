@@ -48,7 +48,7 @@ dotnet add package TemporalCommunity.DurableObjects.Analyzers
 | `TEMP008` | System, cryptographic random, and GUID APIs are not replay-safe. | Replace them with `Workflow.NewGuid` or `Workflow.Random` where the fix is applicable; cryptographic APIs are diagnostic-only because security semantics differ. |
 | `TEMP009` | Inline activity options omit both required timeout properties. | None; choose an application-specific `StartToCloseTimeout` or `ScheduleToCloseTimeout`. Variables and factory-created options are intentionally not analyzed. |
 | `TEMP010` | `CancellationTokenSource.CancelAsync` is not supported in workflow code. | Replace a standalone call with `CancellationTokenSource.Cancel`; expression-context calls remain diagnostic-only. |
-| `TEMP011` | `lock` and selected `Monitor` synchronization calls depend on the system scheduler and are not replay-safe. | None; choose the appropriate Temporal coordination primitive. |
+| `TEMP011` | `lock`, selected `Monitor` calls, and `System.Threading.Semaphore`, `SemaphoreSlim`, or `Mutex` use unsupported thread synchronization in workflow code. | None; use `Temporalio.Workflows.Semaphore` or `Mutex` where workflow-local coordination is appropriate. |
 | `TEMP013` | Direct `Console` I/O bypasses Temporal workflow logging. | None; use `Workflow.Logger` with the supported Temporal logging API. |
 | `TEMP014` | `Dictionary`, `HashSet`, and `ConcurrentDictionary` enumeration order is not guaranteed across replay. | None; use an ordered collection or sort values before iterating. |
 | `TEMP015` | `[WorkflowQuery]` methods cannot return task-like types (`Task`, `Task<T>`, `ValueTask`, or `ValueTask<T>`). | None; queries must compute and return a value synchronously. |

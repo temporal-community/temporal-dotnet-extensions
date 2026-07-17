@@ -65,6 +65,7 @@ The following plans are complete and kept here as implementation history:
 - [007 — Object identity and visibility](007-object-identity-and-visibility.md)
 - [008 — Performance, replay, NativeAOT, and scale](008-performance-replay-aot-scale.md)
 - [Workflow update-validator shape](analyzers/update-validator-shape.md)
+- [Workflow semaphore and mutex primitives](analyzers/workflow-semaphore-primitives.md)
 
 Add new work here only when it is actively being planned or implemented. Once a plan is complete,
 keep it here for historical context unless it is superseded by a newer plan or architectural

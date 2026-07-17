@@ -275,6 +275,22 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
             context.ReportDiagnostic(Diagnostic.Create(s_unsafeTaskWhenAny, invocation.GetLocation()));
         }
 
+        var receiverType = invocation.Expression is MemberAccessExpressionSyntax memberAccess
+            ? context.SemanticModel.GetTypeInfo(memberAccess.Expression, context.CancellationToken).Type
+            : null;
+        var synchronizationType = IsUnsupportedWorkflowSynchronizationPrimitive(receiverType)
+            ? receiverType
+            : IsUnsupportedWorkflowSynchronizationPrimitive(method.ContainingType)
+                ? method.ContainingType
+                : null;
+        if (synchronizationType is not null)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                s_synchronization,
+                invocation.GetLocation(),
+                $"{synchronizationType.Name}.{method.Name}"));
+        }
+
         if (method.ContainingType.ToDisplayString() == "System.Threading.Monitor" &&
             method.Name is "Enter" or "TryEnter" or "Exit" or "Wait" or "Pulse" or "PulseAll")
         {
@@ -451,6 +467,16 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
             return;
         }
 
+        if (type is { } synchronizationType &&
+            IsUnsupportedWorkflowSynchronizationPrimitive(synchronizationType))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                s_synchronization,
+                creation.GetLocation(),
+                $"new {synchronizationType.Name}"));
+            return;
+        }
+
         if (type?.ToDisplayString() == "System.Threading.CancellationTokenSource" &&
             creation.ArgumentList?.Arguments.Count > 0)
         {
@@ -569,6 +595,12 @@ public sealed class TemporalWorkflowAnalyzer : DiagnosticAnalyzer
         validator.Parameters.Length == update.Parameters.Length &&
         validator.Parameters.Select((parameter, index) =>
             SymbolEqualityComparer.Default.Equals(parameter.Type, update.Parameters[index].Type)).All(matches => matches);
+
+    private static bool IsUnsupportedWorkflowSynchronizationPrimitive(ITypeSymbol? type) =>
+        type?.ToDisplayString() is
+            "System.Threading.Semaphore" or
+            "System.Threading.SemaphoreSlim" or
+            "System.Threading.Mutex";
 
     private static void AnalyzeForEachExpression(
         SyntaxNodeAnalysisContext context,

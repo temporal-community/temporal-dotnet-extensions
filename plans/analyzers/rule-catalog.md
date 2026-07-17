@@ -38,7 +38,7 @@ and observability references are now treated as supplemental guidance alongside 
 | TEMP008 | Do not use non-workflow, cryptographic random, or GUID APIs | Error | B | Implemented |
 | TEMP009 | Inline activity options require `StartToCloseTimeout` or `ScheduleToCloseTimeout` | Error | A* | Implemented |
 | TEMP010 | Do not use `CancellationTokenSource.CancelAsync` in workflows | Error | A | Implemented |
-| TEMP011 | Do not use thread synchronization primitives in workflows | Error | B | Implemented |
+| TEMP011 | Do not use `lock`, selected `Monitor` calls, or `System.Threading.Semaphore`, `SemaphoreSlim`, and `Mutex` in workflows | Error | B | Implemented |
 | TEMP013 | Do not write directly to the console in workflows | Warning | A | Implemented |
 | TEMP014 | Do not iterate over unordered collections in workflows | Error | B | Implemented |
 | TEMP015 | Workflow query methods must not return task-like types | Error | A | Implemented |
