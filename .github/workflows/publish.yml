@@ -2,13 +2,22 @@ name: Publish to NuGet
 
 on:
   workflow_dispatch:
+    inputs:
+      release_type:
+        description: Release type for the selected ref
+        required: true
+        default: preview
+        type: choice
+        options:
+          - preview
+          - official
 
 permissions:
   contents: read
 
 jobs:
   publish:
-    name: Pack and publish to NuGet.org
+    name: Pack and publish ${{ inputs.release_type }} packages to NuGet.org
     runs-on: ubuntu-latest
     environment: nuget-publish   # configure this environment in GitHub repo settings
     permissions:
@@ -31,20 +40,39 @@ jobs:
       - name: Install just
         uses: taiki-e/install-action@just
 
-      - name: Verify an exact release tag is checked out
+      - name: Verify release tag and type
         run: |
-          tag=$(git describe --tags --exact-match HEAD 2>/dev/null || true)
-          if [[ -z "$tag" ]]; then
-            echo "::error::The selected ref is not an exact release tag."
-            echo "::error::Tag the release commit and dispatch this workflow from that tag."
-            exit 1
-          fi
+          release_type="${{ inputs.release_type }}"
           version=$(dotnet tool run minver --tag-prefix "" --default-pre-release-identifiers preview)
-          echo "Release tag: $tag; MinVer version: $version"
-          if [[ "$version" != "$tag" ]]; then
-            echo "::error::Release tag '$tag' and MinVer version '$version' do not match."
+          if [[ "$release_type" == "preview" ]]; then
+            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*$ ]]; then
+              echo "::error::Preview publishing requires MinVer to calculate a SemVer prerelease version."
+              echo "::error::Select an untagged commit after a release tag, or a commit tagged with a prerelease version."
+              exit 1
+            fi
+            echo "Preview version: $version"
+          elif [[ "$release_type" == "official" ]]; then
+            tag=$(git describe --tags --exact-match HEAD 2>/dev/null || true)
+            if [[ -z "$tag" ]]; then
+              echo "::error::Official publishing requires an exact release tag."
+              echo "::error::Tag the release commit and dispatch this workflow from that tag."
+              exit 1
+            fi
+            echo "Release tag: $tag; MinVer version: $version"
+            if [[ "$version" != "$tag" ]]; then
+              echo "::error::Release tag '$tag' and MinVer version '$version' do not match."
+              exit 1
+            fi
+            if [[ ! "$tag" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Official releases require a stable SemVer tag such as 0.3.5."
+              exit 1
+            fi
+          else
+            echo "::error::Unsupported release type '$release_type'."
             exit 1
           fi
+
+          echo "Release type: $release_type; MinVer version: $version"
 
       - name: Test
         run: just test
