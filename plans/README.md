@@ -46,10 +46,7 @@ Do not add tests that merely mirror implementation details or documentation that
 ## Active plans
 
 This list includes Proposed plans that are actively being reviewed, in addition to plans already
-approved or in progress.
-
-- [009 — Analyzer and code-fix roadmap](009-analyzer-roadmap.md)
-- [010 — Actionable analyzer rules and research backlog](010-analyzer-actionable-work.md)
+approved or in progress. Nothing is currently active.
 
 ## Archived plans
 
@@ -64,6 +61,8 @@ The following plans are complete and kept here as implementation history:
 - [006 — DurableObject call context](006-durable-object-call-context.md)
 - [007 — Object identity and visibility](007-object-identity-and-visibility.md)
 - [008 — Performance, replay, NativeAOT, and scale](008-performance-replay-aot-scale.md)
+- [009 — Analyzer and code-fix roadmap](009-analyzer-roadmap.md)
+- [010 — Actionable analyzer rules and research backlog](010-analyzer-actionable-work.md)
 - [Workflow update-validator shape](analyzers/update-validator-shape.md)
 - [Workflow semaphore and mutex primitives](analyzers/workflow-semaphore-primitives.md)
 
