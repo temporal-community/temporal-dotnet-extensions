@@ -84,6 +84,7 @@ public void ValidateAdd(int value)
 | `DO0003` | A concrete DurableObject is missing its declared `[WorkflowRun]` method. | None; the correct run signature depends on state shape. |
 | `DO0004` | A typed-state object does not declare matching optional snapshot initializer and run signatures. | None; initializer construction requires an application state decision. |
 | `DO0005` | A contract uses a shape that cannot produce a generated client. | None; make the contract public and non-generic, and avoid generic/ref/dynamic handlers or generated-name collisions. |
+| `DO0007` | A `DurableObjectBase` override of `DeactivateAsync` does not retain `[WorkflowUpdate]`. | Add `[WorkflowUpdate]` back to the override (reuses the same code fix that adds a handler attribute for `DO0001`). |
 
 ## Generated DurableObject clients
 

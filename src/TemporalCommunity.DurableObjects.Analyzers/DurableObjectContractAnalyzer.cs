@@ -11,6 +11,7 @@ public sealed class DurableObjectContractAnalyzer : DiagnosticAnalyzer
     public const string SignalNotSupportedId = "DO0002";
     public const string MissingWorkflowRunId = "DO0003";
     public const string InvalidTypedStateSignatureId = "DO0004";
+    public const string DeactivateOverrideMissingWorkflowUpdateId = "DO0007";
 
     private static readonly DiagnosticDescriptor s_invalidContractMethod = new(
         InvalidContractMethodId,
@@ -44,12 +45,21 @@ public sealed class DurableObjectContractAnalyzer : DiagnosticAnalyzer
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
+    private static readonly DiagnosticDescriptor s_deactivateOverrideMissingWorkflowUpdate = new(
+        DeactivateOverrideMissingWorkflowUpdateId,
+        "DeactivateAsync override is missing [WorkflowUpdate]",
+        "Method '{0}' overrides DeactivateAsync and must retain [WorkflowUpdate]",
+        "Temporal.DurableObjects",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
         ImmutableArray.Create(
             s_invalidContractMethod,
             s_signalNotSupported,
             s_missingWorkflowRun,
-            s_invalidTypedStateSignature);
+            s_invalidTypedStateSignature,
+            s_deactivateOverrideMissingWorkflowUpdate);
 
     public override void Initialize(AnalysisContext context)
     {
@@ -72,9 +82,21 @@ public sealed class DurableObjectContractAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        if (type.TypeKind != TypeKind.Class || type.IsAbstract ||
+        if (type.TypeKind != TypeKind.Class ||
             !DerivesFrom(type, "TemporalCommunity.DurableObjects.DurableObjectBase"))
         {
+            return;
+        }
+
+        // DO0007 must catch a bad DeactivateAsync override wherever it is declared in the
+        // inheritance chain, including on abstract intermediate types that never get a
+        // concrete-type analysis pass of their own. Abstract types intentionally skip the
+        // DO0001-DO0004 checks below (they may not yet have a WorkflowRun/typed-state
+        // signature - that is the concrete leaf's responsibility), so DO0007 is checked here
+        // and we return before reaching those checks.
+        if (type.IsAbstract)
+        {
+            AnalyzeDeactivateOverride(context, type);
             return;
         }
 
@@ -100,6 +122,52 @@ public sealed class DurableObjectContractAnalyzer : DiagnosticAnalyzer
                 GetLocation(type),
                 type.Name));
         }
+
+        AnalyzeDeactivateOverride(context, type, methods);
+    }
+
+    /// <summary>
+    /// Reports DO0007 for a DeactivateAsync override declared directly on <paramref name="type"/>.
+    /// This is invoked once per named type (both abstract and concrete) rather than being
+    /// derived from the concrete leaf's inherited members, so the diagnostic is reported
+    /// exactly once at the level where the offending override is actually declared - even
+    /// when a concrete leaf never re-overrides DeactivateAsync itself and only inherits a
+    /// bad override from an abstract ancestor.
+    /// </summary>
+    private static void AnalyzeDeactivateOverride(
+        SymbolAnalysisContext context,
+        INamedTypeSymbol type,
+        IReadOnlyList<IMethodSymbol>? declaredMethods = null)
+    {
+        var methods = declaredMethods ?? type.GetMembers().OfType<IMethodSymbol>().ToArray();
+        var deactivateOverride = methods.FirstOrDefault(IsDeactivateAsyncOverride);
+        if (deactivateOverride is not null &&
+            !HasAttribute(deactivateOverride, "Temporalio.Workflows.WorkflowUpdateAttribute"))
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                s_deactivateOverrideMissingWorkflowUpdate,
+                GetLocation(deactivateOverride),
+                deactivateOverride.Name));
+        }
+    }
+
+    private static bool IsDeactivateAsyncOverride(IMethodSymbol method)
+    {
+        if (!method.IsOverride || method.Name != "DeactivateAsync")
+        {
+            return false;
+        }
+
+        for (var current = method.OverriddenMethod; current is not null; current = current.OverriddenMethod)
+        {
+            if (current.OverriddenMethod is null)
+            {
+                return current.ContainingType.ToDisplayString() ==
+                    "TemporalCommunity.DurableObjects.DurableObjectBase";
+            }
+        }
+
+        return false;
     }
 
     private static void AnalyzeContract(SymbolAnalysisContext context, INamedTypeSymbol type)

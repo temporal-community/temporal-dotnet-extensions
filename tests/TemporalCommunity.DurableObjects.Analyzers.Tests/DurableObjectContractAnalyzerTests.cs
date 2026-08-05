@@ -22,7 +22,12 @@ public sealed class DurableObjectContractAnalyzerTests
         namespace TemporalCommunity.DurableObjects
         {
             public interface IDurableObject { }
-            public abstract class DurableObjectBase { }
+            public abstract class DurableObjectBase
+            {
+                [Temporalio.Workflows.WorkflowUpdate]
+                public virtual System.Threading.Tasks.Task DeactivateAsync() =>
+                    System.Threading.Tasks.Task.CompletedTask;
+            }
             public abstract class DurableObjectBase<TState> : DurableObjectBase where TState : notnull { }
             public sealed class DurableObjectSnapshot<TState> where TState : notnull { }
         }
@@ -75,6 +80,172 @@ public sealed class DurableObjectContractAnalyzerTests
         Assert.Single(
             diagnostics,
             diagnostic => diagnostic.Id == DurableObjectContractAnalyzer.InvalidTypedStateSignatureId);
+    }
+
+    [Fact]
+    public async Task ReportsDeactivateAsyncOverrideMissingWorkflowUpdate()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            using Temporalio.Workflows;
+            using TemporalCommunity.DurableObjects;
+
+            public sealed class BadObject : DurableObjectBase
+            {
+                [WorkflowRun]
+                public System.Threading.Tasks.Task RunAsync() => System.Threading.Tasks.Task.CompletedTask;
+
+                public override System.Threading.Tasks.Task DeactivateAsync() =>
+                    System.Threading.Tasks.Task.CompletedTask;
+            }
+            """);
+
+        Assert.Single(
+            diagnostics,
+            diagnostic => diagnostic.Id == DurableObjectContractAnalyzer.DeactivateOverrideMissingWorkflowUpdateId);
+    }
+
+    [Fact]
+    public async Task AllowsDeactivateAsyncOverrideThatRetainsWorkflowUpdate()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            using Temporalio.Workflows;
+            using TemporalCommunity.DurableObjects;
+
+            public sealed class GoodObject : DurableObjectBase
+            {
+                [WorkflowRun]
+                public System.Threading.Tasks.Task RunAsync() => System.Threading.Tasks.Task.CompletedTask;
+
+                [WorkflowUpdate]
+                public override System.Threading.Tasks.Task DeactivateAsync() =>
+                    System.Threading.Tasks.Task.CompletedTask;
+            }
+            """);
+
+        Assert.DoesNotContain(
+            diagnostics,
+            diagnostic => diagnostic.Id == DurableObjectContractAnalyzer.DeactivateOverrideMissingWorkflowUpdateId);
+    }
+
+    [Fact]
+    public async Task DoesNotReportWhenDeactivateAsyncIsNotOverridden()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            using Temporalio.Workflows;
+            using TemporalCommunity.DurableObjects;
+
+            public sealed class PlainObject : DurableObjectBase
+            {
+                [WorkflowRun]
+                public System.Threading.Tasks.Task RunAsync() => System.Threading.Tasks.Task.CompletedTask;
+            }
+            """);
+
+        Assert.DoesNotContain(
+            diagnostics,
+            diagnostic => diagnostic.Id == DurableObjectContractAnalyzer.DeactivateOverrideMissingWorkflowUpdateId);
+    }
+
+    [Fact]
+    public async Task DoesNotReportForNonOverrideMethodNamedDeactivateAsync()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            using Temporalio.Workflows;
+            using TemporalCommunity.DurableObjects;
+
+            public sealed class ShadowingObject : DurableObjectBase
+            {
+                [WorkflowRun]
+                public System.Threading.Tasks.Task RunAsync() => System.Threading.Tasks.Task.CompletedTask;
+
+                public new System.Threading.Tasks.Task DeactivateAsync() =>
+                    System.Threading.Tasks.Task.CompletedTask;
+            }
+            """);
+
+        Assert.DoesNotContain(
+            diagnostics,
+            diagnostic => diagnostic.Id == DurableObjectContractAnalyzer.DeactivateOverrideMissingWorkflowUpdateId);
+    }
+
+    [Fact]
+    public async Task ReportsDeactivateAsyncOverrideAcrossMultiLevelChain()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            using Temporalio.Workflows;
+            using TemporalCommunity.DurableObjects;
+
+            public abstract class MidObject : DurableObjectBase
+            {
+                [WorkflowUpdate]
+                public override System.Threading.Tasks.Task DeactivateAsync() =>
+                    System.Threading.Tasks.Task.CompletedTask;
+            }
+
+            public sealed class LeafObject : MidObject
+            {
+                [WorkflowRun]
+                public System.Threading.Tasks.Task RunAsync() => System.Threading.Tasks.Task.CompletedTask;
+
+                public override System.Threading.Tasks.Task DeactivateAsync() =>
+                    System.Threading.Tasks.Task.CompletedTask;
+            }
+            """);
+
+        Assert.Single(
+            diagnostics,
+            diagnostic => diagnostic.Id == DurableObjectContractAnalyzer.DeactivateOverrideMissingWorkflowUpdateId);
+    }
+
+    [Fact]
+    public async Task ReportsDeactivateAsyncOverrideDeclaredOnAbstractAncestorNotRedeclaredByLeaf()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            using Temporalio.Workflows;
+            using TemporalCommunity.DurableObjects;
+
+            public abstract class MidObject : DurableObjectBase
+            {
+                public override System.Threading.Tasks.Task DeactivateAsync() =>
+                    System.Threading.Tasks.Task.CompletedTask;
+            }
+
+            public sealed class LeafObject : MidObject
+            {
+                [WorkflowRun]
+                public System.Threading.Tasks.Task RunAsync() => System.Threading.Tasks.Task.CompletedTask;
+            }
+            """);
+
+        Assert.Single(
+            diagnostics,
+            diagnostic => diagnostic.Id == DurableObjectContractAnalyzer.DeactivateOverrideMissingWorkflowUpdateId);
+    }
+
+    [Fact]
+    public async Task AllowsAbstractAncestorOverrideThatRetainsWorkflowUpdateWhenLeafDoesNotRedeclare()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            using Temporalio.Workflows;
+            using TemporalCommunity.DurableObjects;
+
+            public abstract class MidObject : DurableObjectBase
+            {
+                [WorkflowUpdate]
+                public override System.Threading.Tasks.Task DeactivateAsync() =>
+                    System.Threading.Tasks.Task.CompletedTask;
+            }
+
+            public sealed class LeafObject : MidObject
+            {
+                [WorkflowRun]
+                public System.Threading.Tasks.Task RunAsync() => System.Threading.Tasks.Task.CompletedTask;
+            }
+            """);
+
+        Assert.DoesNotContain(
+            diagnostics,
+            diagnostic => diagnostic.Id == DurableObjectContractAnalyzer.DeactivateOverrideMissingWorkflowUpdateId);
     }
 
     [Fact]

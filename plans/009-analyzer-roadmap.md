@@ -1,13 +1,22 @@
 # Plan 009: Analyzer and Code-Fix Roadmap
 
-Status: Active
+Status: Complete
 Depends on: Plan 004 (Complete); current analyzer and code-fix baseline
 GitHub issue: TBD
 
 Progress: Phase 1 diagnostics TEMP004, TEMP007, and TEMP008 are implemented and covered by
-focused analyzer tests. Mechanical fixes are provided for Task.Run, Thread.Sleep, and supported
-random/GUID replacement cases; Task.Wait and timeout-based cancellation diagnostics remain
-diagnostic-only where an automatic rewrite would require application-specific intent.
+focused analyzer tests, alongside TEMP005 (`Task.WhenAny` overload guidance), TEMP011 (thread
+synchronization), TEMP013 (console I/O), and TEMP015 (workflow query task-like return shapes),
+which are also implemented and tested. TEMP006 (`Task.WhenAll`) was investigated and closed as
+not applicable rather than implemented: the real Temporal .NET SDK source shows all four
+`WhenAllAsync` overloads are one-line passthroughs to `Task.WhenAll` with no scheduler hazard,
+unlike `WhenAnyAsync<TResult>`, which is the real hazard TEMP005 guards against. Phase 2 is fully
+implemented (`TEMP016`-`TEMP019` update-validator rules). Phase 3 is implemented: `DO0001`-`DO0005`
+were already shipped, and the new `DO0007` (`DeactivateAsync` overrides must retain
+`[WorkflowUpdate]`) closes the remaining bullet. Mechanical fixes are provided for Task.Run,
+Thread.Sleep, and supported random/GUID replacement cases; Task.Wait and timeout-based
+cancellation diagnostics remain diagnostic-only where an automatic rewrite would require
+application-specific intent.
 
 ## Outcome
 
@@ -31,8 +40,9 @@ This roadmap extends the existing rule catalog rather than minting duplicate IDs
 
 - `TEMP004`, `TEMP007`, and `TEMP008` are already cataloged as candidate rules and are the first
   promotion targets for the general analyzer package.
-- `TEMP005` and `TEMP006` remain research items; they should only move into implementation after
-  we confirm the overload-sensitive analysis and code-fix shape.
+- `TEMP005` is implemented and shipped as `Workflow.WhenAnyAsync` overload guidance.
+- `TEMP006` is confirmed not applicable: the Temporal .NET SDK source shows `WhenAllAsync` is a
+  safe passthrough to `Task.WhenAll` with no scheduler hazard, so it will not be implemented.
 - `DO0005` is already implemented in the generator and should be treated as shipped behavior, not
   new roadmap work.
 - `TEMP011` and `TEMP013` are cataloged and implemented as focused synchronization and console
@@ -40,8 +50,13 @@ This roadmap extends the existing rule catalog rather than minting duplicate IDs
 
 ## Follow-on candidates (after Phase 1)
 
-- `TEMP005`: `Task.WhenAny` overloads with unsafe semantics.
-- `TEMP006`: `Task.WhenAll` in workflow types.
+- `TEMP005`: `Task.WhenAny` overloads with unsafe semantics. Implemented; see Catalog alignment
+  above.
+- `TEMP006` (`Task.WhenAll` in workflow types) was investigated and closed as not applicable, not
+  deferred. The Temporal .NET SDK source (`Workflow.cs`, `WhenAllAsync` overloads) shows a plain
+  passthrough to `Task.WhenAll` with no scheduler workaround or exception rewrapping, unlike
+  `WhenAnyAsync<TResult>`, where the SDK source itself documents a scheduler hazard. There is no
+  provable violation for a WhenAll rule to catch, so it will not move to implementation.
 
 ## Suggested roadmap
 
@@ -74,12 +89,24 @@ Keep this phase conservative. If a rule cannot be checked with low noise, leave 
 
 Add package-specific diagnostics that enforce the library's supported object model:
 
-- `DeactivateAsync` overrides must retain `[WorkflowUpdate]`;
+- `DeactivateAsync` overrides must retain `[WorkflowUpdate]` -- implemented as `DO0007`, with a
+  code fix that reuses the existing `DurableObjectContractCodeFixProvider` (it already adds
+  `[WorkflowUpdate]` to any Task-returning method).
 - durable-object contracts should continue to reject unsupported handler kinds and async query
-  shapes that the runtime cannot support.
+  shapes that the runtime cannot support -- verified against the analyzer source rather than taken
+  on faith: `DO0001` rejects contract methods whose return-type shape and attribute do not match
+  one of the two supported forms (a Task-returning method must carry `[WorkflowUpdate]`; a
+  synchronous method must carry `[WorkflowQuery]`), which is exactly what catches an async/
+  task-returning query shape. Signal-shaped handlers are specifically rejected by `DO0002`, not
+  `DO0001`. So this bullet was already covered by shipped behavior jointly through `DO0001` and
+  `DO0002`, not by `DO0001` alone as first reported -- no new diagnostic was needed for this part
+  of Phase 3.
 
 `DO0005` already covers generated-client eligibility for unsupported shapes. Keep that behavior
 stable, but do not treat it as new roadmap work here.
+
+Phase 3 is complete: both bullets above are addressed by shipped diagnostics (`DO0001`, `DO0002`,
+`DO0007`).
 
 This package should stay focused on DurableObjects conventions that are unique to the library rather
 than duplicating general Temporal workflow guidance.

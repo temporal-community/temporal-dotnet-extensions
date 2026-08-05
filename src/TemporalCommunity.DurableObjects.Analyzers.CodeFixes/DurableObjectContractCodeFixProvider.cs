@@ -14,7 +14,8 @@ public sealed class DurableObjectContractCodeFixProvider : CodeFixProvider
 {
     public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create(
         DurableObjectContractAnalyzer.InvalidContractMethodId,
-        DurableObjectContractAnalyzer.SignalNotSupportedId);
+        DurableObjectContractAnalyzer.SignalNotSupportedId,
+        DurableObjectContractAnalyzer.DeactivateOverrideMissingWorkflowUpdateId);
 
     public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
 
@@ -65,36 +66,71 @@ public sealed class DurableObjectContractCodeFixProvider : CodeFixProvider
             return document;
         }
 
-        var updated = diagnosticId == DurableObjectContractAnalyzer.SignalNotSupportedId
-            ? RemoveSignalAttribute(method)
-            : method;
         var methodSymbol = semanticModel.GetDeclaredSymbol(method, cancellationToken);
         var returnsTask = methodSymbol?.ReturnType.ToDisplayString() == "System.Threading.Tasks.Task" ||
             methodSymbol?.ReturnType is INamedTypeSymbol named &&
             named.OriginalDefinition.ToDisplayString() == "System.Threading.Tasks.Task<TResult>";
-        var attributeName = returnsTask
-            ? "global::Temporalio.Workflows.WorkflowUpdate"
-            : "global::Temporalio.Workflows.WorkflowQuery";
-        updated = updated.AddAttributeLists(SyntaxFactory.AttributeList(
-            SyntaxFactory.SingletonSeparatedList(
-                SyntaxFactory.Attribute(SyntaxFactory.ParseName(attributeName)))));
+        var (attributeName, requiredMetadataName, conflictingMetadataName) = returnsTask
+            ? ("global::Temporalio.Workflows.WorkflowUpdate", "Temporalio.Workflows.WorkflowUpdateAttribute", "Temporalio.Workflows.WorkflowQueryAttribute")
+            : ("global::Temporalio.Workflows.WorkflowQuery", "Temporalio.Workflows.WorkflowQueryAttribute", "Temporalio.Workflows.WorkflowUpdateAttribute");
+
+        // The diagnostic fires whenever the correct attribute is missing, not only when no
+        // handler attribute is present at all - a method can carry a conflicting or unsupported
+        // one (a signal, or the opposite update/query attribute, e.g. a Task-returning
+        // DeactivateAsync override mistakenly marked [WorkflowQuery]). Adding the correct
+        // attribute without removing a conflicting one would leave both on the method, which the
+        // SDK rejects. A method can also already carry both [WorkflowSignal] and the required
+        // attribute at once (DO0002 fires on the signal alone); in that case the required
+        // attribute must be kept, not duplicated. Attributes are matched by resolving through the
+        // semantic model rather than by spelling, so a `using Query = ...WorkflowQueryAttribute;`
+        // alias is still caught and an unrelated attribute that merely shares a name suffix is
+        // not removed.
+        var namesToRemove = diagnosticId == DurableObjectContractAnalyzer.SignalNotSupportedId
+            ? new[] { "Temporalio.Workflows.WorkflowSignalAttribute", conflictingMetadataName }
+            : new[] { conflictingMetadataName };
+        var alreadyHasRequiredAttribute = ResolveAttributes(method, semanticModel)
+            .Any(resolved => resolved.AttributeType.ToDisplayString() == requiredMetadataName);
+        var updated = RemoveAttributesOfType(method, semanticModel, namesToRemove);
+        if (!alreadyHasRequiredAttribute)
+        {
+            updated = updated.AddAttributeLists(SyntaxFactory.AttributeList(
+                SyntaxFactory.SingletonSeparatedList(
+                    SyntaxFactory.Attribute(SyntaxFactory.ParseName(attributeName)))));
+        }
+
         updated = updated.WithAdditionalAnnotations(Formatter.Annotation);
         return document.WithSyntaxRoot(root.ReplaceNode(method, updated));
     }
 
-    private static MethodDeclarationSyntax RemoveSignalAttribute(MethodDeclarationSyntax method)
-    {
-        var attributes = method.AttributeLists
+    private static IEnumerable<(AttributeSyntax Syntax, INamedTypeSymbol AttributeType)> ResolveAttributes(
+        MethodDeclarationSyntax method,
+        SemanticModel semanticModel) =>
+        method.AttributeLists
             .SelectMany(list => list.Attributes)
-            .Where(attribute =>
-            {
-                var name = attribute.Name.ToString();
-                return name.EndsWith("WorkflowSignal", StringComparison.Ordinal) ||
-                       name.EndsWith("WorkflowSignalAttribute", StringComparison.Ordinal);
-            })
+            .Select(attribute => (attribute, semanticModel.GetSymbolInfo(attribute).Symbol))
+            .Where(pair => pair.Item2 is IMethodSymbol { ContainingType: not null })
+            .Select(pair => (pair.attribute, ((IMethodSymbol)pair.Item2!).ContainingType));
+
+    private static MethodDeclarationSyntax RemoveAttributesOfType(
+        MethodDeclarationSyntax method,
+        SemanticModel semanticModel,
+        IReadOnlyCollection<string> metadataNames)
+    {
+        bool IsRemoved(AttributeSyntax attribute) =>
+            semanticModel.GetSymbolInfo(attribute).Symbol is IMethodSymbol { ContainingType: { } attributeType } &&
+            metadataNames.Contains(attributeType.ToDisplayString());
+
+        // Rebuild the attribute-list collection outright rather than removing individual
+        // AttributeSyntax nodes: node-level removal leaves a dangling empty `[]` behind when an
+        // attribute list's last attribute is removed, and chaining single-node removals across
+        // more than one match silently drops every removal after the first (each subsequent node
+        // reference still points at the original, already-discarded tree).
+        var keptLists = method.AttributeLists
+            .Select(list => list.WithAttributes(
+                SyntaxFactory.SeparatedList(list.Attributes.Where(attribute => !IsRemoved(attribute)))))
+            .Where(list => list.Attributes.Count > 0)
             .ToArray();
-        return attributes.Aggregate(method, (current, attribute) =>
-            current.RemoveNode(attribute, SyntaxRemoveOptions.KeepNoTrivia) ?? current);
+        return method.WithAttributeLists(SyntaxFactory.List(keptLists));
     }
 }
 
