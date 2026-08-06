@@ -11,6 +11,10 @@ namespace TemporalCommunity.Templates.Tests;
 /// supplied, and a shortName containing hyphens is not a valid C# identifier, so the "no name"
 /// path can't be exercised through TemplateVerifier itself. See docs/TEMPLATES.md and the plan
 /// this implements for the full rationale.
+/// Also covers the custom-name path for the <c>temporal-activity</c> and
+/// <c>temporal-payload-converter</c> item templates, following the same instantiate/snapshot/
+/// rebuild pattern (the default-name-via-custom-hive path is already exercised once above and
+/// isn't re-verified per template).
 /// </summary>
 public sealed class TemplateVerifierTests
 {
@@ -104,6 +108,88 @@ public sealed class TemplateVerifierTests
         {
             TestFixtures.DeleteDirectory(fixtureCopy);
             TestFixtures.DeleteDirectory(hiveDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task TemporalActivityWithCustomNameGeneratesFileAndBuilds()
+    {
+        var fixtureCopy = TestFixtures.CopyHostProjectToTempDirectory();
+        var settingsDirectory = TestFixtures.CreateTempDirectory();
+        try
+        {
+            // Same restore requirement as the temporal-workflow case above — the "csharp-only"
+            // constraint needs a restored project to evaluate.
+            await DotnetCli.RunAsync(fixtureCopy, "restore");
+
+            var options = new TemplateVerifierOptions(templateName: "temporal-activity")
+            {
+                TemplatePath = RepoPaths.ContentRoot("TemporalActivity"),
+                OutputDirectory = fixtureCopy,
+                SettingsDirectory = settingsDirectory,
+                EnsureEmptyOutputDirectory = false,
+                TemplateSpecificArgs = new[] { "-n", "CustomActivityName", "-o", "." },
+                VerificationIncludePatterns = new[] { "CustomActivityName.cs" },
+            };
+
+            var engine = new VerificationEngine(NullLoggerFactory.Instance);
+            await engine.Execute(Options.Create(options));
+
+            var generatedFilePath = Path.Combine(fixtureCopy, "CustomActivityName.cs");
+            Assert.True(File.Exists(generatedFilePath), $"Expected generated file at '{generatedFilePath}'.");
+
+            var generatedContent = await File.ReadAllTextAsync(generatedFilePath);
+            Assert.Contains("class CustomActivityName", generatedContent, StringComparison.Ordinal);
+            Assert.Contains("namespace Fixtures.HostProject;", generatedContent, StringComparison.Ordinal);
+            Assert.Contains("[Activity]", generatedContent, StringComparison.Ordinal);
+
+            await DotnetCli.RunAsync(fixtureCopy, "build", "--nologo");
+        }
+        finally
+        {
+            TestFixtures.DeleteDirectory(fixtureCopy);
+            TestFixtures.DeleteDirectory(settingsDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task TemporalPayloadConverterWithCustomNameGeneratesFileAndBuilds()
+    {
+        var fixtureCopy = TestFixtures.CopyHostProjectToTempDirectory();
+        var settingsDirectory = TestFixtures.CreateTempDirectory();
+        try
+        {
+            // Same restore requirement as the temporal-workflow case above — the "csharp-only"
+            // constraint needs a restored project to evaluate.
+            await DotnetCli.RunAsync(fixtureCopy, "restore");
+
+            var options = new TemplateVerifierOptions(templateName: "temporal-payload-converter")
+            {
+                TemplatePath = RepoPaths.ContentRoot("TemporalPayloadConverter"),
+                OutputDirectory = fixtureCopy,
+                SettingsDirectory = settingsDirectory,
+                EnsureEmptyOutputDirectory = false,
+                TemplateSpecificArgs = new[] { "-n", "CustomPayloadConverterName", "-o", "." },
+                VerificationIncludePatterns = new[] { "CustomPayloadConverterName.cs" },
+            };
+
+            var engine = new VerificationEngine(NullLoggerFactory.Instance);
+            await engine.Execute(Options.Create(options));
+
+            var generatedFilePath = Path.Combine(fixtureCopy, "CustomPayloadConverterName.cs");
+            Assert.True(File.Exists(generatedFilePath), $"Expected generated file at '{generatedFilePath}'.");
+
+            var generatedContent = await File.ReadAllTextAsync(generatedFilePath);
+            Assert.Contains("class CustomPayloadConverterName", generatedContent, StringComparison.Ordinal);
+            Assert.Contains("namespace Fixtures.HostProject;", generatedContent, StringComparison.Ordinal);
+            Assert.Contains(": IEncodingConverter", generatedContent, StringComparison.Ordinal);
+
+            await DotnetCli.RunAsync(fixtureCopy, "build", "--nologo");
+        }
+        finally
+        {
+            TestFixtures.DeleteDirectory(fixtureCopy);
+            TestFixtures.DeleteDirectory(settingsDirectory);
         }
     }
 }

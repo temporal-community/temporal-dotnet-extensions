@@ -414,7 +414,11 @@ pack-verify: pack
     [ -f "$templates_pkg" ] || { echo "  ✗ ERROR: no templates nupkg found at $templates_pkg" >&2; exit 1; }
     unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalWorkflow/.template.config/template.json' >/dev/null
     unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalWorkflow/TemporalWorkflow1.cs' >/dev/null
-    echo "  ✓ content/TemporalWorkflow/** present in nupkg"
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalActivity/.template.config/template.json' >/dev/null
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalActivity/TemporalActivity1.cs' >/dev/null
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalPayloadConverter/.template.config/template.json' >/dev/null
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalPayloadConverter/TemporalPayloadConverter1.cs' >/dev/null
+    echo "  ✓ content/TemporalWorkflow/**, content/TemporalActivity/**, and content/TemporalPayloadConverter/** present in nupkg"
     # --nuget-source only selects a package source, not a hive location — point DOTNET_CLI_HOME
     # at a scratch directory so this install/instantiate round-trip never touches the real
     # user-wide template hive. Note: "dotnet new" subcommands (install/instantiate) reject
@@ -432,9 +436,17 @@ pack-verify: pack
     echo "  ✓ temporal-workflow --dry-run reported without error"
     (cd "$templates_scratch" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-workflow -n SampleWorkflow -o .)
     [ -f "$templates_scratch/SampleWorkflow.cs" ] || { echo "  ✗ ERROR: temporal-workflow did not generate SampleWorkflow.cs" >&2; exit 1; }
+    (cd "$templates_scratch" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-activity -n DryRunActivity -o . --dry-run)
+    echo "  ✓ temporal-activity --dry-run reported without error"
+    (cd "$templates_scratch" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-activity -n SampleActivity -o .)
+    [ -f "$templates_scratch/SampleActivity.cs" ] || { echo "  ✗ ERROR: temporal-activity did not generate SampleActivity.cs" >&2; exit 1; }
+    (cd "$templates_scratch" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-payload-converter -n DryRunPayloadConverter -o . --dry-run)
+    echo "  ✓ temporal-payload-converter --dry-run reported without error"
+    (cd "$templates_scratch" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-payload-converter -n SamplePayloadConverter -o .)
+    [ -f "$templates_scratch/SamplePayloadConverter.cs" ] || { echo "  ✗ ERROR: temporal-payload-converter did not generate SamplePayloadConverter.cs" >&2; exit 1; }
     (cd "$templates_scratch" && dotnet add package Temporalio --version 1.16.0)
     (cd "$templates_scratch" && dotnet build --nologo)
-    echo "  ✓ real temporal-workflow instantiation compiled inside a scratch project"
+    echo "  ✓ real temporal-workflow, temporal-activity, and temporal-payload-converter instantiations compiled inside a scratch project"
 
 # Push to NuGet.org (NUGET_API_KEY required; CI uses OIDC Trusted Publishing instead)
 publish-nuget: pack
