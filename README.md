@@ -140,8 +140,6 @@ just run-sample
 | [Maintainer verification](docs/MAINTAINER_VERIFICATION.md) | Replay, packaging, NativeAOT, benchmark, scale, and release checks. |
 | [Architecture decisions](adr/) | Lasting design decisions and compatibility constraints. |
 
-Maintainer-facing implementation plans live in [`plans/`](plans/), separate from user documentation.
-
 ## Building from source
 
 Prerequisites: [.NET 10 SDK](https://dotnet.microsoft.com/download) and

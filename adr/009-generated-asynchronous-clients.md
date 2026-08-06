@@ -2,7 +2,6 @@
 
 Status: Accepted
 Date: 2026-07-12
-Related plan: `plans/005-generated-async-clients.md`
 Related issue: https://github.com/temporal-community/temporal-dotnet-extensions/issues/8
 
 ## Context
