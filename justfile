@@ -280,10 +280,11 @@ pack-verify: pack
     consumer_packages=$(mktemp -d /tmp/ns21-packages.XXXXXX)
     templates_hive=$(mktemp -d /tmp/templates-hive.XXXXXX)
     templates_scratch=$(mktemp -d /tmp/templates-scratch.XXXXXX)
+    templates_worker_scratch=$(mktemp -d /tmp/templates-worker-scratch.XXXXXX)
     # Single trap covering every scratch dir created in this recipe — a later `trap ... EXIT`
     # would replace this one rather than stack with it, leaking whichever dirs were registered
     # first.
-    trap 'rm -rf "$consumer_dir" "$analyzer_consumer_dir" "$consumer_packages" "$templates_hive" "$templates_scratch"' EXIT
+    trap 'rm -rf "$consumer_dir" "$analyzer_consumer_dir" "$consumer_packages" "$templates_hive" "$templates_scratch" "$templates_worker_scratch"' EXIT
     local_source=$(realpath "{{artifacts_dir}}")
     echo "==> Packed analyzer consumer test"
     printf '%s\n' \
@@ -447,6 +448,31 @@ pack-verify: pack
     (cd "$templates_scratch" && dotnet add package Temporalio --version 1.16.0)
     (cd "$templates_scratch" && dotnet build --nologo)
     echo "  ✓ real temporal-workflow, temporal-activity, and temporal-payload-converter instantiations compiled inside a scratch project"
+    echo "==> temporal-worker project template checks"
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalWorker/.template.config/template.json' >/dev/null
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalWorker/.template.config/dotnetcli.host.json' >/dev/null
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalWorker/TemporalWorker1.csproj' >/dev/null
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalWorker/Program.cs' >/dev/null
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalWorker/TemporalConnection.cs' >/dev/null
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalWorker/Workflows/SampleWorkflow.cs' >/dev/null
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalWorker/Activities/SampleActivities.cs' >/dev/null
+    echo "  ✓ content/TemporalWorker/** present in nupkg"
+    mkdir -p "$templates_worker_scratch/dry-run"
+    (cd "$templates_worker_scratch/dry-run" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-worker -n DryRunWorker -o . --dry-run)
+    echo "  ✓ temporal-worker --dry-run reported without error"
+    # Full Framework x IncludeOtel 2x2 matrix — a project template, unlike the item templates
+    # above, needs no ScratchTemplateHost since it generates its own standalone .csproj.
+    for fw in net8.0 net10.0; do
+        for otel in false true; do
+            combo_dir="$templates_worker_scratch/${fw}-otel-${otel}"
+            mkdir -p "$combo_dir"
+            name="Worker_${fw//./}_${otel}"
+            (cd "$combo_dir" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-worker -n "$name" -o . --framework "$fw" --include-otel "$otel")
+            [ -f "$combo_dir/$name.csproj" ] || { echo "  ✗ ERROR: temporal-worker (framework=$fw, include-otel=$otel) did not generate $name.csproj" >&2; exit 1; }
+            (cd "$combo_dir" && dotnet build --nologo)
+            echo "  ✓ temporal-worker (framework=$fw, include-otel=$otel) instantiated and built standalone"
+        done
+    done
 
 # Push to NuGet.org (NUGET_API_KEY required; CI uses OIDC Trusted Publishing instead)
 publish-nuget: pack

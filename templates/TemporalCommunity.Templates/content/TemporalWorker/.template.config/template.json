@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Temporal Community",
+  "classifications": [
+    "Temporal",
+    "Worker",
+    "Console"
+  ],
+  "name": "Temporal Worker",
+  "generatorVersions": "[1.0.0.0-*)",
+  "description": "Creates a single console-host project running a Temporal worker (Temporalio.Extensions.Hosting), with a resolved TemporalClientConnectOptions (env/profile -> Temporal:Address config -> localhost:7233) and optional OpenTelemetry tracing.",
+  "groupIdentity": "TemporalCommunity.Templates.Project.Worker",
+  "precedence": "0",
+  "identity": "TemporalCommunity.Templates.Project.Worker.CSharp",
+  "shortName": "temporal-worker",
+  "tags": {
+    "language": "C#",
+    "type": "project"
+  },
+  "sourceName": "TemporalWorker1",
+  "preferNameDirectory": true,
+  "defaultName": "TemporalWorker1",
+  "symbols": {
+    "Framework": {
+      "type": "parameter",
+      "description": "The target framework for the project.",
+      "datatype": "choice",
+      "choices": [
+        {
+          "choice": "net8.0",
+          "description": "Target net8.0"
+        },
+        {
+          "choice": "net10.0",
+          "description": "Target net10.0"
+        }
+      ],
+      "replaces": "net8.0",
+      "defaultValue": "net10.0",
+      "displayName": "Framework"
+    },
+    "IncludeOtel": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "displayName": "Include OpenTelemetry tracing",
+      "description": "Adds a 'Temporalio' ActivitySource, the client-side TracingInterceptor, and an OTLP exporter gated on the OTEL_EXPORTER_OTLP_ENDPOINT environment variable."
+    }
+  },
+  "primaryOutputs": [
+    {
+      "path": "TemporalWorker1.csproj"
+    }
+  ]
+}
