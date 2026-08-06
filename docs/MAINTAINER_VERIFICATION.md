@@ -34,13 +34,14 @@ state isolation. It is a bounded correctness regression test, not a throughput b
 
 ## Release packages
 
-Run `just pack-verify` before publishing a release. It builds all three NuGet packages, checks
+Run `just pack-verify` before publishing a release. It builds all four NuGet packages, checks
 their assets, and compiles representative consumers. The NuGet publishing workflow publishes this
 package set together:
 
 - `TemporalCommunity.DurableObjects`
 - `TemporalCommunity.Extensions.Analyzers`
 - `TemporalCommunity.DurableObjects.Analyzers`
+- `TemporalCommunity.Templates`
 
 When dispatching `publish.yml`, choose the release type that matches the selected ref:
 

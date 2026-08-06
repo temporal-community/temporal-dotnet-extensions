@@ -41,6 +41,7 @@ jobs:
           dotnet test tests/TemporalCommunity.DurableObjects.GeneratedClients.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=generated-clients.trx"
           dotnet test tests/TemporalCommunity.Extensions.Analyzers.CodeFixes.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=analyzer-codefixes.trx"
           dotnet test tests/TemporalCommunity.DurableObjects.Analyzers.CodeFixes.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=durable-analyzer-codefixes.trx"
+          dotnet test tests/TemporalCommunity.Templates.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=templates.trx"
 
       - name: Install just
         if: matrix.os == 'ubuntu-latest'

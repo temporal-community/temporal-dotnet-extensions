@@ -17,6 +17,9 @@
     <Project Path="src/TemporalCommunity.Extensions.Analyzers/TemporalCommunity.Extensions.Analyzers.csproj" />
     <Project Path="src/TemporalCommunity.DurableObjects/TemporalCommunity.DurableObjects.csproj" />
   </Folder>
+  <Folder Name="/templates/">
+    <Project Path="templates/TemporalCommunity.Templates/TemporalCommunity.Templates.csproj" />
+  </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/TemporalCommunity.DurableObjects.GeneratedClients.Tests/TemporalCommunity.DurableObjects.GeneratedClients.Tests.csproj" />
     <Project Path="tests/TemporalCommunity.DurableObjects.Analyzers.CodeFixes.Tests/TemporalCommunity.DurableObjects.Analyzers.CodeFixes.Tests.csproj" />
@@ -25,5 +28,6 @@
     <Project Path="tests/TemporalCommunity.DurableObjects.Tests/TemporalCommunity.DurableObjects.Tests.csproj" />
     <Project Path="tests/TemporalCommunity.Extensions.Analyzers.CodeFixes.Tests/TemporalCommunity.Extensions.Analyzers.CodeFixes.Tests.csproj" />
     <Project Path="tests/TemporalCommunity.Extensions.Analyzers.Tests/TemporalCommunity.Extensions.Analyzers.Tests.csproj" />
+    <Project Path="tests/TemporalCommunity.Templates.Tests/TemporalCommunity.Templates.Tests.csproj" />
   </Folder>
 </Solution>

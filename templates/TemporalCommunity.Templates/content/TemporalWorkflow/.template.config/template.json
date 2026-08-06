@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "Temporal Community",
+  "classifications": [
+    "Temporal",
+    "Workflow"
+  ],
+  "name": "Temporal Workflow class",
+  "generatorVersions": "[1.0.0.0-*)",
+  "description": "Creates a new plain Temporal .NET workflow class ([Workflow]/[WorkflowRun]).",
+  "groupIdentity": "TemporalCommunity.Templates.Item.Workflow",
+  "precedence": "0",
+  "identity": "TemporalCommunity.Templates.Item.Workflow.CSharp",
+  "shortName": "temporal-workflow",
+  "tags": {
+    "language": "C#",
+    "type": "item"
+  },
+  "sourceName": "TemporalWorkflow1",
+  "preferDefaultName": true,
+  "defaultName": "TemporalWorkflow1",
+  "primaryOutputs": [
+    {
+      "path": "TemporalWorkflow1.cs"
+    }
+  ],
+  "symbols": {
+    "DefaultNamespace": {
+      "type": "bind",
+      "binding": "msbuild:RootNamespace",
+      "replaces": "TemplateNamespace"
+    }
+  },
+  "postActions": [
+    {
+      "description": "This template does not add a Temporalio package reference. Add one to the target project before building.",
+      "manualInstructions": [
+        {
+          "text": "Run 'dotnet add package Temporalio' in the target project if it does not already reference the Temporalio SDK."
+        }
+      ],
+      "actionId": "AC1156F7-BB77-4DB8-B28F-24EEBCCA1E5C",
+      "continueOnError": true
+    }
+  ],
+  "constraints": {
+    "csharp-only": {
+      "type": "project-capability",
+      "args": "CSharp"
+    }
+  }
+}

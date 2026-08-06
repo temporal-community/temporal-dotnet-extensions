@@ -138,6 +138,7 @@ just run-sample
 | [Tier model](docs/TIER_MODEL.md) | Resident execution, explicit deactivation, and Continue-as-New behavior. |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Common runtime, configuration, and NativeAOT problems. |
 | [Maintainer verification](docs/MAINTAINER_VERIFICATION.md) | Replay, packaging, NativeAOT, benchmark, scale, and release checks. |
+| [Templates](docs/TEMPLATES.md) | `dotnet new` templates for scaffolding Temporal .NET workflows, activities, and workers. |
 | [Architecture decisions](adr/) | Lasting design decisions and compatibility constraints. |
 
 ## Building from source

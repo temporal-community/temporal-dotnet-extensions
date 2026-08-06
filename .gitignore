@@ -16,6 +16,11 @@ bld/
 
 TestResults/
 
+# Verify-based snapshot tests (TemplateVerifier) — regenerated locally on a failing snapshot
+# test; promote to *.verified.* / *.verified directories manually, never check in *.received.*
+*.received/
+*.received.*
+
 # OS System files
 .DS_Store
 Thumbs.db

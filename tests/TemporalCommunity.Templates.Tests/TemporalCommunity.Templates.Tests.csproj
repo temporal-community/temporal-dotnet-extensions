@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Snapshot content and the fixture host project are C# source that belongs to a *different*
+         compilation (the generated/checked-in template output, or the fixture project itself) —
+         without these excludes, the SDK's default Compile glob (**/*.cs) pulls them into this test
+         assembly and fails the build with CS0246 (missing Temporalio types this project never
+         references). Same "content/" trap as the packing project, different folder names. -->
+    <Compile Remove="Snapshots/**/*.cs" />
+    <Compile Remove="Fixtures/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
+    <PackageReference Include="Microsoft.TemplateEngine.Authoring.TemplateVerifier" Version="10.0.302" />
+    <PackageReference Include="xunit" Version="2.9.*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.*" PrivateAssets="all" />
+  </ItemGroup>
+</Project>

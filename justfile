@@ -16,6 +16,7 @@ durable_analyzer_tests_dir := "tests/TemporalCommunity.DurableObjects.Analyzers.
 generated_client_tests_dir := "tests/TemporalCommunity.DurableObjects.GeneratedClients.Tests"
 general_codefix_tests_dir := "tests/TemporalCommunity.Extensions.Analyzers.CodeFixes.Tests"
 durable_codefix_tests_dir := "tests/TemporalCommunity.DurableObjects.Analyzers.CodeFixes.Tests"
+template_tests_dir    := "tests/TemporalCommunity.Templates.Tests"
 benchmarks_dir        := "benchmarks/TemporalCommunity.DurableObjects.Benchmarks"
 aot_smoke_dir         := "tests/smoke/GeneratedClientAot"
 # Runs minver (local tool — .config/dotnet-tools.json) to compute the current version from git tags.
@@ -127,6 +128,11 @@ test-unit: build
         --no-build \
         --nologo \
         --logger "trx;LogFileName=durable-analyzer-codefixes.trx"
+    dotnet test "{{template_tests_dir}}" \
+        --configuration "{{configuration}}" \
+        --no-build \
+        --nologo \
+        --logger "trx;LogFileName=templates.trx"
 
 # Run integration tests (uses WorkflowEnvironment.StartLocalAsync — no external server needed)
 test-integration: build
@@ -238,6 +244,11 @@ pack: build
         --no-build \
         --nologo \
         --output "{{artifacts_dir}}"
+    dotnet pack "templates/TemporalCommunity.Templates" \
+        --configuration "{{configuration}}" \
+        --no-build \
+        --nologo \
+        --output "{{artifacts_dir}}"
 
 # Verify the packed nupkg: confirm net10.0 + net8.0 + netstandard2.1 lib/ folders exist,
 # then compile a netstandard2.1 consumer project against the local package.
@@ -267,7 +278,12 @@ pack-verify: pack
     consumer_dir=$(mktemp -d /tmp/ns21-consumer.XXXXXX)
     analyzer_consumer_dir=$(mktemp -d /tmp/analyzer-consumer.XXXXXX)
     consumer_packages=$(mktemp -d /tmp/ns21-packages.XXXXXX)
-    trap 'rm -rf "$consumer_dir" "$analyzer_consumer_dir" "$consumer_packages"' EXIT
+    templates_hive=$(mktemp -d /tmp/templates-hive.XXXXXX)
+    templates_scratch=$(mktemp -d /tmp/templates-scratch.XXXXXX)
+    # Single trap covering every scratch dir created in this recipe — a later `trap ... EXIT`
+    # would replace this one rather than stack with it, leaking whichever dirs were registered
+    # first.
+    trap 'rm -rf "$consumer_dir" "$analyzer_consumer_dir" "$consumer_packages" "$templates_hive" "$templates_scratch"' EXIT
     local_source=$(realpath "{{artifacts_dir}}")
     echo "==> Packed analyzer consumer test"
     printf '%s\n' \
@@ -393,6 +409,32 @@ pack-verify: pack
         -p:RestoreAdditionalProjectSources="$local_source"
     grep -q 'lib/net8.0/TemporalCommunity.DurableObjects.dll' "$consumer_dir/obj/project.assets.json"
     echo "  ✓ net8.0 consumer selected the net8.0 package asset"
+    echo "==> Templates package installation test (isolated hive)"
+    templates_pkg="{{artifacts_dir}}/TemporalCommunity.Templates.{{version}}.nupkg"
+    [ -f "$templates_pkg" ] || { echo "  ✗ ERROR: no templates nupkg found at $templates_pkg" >&2; exit 1; }
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalWorkflow/.template.config/template.json' >/dev/null
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalWorkflow/TemporalWorkflow1.cs' >/dev/null
+    echo "  ✓ content/TemporalWorkflow/** present in nupkg"
+    # --nuget-source only selects a package source, not a hive location — point DOTNET_CLI_HOME
+    # at a scratch directory so this install/instantiate round-trip never touches the real
+    # user-wide template hive. Note: "dotnet new" subcommands (install/instantiate) reject
+    # --nologo outright (confirmed empirically: exit 127, "'--nologo' is not a valid option") —
+    # unlike build/restore/pack, it is not a recognized option there. DOTNET_NOLOGO/
+    # DOTNET_CLI_TELEMETRY_OPTOUT instead suppress the first-run welcome banner this fresh,
+    # isolated CLI home would otherwise print.
+    export DOTNET_NOLOGO=1
+    export DOTNET_CLI_TELEMETRY_OPTOUT=1
+    DOTNET_CLI_HOME="$templates_hive" dotnet new install "$templates_pkg"
+    echo "  ✓ TemporalCommunity.Templates installed into isolated hive"
+    DOTNET_CLI_HOME="$templates_hive" dotnet new classlib -n ScratchTemplateHost -o "$templates_scratch" --no-restore
+    (cd "$templates_scratch" && DOTNET_CLI_HOME="$templates_hive" dotnet restore)
+    (cd "$templates_scratch" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-workflow -n DryRunWorkflow -o . --dry-run)
+    echo "  ✓ temporal-workflow --dry-run reported without error"
+    (cd "$templates_scratch" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-workflow -n SampleWorkflow -o .)
+    [ -f "$templates_scratch/SampleWorkflow.cs" ] || { echo "  ✗ ERROR: temporal-workflow did not generate SampleWorkflow.cs" >&2; exit 1; }
+    (cd "$templates_scratch" && dotnet add package Temporalio --version 1.16.0)
+    (cd "$templates_scratch" && dotnet build --nologo)
+    echo "  ✓ real temporal-workflow instantiation compiled inside a scratch project"
 
 # Push to NuGet.org (NUGET_API_KEY required; CI uses OIDC Trusted Publishing instead)
 publish-nuget: pack
