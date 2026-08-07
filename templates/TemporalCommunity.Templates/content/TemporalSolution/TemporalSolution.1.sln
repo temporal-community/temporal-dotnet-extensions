@@ -1,0 +1,52 @@
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.8.0.0
+MinimumVisualStudioVersion = 17.8.0.0
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TemporalSolution.1.Worker", "TemporalSolution.1.Worker\TemporalSolution.1.Worker.csproj", "{BBDCEDE6-14B7-4FB5-9B13-8F2FA0A1F224}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TemporalSolution.1.Client", "TemporalSolution.1.Client\TemporalSolution.1.Client.csproj", "{0C530E8C-096E-465D-BB11-93348A245B81}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TemporalSolution.1.Shared", "TemporalSolution.1.Shared\TemporalSolution.1.Shared.csproj", "{C5303D9B-2C05-4786-9DDB-3F6CEDD6736D}"
+EndProject
+#if (IncludeAspire)
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TemporalSolution.1.AppHost", "TemporalSolution.1.AppHost\TemporalSolution.1.AppHost.csproj", "{F2D16E20-35DD-431E-ACA7-CFDFE8E2D80A}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TemporalSolution.1.ServiceDefaults", "TemporalSolution.1.ServiceDefaults\TemporalSolution.1.ServiceDefaults.csproj", "{40643D24-CD4E-45ED-A105-D4F496C5975E}"
+EndProject
+#endif
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{BBDCEDE6-14B7-4FB5-9B13-8F2FA0A1F224}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BBDCEDE6-14B7-4FB5-9B13-8F2FA0A1F224}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BBDCEDE6-14B7-4FB5-9B13-8F2FA0A1F224}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BBDCEDE6-14B7-4FB5-9B13-8F2FA0A1F224}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0C530E8C-096E-465D-BB11-93348A245B81}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0C530E8C-096E-465D-BB11-93348A245B81}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0C530E8C-096E-465D-BB11-93348A245B81}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0C530E8C-096E-465D-BB11-93348A245B81}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C5303D9B-2C05-4786-9DDB-3F6CEDD6736D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C5303D9B-2C05-4786-9DDB-3F6CEDD6736D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C5303D9B-2C05-4786-9DDB-3F6CEDD6736D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C5303D9B-2C05-4786-9DDB-3F6CEDD6736D}.Release|Any CPU.Build.0 = Release|Any CPU
+#if (IncludeAspire)
+		{F2D16E20-35DD-431E-ACA7-CFDFE8E2D80A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F2D16E20-35DD-431E-ACA7-CFDFE8E2D80A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F2D16E20-35DD-431E-ACA7-CFDFE8E2D80A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F2D16E20-35DD-431E-ACA7-CFDFE8E2D80A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{40643D24-CD4E-45ED-A105-D4F496C5975E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{40643D24-CD4E-45ED-A105-D4F496C5975E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{40643D24-CD4E-45ED-A105-D4F496C5975E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{40643D24-CD4E-45ED-A105-D4F496C5975E}.Release|Any CPU.Build.0 = Release|Any CPU
+#endif
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {EE7369E1-6101-455F-8ECC-0A4D83339A10}
+	EndGlobalSection
+EndGlobal

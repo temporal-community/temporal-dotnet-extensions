@@ -15,6 +15,18 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Disables cross-class test parallelization for this project only. These tests each spawn
+         several real "dotnet new"/"dotnet build" subprocesses (multi-project solution builds
+         especially), and running many of them fully in parallel oversubscribes MSBuild's shared
+         infrastructure — confirmed empirically: a solution build that succeeds cleanly in
+         isolation intermittently fails with "GenerateDepsFile ... process cannot access the
+         file ... deps.json" (MSB4018) when several heavy tests race concurrently. Serializing
+         collections trades wall-clock time for reliability, which is the right tradeoff for
+         subprocess-heavy integration-style tests like these. -->
+    <None Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.*" />
     <PackageReference Include="Microsoft.TemplateEngine.Authoring.TemplateVerifier" Version="10.0.302" />
     <PackageReference Include="xunit" Version="2.9.*" />

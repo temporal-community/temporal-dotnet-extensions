@@ -1,0 +1,24 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.4.6">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- No explicit Aspire.Hosting.AppHost PackageReference — the Aspire.AppHost.Sdk MSBuild SDK
+         reference above already supplies it (confirmed against the real Aspire.ProjectTemplates
+         AppHost.csproj, which only adds explicit PackageReferences for specific integrations
+         actually used, e.g. Aspire.Hosting.Redis). TemporalCommunity.Aspire.Hosting is that kind
+         of specific integration. -->
+    <PackageReference Include="TemporalCommunity.Aspire.Hosting" Version="0.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XmlEncodedProjectName.Worker\XmlEncodedProjectName.Worker.csproj" />
+    <ProjectReference Include="..\XmlEncodedProjectName.Client\XmlEncodedProjectName.Client.csproj" />
+  </ItemGroup>
+
+</Project>

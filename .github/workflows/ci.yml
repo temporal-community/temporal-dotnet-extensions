@@ -41,7 +41,7 @@ jobs:
           dotnet test tests/TemporalCommunity.DurableObjects.GeneratedClients.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=generated-clients.trx"
           dotnet test tests/TemporalCommunity.Extensions.Analyzers.CodeFixes.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=analyzer-codefixes.trx"
           dotnet test tests/TemporalCommunity.DurableObjects.Analyzers.CodeFixes.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=durable-analyzer-codefixes.trx"
-          dotnet test tests/TemporalCommunity.Templates.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=templates.trx"
+          MSBUILDDISABLENODEREUSE=1 dotnet test tests/TemporalCommunity.Templates.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=templates.trx"
 
       - name: Install just
         if: matrix.os == 'ubuntu-latest'
@@ -61,3 +61,34 @@ jobs:
         with:
           name: unit-test-results-${{ matrix.os }}
           path: tests/**/*.trx
+
+  template-smoke-test:
+    name: template runtime smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # MinVer needs full history for tag resolution
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install just
+        uses: taiki-e/install-action@just
+
+      - name: Install Temporal CLI
+        uses: temporalio/setup-temporal@v0
+
+      - name: Install Aspire CLI
+        # --version is a named flag, not positional (confirmed by downloading and reading the
+        # real install script) — a bare positional version argument would be silently ignored.
+        run: curl -sSL https://aspire.dev/install.sh | bash -s -- --version 13.4.6
+
+      - name: Add Aspire CLI to PATH
+        run: echo "$HOME/.aspire/bin" >> "$GITHUB_PATH"
+
+      - name: Runtime smoke test (standalone + Aspire)
+        run: just template-smoke-test

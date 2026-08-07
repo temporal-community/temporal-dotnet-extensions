@@ -43,6 +43,11 @@ package set together:
 - `TemporalCommunity.DurableObjects.Analyzers`
 - `TemporalCommunity.Templates`
 
+Additionally run `just template-smoke-test` before publishing a release that touches
+`temporal-solution` — it exercises both the standalone (real `temporal server start-dev`) and
+Aspire (real `aspire start`, auto-provisioned dev server) runtime paths against a real Worker and
+Client, not just `dotnet build`. `pack-verify` alone only proves the generated code compiles.
+
 When dispatching `publish.yml`, choose the release type that matches the selected ref:
 
 - `preview` may use an untagged branch or commit. It publishes the SemVer prerelease version

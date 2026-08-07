@@ -145,6 +145,53 @@ dotnet run
 Without that variable set, `--include-otel` still compiles and runs — it just doesn't send spans
 anywhere.
 
+## Multi-project templates
+
+### `temporal-solution`
+
+Creates a Worker + Client + Shared multi-project solution running plain Temporalio
+workflows/activities, with optional .NET Aspire orchestration.
+
+```bash
+dotnet new temporal-solution -n Contoso.Fulfillment
+```
+
+Options:
+
+- `--framework <net8.0|net10.0>` (default `net10.0`) — applied to Worker, Client, and Shared.
+- `--include-aspire` (default off) — adds an `AppHost` and `ServiceDefaults` project. The AppHost
+  references `TemporalCommunity.Aspire.Hosting` and calls `AddTemporalLocalDevServer`, which
+  auto-provisions a local Temporal dev server as part of `aspire run`/`dotnet run` — no separately
+  installed Temporal CLI required for this path (it uses
+  `Temporalio.Testing.WorkflowEnvironment`'s self-managed ephemeral server under the hood). With
+  `--include-aspire` off (the default), you run your own `temporal server start-dev` (or point at
+  Temporal Cloud), exactly like `temporal-worker` and every sample in `samples/`.
+- `--include-otel` (default off) — adds a `"Temporalio"` `ActivitySource` and the client-side
+  `TracingInterceptor` to Worker and Client. When combined with `--include-aspire`, the exporter
+  comes from `ServiceDefaults`; without it, a standalone OTLP exporter is added instead (see
+  "Configuring the OTLP exporter" above — the same `OTEL_EXPORTER_OTLP_ENDPOINT` convention applies).
+
+Generated projects:
+
+| Project | Purpose |
+|---|---|
+| `<Name>.Shared` | Class library holding `SharedTemporalConnection` and the starter `[Workflow]`/`[Activity]` pair. Referenced by both Worker and Client — Client needs it for type-safe `StartWorkflowAsync<SampleWorkflow>(...)` calls. Carries the `TemporalCommunity.Extensions.Analyzers` reference, since that's where the workflow/activity code lives. |
+| `<Name>.Worker` | Console host running the Temporal worker, referencing Shared. |
+| `<Name>.Client` | Console host that starts the sample workflow, waits for its result, prints it, and exits — a one-shot demo, not a long-running service. |
+| `<Name>.AppHost` *(--include-aspire only)* | Aspire orchestrator: provisions the local Temporal dev server and runs Worker + Client as Aspire resources. |
+| `<Name>.ServiceDefaults` *(--include-aspire only)* | Service discovery, HTTP resilience, and OpenTelemetry wiring shared by Worker and Client. Trimmed from Aspire's own ServiceDefaults template to what applies to plain Generic Host console apps — no ASP.NET Core instrumentation or health-check endpoints, since neither Worker nor Client is a web application. |
+
+**Non-trivial project names.** A single `sourceName` token replace isn't enough for a
+multi-project solution with strongly-typed Aspire project references and XML project files, so two
+additional symbols handle the edge cases: `GeneratedClassNamePrefix` sanitizes the name into a
+valid C# identifier (used for `Projects.<Name>_Worker`-style references in `AppHost.cs`), and
+`XmlEncodedProjectName` XML-escapes the name for use inside `.csproj` `ProjectReference` paths.
+Both track the folder names on disk (which use the raw, unescaped name), so a name like
+`Contoso-Fulfillment&Orders` produces valid C# (`Contoso_Fulfillment_Orders`) and valid XML
+(`Contoso-Fulfillment&amp;Orders`) even though the actual directory on disk keeps the literal `&`.
+
+**Package version pins** follow the same one-place-per-package convention as `temporal-worker`.
+
 ## Connecting to Temporal
 
 `temporal-worker`'s generated `TemporalConnection.cs` resolves a `TemporalClientConnectOptions`
@@ -167,9 +214,12 @@ target host. To connect to Temporal Cloud, configure a Temporal CLI profile or t
 `TEMPORAL_*` environment variables; do not try to express an API key or TLS setting through
 `Temporal:Address`, since `Resolve` never reads anything else from it.
 
-A multi-project solution template (`temporal-solution`, planned for a later release) will reuse
-this exact same precedence via an equivalent shared helper, so Worker and Client projects in that
-template never end up pointed at different servers.
+The `temporal-solution` multi-project template reuses this exact same precedence via an equivalent
+`SharedTemporalConnection` helper in its `Shared` project, so Worker and Client never end up
+pointed at different servers. When `--include-aspire` is enabled, `AddTemporalLocalDevServer`'s
+`WithReference` injects `TEMPORAL_ADDRESS`/`TEMPORAL_NAMESPACE` env vars into both projects, which
+is what typically satisfies step 1 above — Temporal Cloud credentials, TLS, namespace, and RPC
+metadata still come from environment/profile configuration, not from anything Aspire-specific.
 
 ## Building from source
 
@@ -177,6 +227,9 @@ The template pack lives in `templates/TemporalCommunity.Templates/`. Packing and
 follow this repo's usual `just` workflow:
 
 ```bash
-just pack          # packs TemporalCommunity.Templates.<version>.nupkg into artifacts/packages
-just pack-verify    # installs it into an isolated hive and instantiates/builds each template
+just pack                          # packs TemporalCommunity.Templates.<version>.nupkg into artifacts/packages
+just pack-verify                   # installs it into an isolated hive and instantiates/builds each template
+just template-smoke-test-standalone  # real Temporal dev server + Worker + Client runtime check
+just template-smoke-test-aspire      # real Aspire AppHost + auto-provisioned dev server runtime check
+just template-smoke-test             # runs both of the above
 ```

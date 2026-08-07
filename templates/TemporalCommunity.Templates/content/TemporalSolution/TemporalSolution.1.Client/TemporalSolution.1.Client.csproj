@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Temporalio" Version="1.17.0" />
+    <!-- Client uses the Generic Host for its builder infrastructure (config, DI, logging) but
+         never calls Temporalio.Extensions.Hosting's AddTemporalClient — see SharedTemporalConnection
+         and the registration pattern in Program.cs. Microsoft.Extensions.Hosting is referenced
+         directly here (rather than transitively via Temporalio.Extensions.Hosting, as Worker gets
+         it) because Client has no other reason to reference that package. -->
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+  </ItemGroup>
+
+  <!--#if (IncludeOtel) -->
+  <ItemGroup>
+    <PackageReference Include="Temporalio.Extensions.OpenTelemetry" Version="1.17.0" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />
+  </ItemGroup>
+  <!--#endif -->
+
+  <!--#if (OtelWithoutAspire) -->
+  <ItemGroup>
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.17.0" />
+  </ItemGroup>
+  <!--#endif -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\XmlEncodedProjectName.Shared\XmlEncodedProjectName.Shared.csproj" />
+<!--#if (IncludeAspire) -->
+    <ProjectReference Include="..\XmlEncodedProjectName.ServiceDefaults\XmlEncodedProjectName.ServiceDefaults.csproj" />
+<!--#endif -->
+  </ItemGroup>
+
+</Project>

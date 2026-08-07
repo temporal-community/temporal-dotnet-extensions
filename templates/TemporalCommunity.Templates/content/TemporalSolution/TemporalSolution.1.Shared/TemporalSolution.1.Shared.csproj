@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Pinned here, in exactly one place, so bumping the analyzer package is a one-line change,
+         independent of this template package's own MinVer-derived version. -->
+    <TemporalCommunityAnalyzersVersion>0.3.4</TemporalCommunityAnalyzersVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Temporalio" Version="1.17.0" />
+    <!-- Needed for SharedTemporalConnection.Resolve's IConfiguration parameter. -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.0" />
+    <!-- Applied to Shared, not Worker/Client — this is where the workflow/activity code the
+         analyzer targets actually lives. -->
+    <PackageReference Include="TemporalCommunity.Extensions.Analyzers" Version="$(TemporalCommunityAnalyzersVersion)" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

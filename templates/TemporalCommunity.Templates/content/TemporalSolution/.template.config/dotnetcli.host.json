@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json.schemastore.org/dotnetcli.host",
+  "symbolInfo": {
+    "Framework": {
+      "longName": "framework"
+    },
+    "IncludeAspire": {
+      "longName": "include-aspire",
+      "shortName": ""
+    },
+    "IncludeOtel": {
+      "longName": "include-otel",
+      "shortName": ""
+    }
+  },
+  "usageExamples": [
+    "--include-aspire",
+    "--include-otel",
+    "--framework net8.0"
+  ]
+}

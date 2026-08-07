@@ -4,23 +4,12 @@ namespace TemporalCommunity.Templates.Tests;
 
 /// <summary>
 /// Builds and runs a small harness console app that references the generated
-/// <c>temporal-worker</c> project via <c>ProjectReference</c> and calls its
-/// <c>TemporalConnection.Resolve</c> directly — the same "reference the generated project from a
-/// separate harness assembly" mechanism <see cref="SharedTemporalConnectionResolverHarness"/> uses
-/// for <c>temporal-solution</c>'s analogous <c>SharedTemporalConnection</c> helper. A
-/// <c>ProjectReference</c> (rather than loading the built assembly via reflection) guarantees the
-/// harness and the generated project share the exact same
-/// <c>Temporalio.Client.TemporalClientConnectOptions</c> type identity, since both resolve
-/// <c>Temporalio</c> through the same MSBuild build graph.
+/// <c>temporal-solution</c> Shared project via <c>ProjectReference</c> and calls its
+/// <c>SharedTemporalConnection.Resolve</c> directly. Mirrors
+/// <see cref="TemporalConnectionResolverHarness"/>'s approach for <c>temporal-worker</c>.
 /// </summary>
-internal static class TemporalConnectionResolverHarness
+internal static class SharedTemporalConnectionResolverHarness
 {
-    /// <summary>
-    /// Instantiates <c>temporal-worker</c> (default Framework/IncludeOtel — this template's
-    /// TemporalConnection.cs content does not vary with either symbol), generates a harness project
-    /// that references it, runs all five precedence scenarios in one process, and returns the
-    /// parsed results.
-    /// </summary>
     public static async Task<IReadOnlyDictionary<string, TemporalConnectionResolverResult>> RunAllScenariosAsync()
     {
         var targetDirectory = TestFixtures.CreateTempDirectory();
@@ -28,13 +17,13 @@ internal static class TemporalConnectionResolverHarness
         var harnessDirectory = TestFixtures.CreateTempDirectory();
         try
         {
-            const string targetName = "TemporalConnectionHarnessTarget";
-            await TemporalWorkerTestHelper.InstantiateAsync(
-                targetName, "net10.0", includeOtel: false, targetDirectory, settingsDirectory)
+            const string targetName = "SharedConnectionHarnessTarget";
+            await TemporalSolutionTestHelper.InstantiateAsync(
+                targetName, "net10.0", includeAspire: false, includeOtel: false, targetDirectory, settingsDirectory)
                 .ConfigureAwait(false);
 
-            var targetCsprojPath = Path.Combine(targetDirectory, $"{targetName}.csproj");
-            Assert.True(File.Exists(targetCsprojPath));
+            var sharedCsprojPath = Path.Combine(targetDirectory, $"{targetName}.Shared", $"{targetName}.Shared.csproj");
+            Assert.True(File.Exists(sharedCsprojPath));
 
             await File.WriteAllTextAsync(
                 Path.Combine(harnessDirectory, "Harness.csproj"),
@@ -50,7 +39,7 @@ internal static class TemporalConnectionResolverHarness
                     <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.0" />
                   </ItemGroup>
                   <ItemGroup>
-                    <ProjectReference Include="{targetCsprojPath}" />
+                    <ProjectReference Include="{sharedCsprojPath}" />
                   </ItemGroup>
                 </Project>
                 """).ConfigureAwait(false);
@@ -58,7 +47,7 @@ internal static class TemporalConnectionResolverHarness
             await File.WriteAllTextAsync(
                 Path.Combine(harnessDirectory, "Program.cs"),
                 TemporalConnectionResolverHarnessProgram.Build(
-                    resolverExpression: $"{targetName}.TemporalConnection.Resolve")).ConfigureAwait(false);
+                    resolverExpression: $"{targetName}.Shared.SharedTemporalConnection.Resolve")).ConfigureAwait(false);
 
             await DotnetCli.RunAsync(harnessDirectory, "build", "--nologo", "-c", "Debug").ConfigureAwait(false);
 

@@ -128,7 +128,12 @@ test-unit: build
         --no-build \
         --nologo \
         --logger "trx;LogFileName=durable-analyzer-codefixes.trx"
-    dotnet test "{{template_tests_dir}}" \
+    # MSBUILDDISABLENODEREUSE=1: these tests spawn many real "dotnet new"/"dotnet build"
+    # subprocesses; MSBuild's default node-reuse workers can outlive the subprocess that spawned
+    # them and keep its redirected stdout/stderr pipe open, which hangs
+    # Process.StandardOutput.ReadToEndAsync() indefinitely — confirmed empirically (a 15+ minute
+    # hang that resolved to a normal ~30s run once node reuse was disabled).
+    MSBUILDDISABLENODEREUSE=1 dotnet test "{{template_tests_dir}}" \
         --configuration "{{configuration}}" \
         --no-build \
         --nologo \
@@ -281,10 +286,11 @@ pack-verify: pack
     templates_hive=$(mktemp -d /tmp/templates-hive.XXXXXX)
     templates_scratch=$(mktemp -d /tmp/templates-scratch.XXXXXX)
     templates_worker_scratch=$(mktemp -d /tmp/templates-worker-scratch.XXXXXX)
+    templates_solution_scratch=$(mktemp -d /tmp/templates-solution-scratch.XXXXXX)
     # Single trap covering every scratch dir created in this recipe — a later `trap ... EXIT`
     # would replace this one rather than stack with it, leaking whichever dirs were registered
     # first.
-    trap 'rm -rf "$consumer_dir" "$analyzer_consumer_dir" "$consumer_packages" "$templates_hive" "$templates_scratch" "$templates_worker_scratch"' EXIT
+    trap 'rm -rf "$consumer_dir" "$analyzer_consumer_dir" "$consumer_packages" "$templates_hive" "$templates_scratch" "$templates_worker_scratch" "$templates_solution_scratch"' EXIT
     local_source=$(realpath "{{artifacts_dir}}")
     echo "==> Packed analyzer consumer test"
     printf '%s\n' \
@@ -473,6 +479,167 @@ pack-verify: pack
             echo "  ✓ temporal-worker (framework=$fw, include-otel=$otel) instantiated and built standalone"
         done
     done
+    echo "==> temporal-solution multi-project template checks"
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalSolution/.template.config/template.json' >/dev/null
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalSolution/.template.config/dotnetcli.host.json' >/dev/null
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalSolution/TemporalSolution.1.sln' >/dev/null
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalSolution/TemporalSolution.1.Worker/TemporalSolution.1.Worker.csproj' >/dev/null
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalSolution/TemporalSolution.1.Client/TemporalSolution.1.Client.csproj' >/dev/null
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalSolution/TemporalSolution.1.Shared/TemporalSolution.1.Shared.csproj' >/dev/null
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalSolution/TemporalSolution.1.Shared/SharedTemporalConnection.cs' >/dev/null
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalSolution/TemporalSolution.1.AppHost/AppHost.cs' >/dev/null
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalSolution/TemporalSolution.1.ServiceDefaults/Extensions.cs' >/dev/null
+    echo "  ✓ content/TemporalSolution/** present in nupkg"
+    mkdir -p "$templates_solution_scratch/dry-run"
+    (cd "$templates_solution_scratch/dry-run" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-solution -n DryRunSolution -o . --dry-run)
+    echo "  ✓ temporal-solution --dry-run reported without error"
+    # Full Framework x IncludeAspire x IncludeOtel matrix, built via the generated .sln (not just
+    # individual projects) to catch broken ProjectReference paths from sourceName substitution.
+    for fw in net8.0 net10.0; do
+        for aspire in false true; do
+            for otel in false true; do
+                combo_dir="$templates_solution_scratch/${fw}-aspire-${aspire}-otel-${otel}"
+                mkdir -p "$combo_dir"
+                name="Sol_${fw//./}_${aspire}_${otel}"
+                (cd "$combo_dir" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-solution -n "$name" -o . --framework "$fw" --include-aspire "$aspire" --include-otel "$otel")
+                [ -f "$combo_dir/$name.sln" ] || { echo "  ✗ ERROR: temporal-solution (framework=$fw, include-aspire=$aspire, include-otel=$otel) did not generate $name.sln" >&2; exit 1; }
+                if [ "$aspire" = "true" ]; then
+                    [ -d "$combo_dir/$name.AppHost" ] || { echo "  ✗ ERROR: expected $name.AppHost with include-aspire=true" >&2; exit 1; }
+                else
+                    [ -d "$combo_dir/$name.AppHost" ] && { echo "  ✗ ERROR: did not expect $name.AppHost with include-aspire=false" >&2; exit 1; }
+                fi
+                (cd "$combo_dir" && dotnet build "$name.sln" --nologo)
+                echo "  ✓ temporal-solution (framework=$fw, include-aspire=$aspire, include-otel=$otel) instantiated and built"
+            done
+        done
+    done
+    echo "==> temporal-solution XML-sensitive name check"
+    xml_name_dir="$templates_solution_scratch/xml-name"
+    mkdir -p "$xml_name_dir"
+    (cd "$xml_name_dir" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-solution -n "Contoso-Fulfillment&Orders" -o . --include-aspire)
+    grep -q 'Projects.Contoso_Fulfillment_Orders_Worker' "$xml_name_dir/Contoso-Fulfillment&Orders.AppHost/AppHost.cs"
+    grep -q 'Contoso-Fulfillment&amp;Orders.Shared' "$xml_name_dir/Contoso-Fulfillment&Orders.Worker/Contoso-Fulfillment&Orders.Worker.csproj"
+    (cd "$xml_name_dir" && dotnet build "Contoso-Fulfillment&Orders.sln" --nologo)
+    echo "  ✓ XML-sensitive project name sanitized correctly and built"
+
+# ── Template runtime smoke tests ────────────────────────────
+# Two separate recipes, each owning its own cleanup trap — a later `trap ... EXIT` within the same
+# shell replaces an earlier one rather than stacking with it (confirmed empirically), so combining
+# both branches into one recipe would let the second branch's trap silently drop the first
+# branch's cleanup on failure. Aggregated by `template-smoke-test` below.
+
+# [unix] Standalone (IncludeAspire=false) runtime smoke test: real temporal server + Worker + Client.
+[unix]
+template-smoke-test-standalone: pack
+    #!/usr/bin/env bash
+    set -euo pipefail
+    SERVER_PID=
+    WORKER_PID=
+    SCRATCH_DIR=
+    HIVE_DIR=
+    cleanup() {
+        # Confirmed empirically: `dotnet run` starts the compiled apphost executable as a *child*
+        # process rather than exec-replacing itself, so `kill "$WORKER_PID"` only kills the
+        # "dotnet run" wrapper and leaves the actual Worker process running indefinitely. Matching
+        # on $SCRATCH_DIR (a unique per-run temp path) catches both the wrapper and its child.
+        if [ -n "$SCRATCH_DIR" ]; then pkill -f "$SCRATCH_DIR" 2>/dev/null || true; fi
+        if [ -n "$WORKER_PID" ]; then kill "$WORKER_PID" 2>/dev/null || true; wait "$WORKER_PID" 2>/dev/null || true; fi
+        if [ -n "$SERVER_PID" ]; then kill "$SERVER_PID" 2>/dev/null || true; wait "$SERVER_PID" 2>/dev/null || true; fi
+        if [ -n "$SCRATCH_DIR" ]; then rm -rf "$SCRATCH_DIR"; fi
+        if [ -n "$HIVE_DIR" ]; then rm -rf "$HIVE_DIR"; fi
+    }
+    trap cleanup EXIT
+
+    echo "==> Starting temporal server"
+    temporal server start-dev >/tmp/template-smoke-server.log 2>&1 &
+    SERVER_PID=$!
+    ready=false
+    for _ in $(seq 1 30); do
+        if temporal operator cluster health >/dev/null 2>&1; then
+            ready=true
+            break
+        fi
+        sleep 1
+    done
+    [ "$ready" = true ] || { echo "  ✗ ERROR: temporal server did not become ready" >&2; cat /tmp/template-smoke-server.log >&2; exit 1; }
+    echo "  ✓ temporal server ready"
+
+    # realpath: on macOS /tmp is a symlink to /private/tmp — resolving it once here keeps every
+    # later reference (this script's own and any project-to-project paths dotnet new/MSBuild
+    # record internally) consistently spelled, avoiding NuGet/MSBuild treating the same file as
+    # two different projects when reached through different-looking (but identical) paths.
+    SCRATCH_DIR=$(realpath "$(mktemp -d /tmp/template-smoke-standalone.XXXXXX)")
+    HIVE_DIR=$(realpath "$(mktemp -d /tmp/template-smoke-standalone-hive.XXXXXX)")
+    export DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1
+    DOTNET_CLI_HOME="$HIVE_DIR" dotnet new install "{{artifacts_dir}}/TemporalCommunity.Templates.{{version}}.nupkg"
+    (cd "$SCRATCH_DIR" && DOTNET_CLI_HOME="$HIVE_DIR" dotnet new temporal-solution -n SmokeStandalone -o .)
+
+    echo "==> Starting worker"
+    (cd "$SCRATCH_DIR/SmokeStandalone.Worker" && dotnet run --nologo) >/tmp/template-smoke-worker.log 2>&1 &
+    WORKER_PID=$!
+    sleep 5
+
+    echo "==> Running client"
+    (cd "$SCRATCH_DIR/SmokeStandalone.Client" && dotnet run --nologo) | tee /tmp/template-smoke-client.log
+    grep -q 'Workflow result: Hello, world!' /tmp/template-smoke-client.log || {
+        echo "  ✗ ERROR: client did not report the expected workflow result" >&2
+        echo "worker log:" >&2; cat /tmp/template-smoke-worker.log >&2
+        exit 1
+    }
+    echo "  ✓ standalone smoke test: client received the expected workflow result"
+
+# [unix] Aspire (IncludeAspire=true) runtime smoke test: AppHost auto-provisions the dev server.
+[unix]
+template-smoke-test-aspire: pack
+    #!/usr/bin/env bash
+    set -euo pipefail
+    APPHOST=
+    SCRATCH_DIR=
+    HIVE_DIR=
+    cleanup() {
+        if [ -n "$APPHOST" ]; then aspire stop --apphost "$APPHOST" >/dev/null 2>&1 || true; fi
+        if [ -n "$SCRATCH_DIR" ]; then rm -rf "$SCRATCH_DIR"; fi
+        if [ -n "$HIVE_DIR" ]; then rm -rf "$HIVE_DIR"; fi
+    }
+    trap cleanup EXIT
+
+    # realpath: see the standalone recipe's comment — avoids a real, empirically-confirmed NuGet
+    # restore collision ("project.assets.json already exists") from /tmp vs. /private/tmp path
+    # spelling inconsistency on macOS.
+    SCRATCH_DIR=$(realpath "$(mktemp -d /tmp/template-smoke-aspire.XXXXXX)")
+    HIVE_DIR=$(realpath "$(mktemp -d /tmp/template-smoke-aspire-hive.XXXXXX)")
+    export DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1
+    DOTNET_CLI_HOME="$HIVE_DIR" dotnet new install "{{artifacts_dir}}/TemporalCommunity.Templates.{{version}}.nupkg"
+    (cd "$SCRATCH_DIR" && DOTNET_CLI_HOME="$HIVE_DIR" dotnet new temporal-solution -n SmokeAspire -o . --include-aspire)
+
+    apphost_candidates=$(find "$SCRATCH_DIR" -maxdepth 2 -name '*.AppHost.csproj')
+    if [ "$(printf '%s\n' "$apphost_candidates" | wc -l)" -ne 1 ] || [ -z "$apphost_candidates" ]; then
+        echo "  ✗ ERROR: expected exactly one *.AppHost.csproj, found: $apphost_candidates" >&2
+        exit 1
+    fi
+    APPHOST="$apphost_candidates"
+
+    # Required — confirmed empirically. `aspire start` launches each project resource via
+    # `dotnet run --no-build`, which assumes a prior build already produced a complete output
+    # (including transitive ProjectReference dependencies like ServiceDefaults) for every project;
+    # it does not build them itself. Without this, Client failed at runtime with
+    # "Could not load file or assembly 'SmokeAspire.ServiceDefaults'" even though restore succeeded.
+    solution_file=$(find "$SCRATCH_DIR" -maxdepth 1 -name '*.sln')
+    dotnet build "$solution_file" --nologo -m:1
+    aspire start --apphost "$APPHOST" --non-interactive
+    aspire wait temporal --apphost "$APPHOST" --status healthy
+    aspire wait worker --apphost "$APPHOST" --status up
+    aspire wait client --apphost "$APPHOST" --status down
+    aspire logs client --apphost "$APPHOST" --format Json > "$SCRATCH_DIR/client-logs.json"
+    grep -q 'Workflow result: Hello, world!' "$SCRATCH_DIR/client-logs.json" || {
+        echo "  ✗ ERROR: client logs did not contain the expected workflow result" >&2
+        cat "$SCRATCH_DIR/client-logs.json" >&2
+        exit 1
+    }
+    echo "  ✓ aspire smoke test: client logs contain the expected workflow result"
+
+# Runs both runtime smoke-test branches (each owns its own cleanup — see the comment above).
+template-smoke-test: template-smoke-test-standalone template-smoke-test-aspire
 
 # Push to NuGet.org (NUGET_API_KEY required; CI uses OIDC Trusted Publishing instead)
 publish-nuget: pack
