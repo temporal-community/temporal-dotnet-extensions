@@ -150,10 +150,12 @@ helper is planned for v1.1. The manual approach above is the supported path in v
 
 ## Reminders and Idempotency
 
-> **Registration note:** `ReminderDeliveryActivities` is automatically registered when you call
-> `AddDurableObjectWorkflows(...)`. You do **not** need to register it manually on the worker
-> builder. Adding a duplicate registration will cause an `InvalidOperationException` at worker
-> startup.
+`AddDurableObjectWorkflows(...)` registers the `ReminderDispatcher` workflow and installs the
+DurableObject interceptor. It does **not** register the reminder delivery activity. If the worker
+delivers reminders, register the activity separately with
+`AddDurableObjectReminderDelivery<ReminderDeliveryActivities>()` (or the overload that accepts an
+instance). See [the scheduling sample](../samples/03-scheduling/Program.cs). Do not register the
+same activity twice.
 
 Reminders are delivered at-least-once. The `ReminderDeliveryActivities.DeliverReminderAsync`
 activity derives a stable `UpdateId` from `ActivityExecutionContext.Current.Info.WorkflowId`
@@ -218,15 +220,17 @@ resolve). This is why `DeactivateAsync` sets the flag and returns rather than dr
 
 ## Versioning Quick Reference
 
-See [ADR 004](../adr/004-versioning-strategy.md) for the full versioning strategy.
+See [implementation requirements](DURABLE_OBJECTS.md#implementation-requirements) and
+[replay verification](MAINTAINER_VERIFICATION.md#replay-compatibility) before changing live workflows.
 
 | Change | Safe without patching? |
 |--------|----------------------|
 | Adding a new `[WorkflowQuery]` handler | Yes |
 | Adding a parameter with a default value | Yes (backward compatible) |
 | Internal logic changes (no handler rename) | Yes |
-| Adding / removing / renaming a `[WorkflowUpdate]` handler reachable by live objects | **No — use `Workflow.Patched`** |
-| Changing `OnBeforeContinueAsNewAsync` return shape | **No — use `Workflow.Patched`** |
+| Changing the Temporal command sequence emitted by a workflow handler | **No — use `Workflow.Patched`** |
+| Deploying a worker that lacks an update handler which may receive live updates | **No — use staged rollout or Worker Versioning** |
+| Changing `OnBeforeContinueAsNewAsync` return shape | **No — keep the new initializer compatible with old CAN arguments or migrate explicitly** |
 | Removing a handler that may be targeted by in-flight updates | **Forbidden without migration** |
 
 ---

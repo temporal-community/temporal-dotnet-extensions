@@ -66,21 +66,32 @@ internal sealed class SchedulingDemo : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Brief startup delay so the worker is ready before we create schedules.
-        await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken).ConfigureAwait(false);
+        try
+        {
+            // Brief startup delay so the worker is ready before we create schedules.
+            await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken).ConfigureAwait(false);
 
-        _logger.LogInformation("=== Scheduling Demo: Two Patterns ===");
-        _logger.LogInformation("");
+            _logger.LogInformation("=== Scheduling Demo: Two Patterns ===");
+            _logger.LogInformation("");
 
-        await RunReportGeneratorDemoAsync(stoppingToken).ConfigureAwait(false);
-        await RunSubscriptionTrackerDemoAsync(stoppingToken).ConfigureAwait(false);
+            await RunReportGeneratorDemoAsync(stoppingToken).ConfigureAwait(false);
+            await RunSubscriptionTrackerDemoAsync(stoppingToken).ConfigureAwait(false);
 
-        _logger.LogInformation("");
-        _logger.LogInformation("=== Demo complete. Check Temporal Web UI at http://localhost:8233 ===");
-        _logger.LogInformation("  Pattern 1 (Schedule): look for 'report-gen-*' executions — each tick gets a distinct ID");
-        _logger.LogInformation("  Pattern 2 (Reminder): look for 'subscription-tracker-demo' — one execution, count grows");
+            _logger.LogInformation("");
+            _logger.LogInformation("=== Demo complete. Check Temporal Web UI at http://localhost:8233 ===");
+            _logger.LogInformation("  Pattern 1 (Schedule): look for 'report-gen-*' executions — each tick gets a distinct ID");
+            _logger.LogInformation("  Pattern 2 (Reminder): look for 'subscription-tracker-demo' — one execution, count grows");
 
-        _lifetime.StopApplication();
+        }
+        catch (Exception error) when (!stoppingToken.IsCancellationRequested)
+        {
+            Environment.ExitCode = 1;
+            _logger.LogError(error, "Demo failed");
+        }
+        finally
+        {
+            _lifetime.StopApplication();
+        }
     }
 
     private async Task RunReportGeneratorDemoAsync(CancellationToken ct)
@@ -102,17 +113,25 @@ internal sealed class SchedulingDemo : BackgroundService
             scheduleOptions: new ScheduleOptions { TriggerImmediately = true },
             cancellationToken: ct).ConfigureAwait(false);
 
-        _logger.LogInformation("Schedule '{ScheduleId}' created. Waiting 5s for first tick...", scheduleId);
-        await Task.Delay(TimeSpan.FromSeconds(5), ct).ConfigureAwait(false);
+        try
+        {
+            _logger.LogInformation("Schedule '{ScheduleId}' created. Waiting 15s for repeated ticks...", scheduleId);
+            await Task.Delay(TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
 
-        var desc = await schedHandle.DescribeAsync().ConfigureAwait(false);
-        _logger.LogInformation("Schedule actions so far: {Count}", desc.Info.NumActions);
-        _logger.LogInformation("Each tick creates a workflow ID like: report-gen-2026-07-08T10:00:00Z");
+            var desc = await schedHandle.DescribeAsync().ConfigureAwait(false);
+            var executionIds = desc.Info.RecentActions
+                .Select(action => action.Action).OfType<ScheduleActionExecutionStartWorkflow>()
+                .Select(action => action.WorkflowId).Distinct(StringComparer.Ordinal).ToArray();
+            if (executionIds.Length < 2)
+                throw new InvalidOperationException("The schedule did not start two distinct report executions.");
 
-        // Clean up the schedule so it does not linger after the demo.
-        await schedHandle.DeleteAsync().ConfigureAwait(false);
-        _logger.LogInformation("Schedule deleted.");
-        _logger.LogInformation("");
+            _logger.LogInformation("Schedule actions so far: {Count}", desc.Info.NumActions);
+            foreach (var id in executionIds) _logger.LogInformation("Report execution: {ObjectId}", id);
+        }
+        finally
+        {
+            await schedHandle.DeleteAsync().ConfigureAwait(false);
+        }
     }
 
     private async Task RunSubscriptionTrackerDemoAsync(CancellationToken ct)
@@ -144,17 +163,19 @@ internal sealed class SchedulingDemo : BackgroundService
             scheduleOptions: new ScheduleOptions { TriggerImmediately = true },
             cancellationToken: ct).ConfigureAwait(false);
 
-        _logger.LogInformation("Reminder schedule '{ScheduleId}' created. Waiting 15s for 2 deliveries...", scheduleId);
-        await Task.Delay(TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
+        try
+        {
+            _logger.LogInformation("Reminder schedule '{ScheduleId}' created. Waiting 15s for repeated deliveries...", scheduleId);
+            await Task.Delay(TimeSpan.FromSeconds(15), ct).ConfigureAwait(false);
 
-        // Query the SAME execution — count should have grown across ticks.
-        var count = tracker.GetReminderCount();
-        _logger.LogInformation("Reminder count on canonical execution: {Count} (should be >= 1)", count);
-        _logger.LogInformation("In Temporal Web UI, '{ObjectId}' shows ONE execution with multiple update events", trackerObjectId);
-
-        // Clean up.
-        await schedHandle.DeleteAsync().ConfigureAwait(false);
-        await tracker.DeactivateAsync().ConfigureAwait(false);
-        _logger.LogInformation("Schedule deleted and tracker deactivated.");
+            var count = tracker.GetReminderCount();
+            if (count < 2) throw new InvalidOperationException("The tracker did not receive multiple reminders.");
+            _logger.LogInformation("Reminder count on canonical execution: {Count}", count);
+        }
+        finally
+        {
+            await schedHandle.DeleteAsync().ConfigureAwait(false);
+            await tracker.DeactivateAsync().ConfigureAwait(false);
+        }
     }
 }

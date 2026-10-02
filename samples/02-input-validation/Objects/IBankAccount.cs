@@ -5,7 +5,7 @@ namespace TemporalCommunity.DurableObjects.InputValidation.Objects;
 
 /// <summary>
 /// Contract for a bank account DurableObject.
-/// Demonstrates deposit, withdraw with balance validation, and explicit deactivation.
+/// Demonstrates deposits, guarded withdrawals, and domain closure.
 /// </summary>
 [Workflow]
 public interface IBankAccount : IDurableObject
@@ -26,7 +26,7 @@ public interface IBankAccount : IDurableObject
     [WorkflowQuery]
     decimal GetBalance();
 
-    /// <summary>Closes the account. Subsequent operations will throw DurableObjectNotActiveException.</summary>
+    /// <summary>Closes the account. Subsequent deposit and withdrawal updates fail.</summary>
     [WorkflowUpdate]
     Task CloseAccountAsync();
 }

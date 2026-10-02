@@ -22,7 +22,10 @@ var builder = Host.CreateApplicationBuilder(args);
 // ---------------------------------------------------------------------------
 builder.Services.AddOpenTelemetry()
     .WithTracing(tracing => tracing
-        .AddSource("Temporalio")
+        .AddSource(
+            TracingInterceptor.ClientSource.Name,
+            TracingInterceptor.WorkflowsSource.Name,
+            TracingInterceptor.ActivitiesSource.Name)
         .AddConsoleExporter());
 
 // ---------------------------------------------------------------------------
@@ -42,13 +45,11 @@ const string taskQueue = "observability-tq";
 builder.Services.AddDurableObjects(taskQueue);
 
 // ---------------------------------------------------------------------------
-// Worker — attach the TracingInterceptor to the worker as well so workflow
-// tasks and activity invocations produce spans on the server side.
-// AddDurableObjectWorkflows adds DurableObjectWorkerInterceptor automatically;
-// ConfigureOptions prepends the TracingInterceptor before it runs.
+// The SDK inherits worker interceptors from the client. Registering another
+// TracingInterceptor here would duplicate workflow and activity spans.
+// AddDurableObjectWorkflows appends the Durable Objects policy interceptor.
 // ---------------------------------------------------------------------------
 builder.Services.AddHostedTemporalWorker(taskQueue)
-    .ConfigureOptions(opts => opts.Interceptors = [new TracingInterceptor()])
     .AddDurableObjectWorkflows(Assembly.GetExecutingAssembly())
     .AddSingletonActivities<SensorActivities>();
 
@@ -88,11 +89,14 @@ internal sealed class DemoService : BackgroundService
         {
             Console.WriteLine("=== Observability: TemperatureSensor Demo ===");
             Console.WriteLine("OTel spans will appear below — look for 'StartWorkflow',");
-            Console.WriteLine("'ExecuteUpdate', and 'RunActivity' span names.");
+            Console.WriteLine("'UpdateWithStartWorkflow', and 'RunActivity' span names.");
             Console.WriteLine();
 
             var sensor = await _factory.GetOrCreateAsync<ITemperatureSensor>(
                 "sensor-kitchen", stoppingToken).ConfigureAwait(false);
+
+            var initialCount = await _factory.QueryDurableObjectAsync<int>(
+                "sensor-kitchen", "GetReadingCount", cancellationToken: stoppingToken).ConfigureAwait(false);
 
             double[] readings = [21.5, 22.1, 23.0];
             foreach (var temp in readings)
@@ -110,13 +114,16 @@ internal sealed class DemoService : BackgroundService
                 .ConfigureAwait(false);
 
             Console.WriteLine();
-            Console.WriteLine($"Total readings: {count} (expected 3)");
+            if (count != initialCount + 3 || latest != 23.0)
+                throw new InvalidOperationException("The sensor did not retain the expected readings.");
+            Console.WriteLine($"Total readings: {count} (started at {initialCount}; added 3)");
             Console.WriteLine($"Latest reading: {latest}°C (expected 23.0)");
             Console.WriteLine();
-            Console.WriteLine("Demo complete. Press Ctrl+C to exit.");
+            Console.WriteLine("Demo complete. The host will stop; the sensor remains open.");
         }
         catch (Exception ex)
         {
+            Environment.ExitCode = 1;
             _logger.LogError(ex, "Demo failed");
         }
         finally

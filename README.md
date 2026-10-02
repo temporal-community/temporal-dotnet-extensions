@@ -133,13 +133,11 @@ just run-sample
 | [Temporal .NET analyzers](docs/ANALYZERS.md) | General and Durable Objects rules, code fixes, generated clients, and installation. |
 | [Durable Objects concepts](docs/DURABLE_OBJECTS.md) | When to use the runtime, identity, lifecycle, state, scheduling, NativeAOT, and API overview. |
 | [Durable Objects getting started](docs/GETTING_STARTED.md) | Reading path from first object through production readiness. |
-| [Required Durable Objects patterns](docs/BOILERPLATE.md) | Workflow entry point, registration, activities, and scheduled-object requirements. |
 | [Failure handling](docs/FAILURE_HANDLING.md) | Exception taxonomy, authorization, lifecycle failures, and reminder idempotency. |
 | [Tier model](docs/TIER_MODEL.md) | Resident execution, explicit deactivation, and Continue-as-New behavior. |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Common runtime, configuration, and NativeAOT problems. |
 | [Maintainer verification](docs/MAINTAINER_VERIFICATION.md) | Replay, packaging, NativeAOT, benchmark, scale, and release checks. |
 | [Templates](docs/TEMPLATES.md) | `dotnet new` item templates for workflows, activities, and payload converters; project templates for workers and Worker+Client+Shared solutions (with optional .NET Aspire orchestration). |
-| [Architecture decisions](adr/) | Lasting design decisions and compatibility constraints. |
 
 ## Building from source
 
@@ -165,7 +163,7 @@ Windows and runs package verification on Ubuntu.
 2. Run `dotnet tool restore` once.
 3. Before opening a pull request, run `just ci` on Linux/macOS or `just test-unit` on Windows.
 4. Add or update meaningful tests and user documentation when behavior changes.
-5. Record architectural decisions and compatibility constraints in [`adr/`](adr/).
+5. Document current behavior and compatibility constraints in the relevant guide under `docs/`.
 
 ## License
 

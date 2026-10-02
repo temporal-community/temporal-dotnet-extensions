@@ -55,7 +55,7 @@ services.AddHostedTemporalWorker("my-task-queue")
         .AddDurableObjectWorkflows(typeof(Counter).Assembly);
 ```
 
-**See also:** [`docs/BOILERPLATE.md`](BOILERPLATE.md) — "`[WorkflowRun]` Is Required on Every Concrete Class"
+**See also:** [implementation requirements](DURABLE_OBJECTS.md#implementation-requirements) — implementation requirements
 
 ---
 
@@ -111,7 +111,7 @@ public async Task IncrementAsync()
 Activity implementations and worker setup code that run outside `WorkflowInstance` are exempt and
 may use `ConfigureAwait(false)`.
 
-**See also:** [`docs/BOILERPLATE.md`](BOILERPLATE.md) — "`ConfigureAwait(true)` Is Load-Bearing"
+**See also:** [implementation requirements](DURABLE_OBJECTS.md#implementation-requirements) — workflow scheduler requirements
 
 ---
 
@@ -210,7 +210,7 @@ public class DailyReport : DurableObjectBase, IDailyReport
 }
 ```
 
-**See also:** [`docs/BOILERPLATE.md`](BOILERPLATE.md) — "Scheduled Objects"; [`docs/TIER_MODEL.md`](TIER_MODEL.md) — "Tier 3 — Explicit Deactivation"
+**See also:** [implementation requirements](DURABLE_OBJECTS.md#implementation-requirements) — scheduled-object requirements; [`docs/TIER_MODEL.md`](TIER_MODEL.md) — "Tier 3 — Explicit Deactivation"
 
 ---
 
@@ -230,14 +230,14 @@ The exception chain looks like:
 
 ```
 WorkflowUpdateFailedException
-  └─ Cause: ApplicationFailureException
+  └─ InnerException: ApplicationFailureException
                └─ ErrorType: "UnhandledUpdateException" (framework-wrapped)
                   or your own errorType if you threw ApplicationFailureException directly
 ```
 
 **Fix:**
 
-Catch `WorkflowUpdateFailedException` and inspect `.Cause` for the inner `ApplicationFailureException`:
+Catch `WorkflowUpdateFailedException` and inspect `.InnerException` for the inner `ApplicationFailureException`:
 
 ```csharp
 // Wrong — catches too broadly; loses error type information
@@ -247,7 +247,7 @@ try
 }
 catch (Exception ex)
 {
-    // ex is WorkflowUpdateFailedException; the actual details are in ex.Cause
+    // ex is WorkflowUpdateFailedException; the actual details are in ex.InnerException
     Console.WriteLine(ex.Message); // not useful
 }
 
@@ -257,7 +257,7 @@ try
     await counter.IncrementAsync();
 }
 catch (WorkflowUpdateFailedException ex)
-    when (ex.Cause is ApplicationFailureException appEx)
+    when (ex.InnerException is ApplicationFailureException appEx)
 {
     // appEx.ErrorType is "UnhandledUpdateException", "Unauthorized",
     // "ObjectDeactivating", or your own errorType
@@ -324,40 +324,30 @@ If generation is not an option, disable NativeAOT for that application:
 The generated client-dispatch path is verified under NativeAOT in CI. This does not imply that
 reflection-based worker discovery or every Temporal SDK feature is NativeAOT-compatible.
 
-**See also:** [`adr/009-generated-asynchronous-clients.md`](../adr/009-generated-asynchronous-clients.md)
+**See also:** [generated clients and NativeAOT](DURABLE_OBJECTS.md#generated-clients-and-nativeaot)
 
 ---
 
-## Symptom: "My reminders fire twice"
+## Symptom: "Reminder delivery activity is not registered"
 
-**Cause:** `ReminderDeliveryActivities` was registered manually AND `AddDurableObjectWorkflows`
-auto-registers it. Both registrations are active, and the activity runs twice per tick.
-
-`AddDurableObjectWorkflows` always registers `ReminderDispatcher` (the workflow that dispatches
-reminder ticks) and installs the interceptor. If you also manually called
-`AddSingletonActivities<ReminderDeliveryActivities>()` or registered the activities in your
-worker setup, the activity is registered twice on the same worker. Temporal can dispatch two
-instances of the same activity per tick.
+**Cause:** `AddDurableObjectWorkflows` registers the `ReminderDispatcher` workflow and installs
+the DurableObject interceptor, but it does not register the reminder delivery activity.
 
 **Fix:**
 
-Remove the manual `ReminderDeliveryActivities` registration. `AddDurableObjectWorkflows` handles
-it:
+Register the delivery activity separately on the worker that executes reminder dispatches:
 
 ```csharp
-// Wrong — double registration; reminders may fire twice
+// AddDurableObjectWorkflows adds the dispatcher workflow and interceptor.
+// AddDurableObjectReminderDelivery adds the activity that sends each reminder.
 services.AddHostedTemporalWorker("my-task-queue")
         .AddDurableObjectWorkflows(typeof(MyObject).Assembly)
-        .AddSingletonActivities<ReminderDeliveryActivities>(); // <-- remove this
-
-// Right — AddDurableObjectWorkflows registers everything needed
-services.AddHostedTemporalWorker("my-task-queue")
-        .AddDurableObjectWorkflows(typeof(MyObject).Assembly);
+        .AddDurableObjectReminderDelivery<ReminderDeliveryActivities>();
 ```
 
-To verify: check your worker setup for any call to `AddSingletonActivities`,
-`AddTransientActivities`, or `AddActivities` that includes `ReminderDeliveryActivities` or
-registers it via assembly scanning. Remove those registrations.
+The activity type must be registered in DI before the worker starts. Do not also register the same
+activity through `AddSingletonActivities`, `AddTransientActivities`, `AddActivities`, or assembly
+scanning.
 
 **See also:** [`docs/FAILURE_HANDLING.md`](FAILURE_HANDLING.md) — "Reminders and Idempotency"; [`samples/03-scheduling`](../samples/03-scheduling/)
 
@@ -410,10 +400,10 @@ just doctor
 
 - Check the [`docs/FAILURE_HANDLING.md`](FAILURE_HANDLING.md) — covers all exception types the
   framework produces and when.
-- Check [`docs/BOILERPLATE.md`](BOILERPLATE.md) — covers the four patterns that are easy to get
+- Check [implementation requirements](DURABLE_OBJECTS.md#implementation-requirements) — covers the implementation requirements that are easy to get
   wrong on first use.
 - Run `just test-unit` — unit tests do not require a Temporal server and are a fast sanity check
   that your build is correct.
 - Open a [GitHub Issue](https://github.com/temporal-community/temporal-dotnet-extensions/issues) with the
-  error message, the exception chain (including `ex.Cause`), and which version of the library you
+  error message, the exception chain (including `ex.InnerException`), and which version of the library you
   are using.

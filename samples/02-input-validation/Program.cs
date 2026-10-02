@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Temporalio.Extensions.Hosting;
+using Temporalio.Exceptions;
 using TemporalCommunity.DurableObjects;
 using TemporalCommunity.DurableObjects.InputValidation.Objects;
 
@@ -35,7 +36,7 @@ await builder.Build().RunAsync();
 ///   1. Happy path: deposit and withdraw.
 ///   2. Validator rejection: withdraw more than balance.
 ///   3. Missing object: query an object that was never created.
-///   4. Deactivated object: close the account then query it.
+///   4. Domain closure: close the account and reject later mutations.
 /// </summary>
 internal sealed class DemoService : BackgroundService
 {
@@ -66,7 +67,8 @@ internal sealed class DemoService : BackgroundService
             // Scenario 1: Happy path
             // ------------------------------------------------------------------
             Console.WriteLine("--- Scenario 1: Happy path ---");
-            var account = await _factory.GetOrCreateAsync<IBankAccount>("acct-001", stoppingToken)
+            var accountId = $"account/{Guid.NewGuid():N}";
+            var account = await _factory.GetOrCreateAsync<IBankAccount>(accountId, stoppingToken)
                 .ConfigureAwait(false);
 
             await account.DepositAsync(500m).ConfigureAwait(false);
@@ -76,7 +78,8 @@ internal sealed class DemoService : BackgroundService
             Console.WriteLine("Withdrew $200.");
 
             var balance = await _factory.QueryDurableObjectAsync<decimal>(
-                "acct-001", "GetBalance", cancellationToken: stoppingToken).ConfigureAwait(false);
+                accountId, "GetBalance", cancellationToken: stoppingToken).ConfigureAwait(false);
+            if (balance != 300m) throw new InvalidOperationException("Unexpected account balance.");
             Console.WriteLine($"Balance: {balance:C} (expected $300)");
             Console.WriteLine();
 
@@ -87,9 +90,9 @@ internal sealed class DemoService : BackgroundService
             try
             {
                 await account.WithdrawAsync(400m).ConfigureAwait(false);
-                Console.WriteLine("ERROR: expected exception was not thrown.");
+                throw new InvalidOperationException("Expected rejection was not received.");
             }
-            catch (Exception ex)
+            catch (WorkflowUpdateFailedException ex)
             {
                 Console.WriteLine($"Caught expected exception: {ex.GetType().Name}");
                 Console.WriteLine($"  Message: {ex.Message}");
@@ -107,7 +110,7 @@ internal sealed class DemoService : BackgroundService
                 _ = await _factory.QueryDurableObjectAsync<decimal>(
                     "nonexistent-account", "GetBalance", cancellationToken: stoppingToken)
                     .ConfigureAwait(false);
-                Console.WriteLine("ERROR: expected exception was not thrown.");
+                throw new InvalidOperationException("Expected rejection was not received.");
             }
             catch (DurableObjectNotFoundException ex)
             {
@@ -117,32 +120,32 @@ internal sealed class DemoService : BackgroundService
             Console.WriteLine();
 
             // ------------------------------------------------------------------
-            // Scenario 4: Deactivated object
-            // Close the account, then try to query it.
+            // Scenario 4: Domain closure
+            // The workflow remains open so its closed state rejects later mutations.
             // ------------------------------------------------------------------
-            Console.WriteLine("--- Scenario 4: Deactivated object ---");
+            Console.WriteLine("--- Scenario 4: Closed account ---");
             await account.CloseAccountAsync().ConfigureAwait(false);
             Console.WriteLine("Account closed.");
-
-            // Give Temporal visibility a moment to reflect the closed status.
-            await Task.Delay(TimeSpan.FromMilliseconds(500), stoppingToken).ConfigureAwait(false);
-
             try
             {
-                _ = await _factory.QueryDurableObjectAsync<decimal>(
-                    "acct-001", "GetBalance", cancellationToken: stoppingToken).ConfigureAwait(false);
-                Console.WriteLine("ERROR: expected exception was not thrown.");
+                await account.DepositAsync(50m).ConfigureAwait(false);
+                throw new InvalidOperationException("Expected rejection was not received.");
             }
-            catch (DurableObjectNotActiveException ex)
+            catch (WorkflowUpdateFailedException ex)
             {
-                Console.WriteLine($"Caught {nameof(DurableObjectNotActiveException)}: {ex.Message}");
+                Console.WriteLine($"Caught expected closed-account failure: {ex.GetType().Name}: {ex.Message}");
             }
 
+            var finalBalance = await _factory.QueryDurableObjectAsync<decimal>(
+                accountId, "GetBalance", cancellationToken: stoppingToken).ConfigureAwait(false);
+            if (finalBalance != 300m) throw new InvalidOperationException("Rejected updates changed the balance.");
+
             Console.WriteLine();
-            Console.WriteLine("Demo complete. Press Ctrl+C to exit.");
+            Console.WriteLine("Demo complete. The host will stop; the closed account remains queryable.");
         }
         catch (Exception ex)
         {
+            Environment.ExitCode = 1;
             _logger.LogError(ex, "Demo failed");
         }
         finally

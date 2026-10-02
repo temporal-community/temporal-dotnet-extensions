@@ -23,7 +23,7 @@ public abstract class DurableObjectTestBase
     /// <summary>The shared test environment fixture.</summary>
     protected WorkflowEnvironmentFixture Fixture { get; }
 
-    /// <summary>The Temporal client connected to the in-process test server.</summary>
+    /// <summary>The Temporal client connected to the SDK-managed local server.</summary>
     protected ITemporalClient Client => Fixture.Env.Client;
 
     /// <summary>Receives the shared fixture from xUnit's collection fixture mechanism.</summary>

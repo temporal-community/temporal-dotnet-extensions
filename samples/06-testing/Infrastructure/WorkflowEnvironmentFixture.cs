@@ -1,10 +1,10 @@
 // WorkflowEnvironmentFixture.cs — Shared Temporal test server for the entire test session.
 //
 // Why StartLocalAsync()?
-//   WorkflowEnvironment.StartLocalAsync() boots an in-process Temporal test server that runs
+//   WorkflowEnvironment.StartLocalAsync() launches a local Temporal dev-server subprocess that runs
 //   the full Temporal state machine without requiring an external Docker container or running
 //   Temporal CLI. This is the standard approach for integration testing .NET workflow code.
-//   The binary is downloaded once (cached in ~/.temporalio) on first run.
+//   The binary is downloaded and cached by the SDK on first run.
 //
 // Why ICollectionFixture?
 //   Starting the local server takes ~2-4 seconds. ICollectionFixture<T> shares one instance

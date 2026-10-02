@@ -9,7 +9,7 @@ execution is covered separately by `tests/TemporalCommunity.DurableObjects.Gener
 
 ## What this project shows
 
-- How to start an in-process Temporal server for tests
+- How to start an local Temporal server process for tests
 - How to isolate tests with unique task queues
 - How to create and exercise a DurableObject end-to-end
 - How to use `GetOrCreateAsync` to guarantee the object exists before asserting
@@ -19,21 +19,21 @@ execution is covered separately by `tests/TemporalCommunity.DurableObjects.Gener
 
 ## Running the tests
 
-No Temporal server or Docker required. The in-process test server handles everything.
+No Temporal server or Docker required. The SDK-managed local server handles everything.
 
 ```bash
 dotnet test samples/06-testing
 ```
 
-On the first run the Temporal test binary is downloaded and cached in `~/.temporalio`.
+On the first run the Temporal test binary is downloaded and cached in the SDK's configured cache.
 Subsequent runs use the cached binary and start in seconds.
 
 ## Why `WorkflowEnvironment.StartLocalAsync()`?
 
-`WorkflowEnvironment.StartLocalAsync()` boots a full Temporal state machine in-process —
-same server behavior as production Temporal, but no external process required. This gives
-tests genuine durable-execution semantics (replay, persistence within the test session,
-update-with-start atomicity) without the overhead of Docker or a running Temporal CLI server.
+`WorkflowEnvironment.StartLocalAsync()` launches a real Temporal dev-server subprocess on local
+ports. No pre-existing server or Docker is required. It uses real time rather than time skipping,
+and persistence lasts for the test environment's lifetime. This exercises RPCs and workflow
+execution; it does not establish production capacity or persistence across server restarts.
 
 The fixture is shared across all tests via `ICollectionFixture<WorkflowEnvironmentFixture>`,
 so the server starts once per test run rather than once per test class.
@@ -66,7 +66,7 @@ the caller:
 ```
 WorkflowUpdateFailedException
   .InnerException: ApplicationFailureException   (Temporal's serialized failure)
-    .InnerException: ArgumentException / InvalidOperationException / ...   (your original exception)
+    .InnerException: ApplicationFailureException   (ErrorType names the original CLR type)
 ```
 
 Tests that verify handler validation should catch `WorkflowUpdateFailedException` and assert
@@ -77,14 +77,15 @@ var ex = await Assert.ThrowsAsync<WorkflowUpdateFailedException>(
     () => todoList.AddItemAsync(string.Empty));
 
 var appFailure = Assert.IsType<ApplicationFailureException>(ex.InnerException);
-Assert.IsType<ArgumentException>(appFailure.InnerException);
+var cause = Assert.IsType<ApplicationFailureException>(appFailure.InnerException);
+Assert.Equal("ArgumentException", cause.ErrorType);
 ```
 
 ## How to extend this pattern for your own DurableObjects
 
 1. Create your interface (`IMyObject : IDurableObject`) with `[WorkflowUpdate]` and `[WorkflowQuery]` methods.
-2. Create your concrete class extending `DurableObjectBase` and implementing your interface.
-3. Add `[WorkflowRun] public Task RunAsync() => DurableObjectRunAsync();` to the concrete class.
+2. Create your class extending `DurableObjectBase<TState>` with an optional typed snapshot constructor.
+3. Add a `[WorkflowRun]` method with the same optional snapshot signature, delegating to `DurableObjectRunAsync()`.
 4. Copy `Infrastructure/` into your test project (or reference it from a shared test utilities project).
 5. Derive your test class from `DurableObjectTestBase`.
 6. In each test: `UniqueTaskQueue()` → `TestHelper.CreateWorker(...)` → `TestHelper.CreateFactory(...)` → exercise and assert.

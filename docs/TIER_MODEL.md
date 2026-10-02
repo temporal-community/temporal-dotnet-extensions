@@ -56,7 +56,7 @@ any other handler. The run loop exits after the current handler returns.
 
 This is required for **scheduled objects** (objects used with `CreateDurableObjectScheduleAsync`).
 Without self-deactivation, `ScheduleOverlapPolicy.Skip` suppresses subsequent ticks while the
-first execution remains open. See [BOILERPLATE.md](BOILERPLATE.md) under "Scheduled Objects."
+first execution remains open. See [implementation requirements](DURABLE_OBJECTS.md#implementation-requirements).
 
 ```csharp
 protected override Task OnActivateAsync()

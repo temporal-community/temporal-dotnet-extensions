@@ -1,6 +1,6 @@
 // TodoListIntegrationTests.cs — Integration tests for the TodoList DurableObject.
 //
-// These tests exercise the full Temporal stack end-to-end using an in-process test server.
+// These tests exercise the full Temporal stack end-to-end using an SDK-managed local server process.
 // They are the canonical reference for how to test DurableObject state mutations and queries.
 //
 // Test structure pattern used throughout:

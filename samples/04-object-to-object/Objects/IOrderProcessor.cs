@@ -12,14 +12,18 @@ namespace TemporalCommunity.DurableObjects.ObjectToObject.Objects;
 public interface IOrderProcessor : IDurableObject
 {
     /// <summary>
-    /// Places an order for the given product and quantity.
+    /// Places or retries an order. The caller must reuse the same stable order ID for retries.
     /// Internally calls FulfillmentActivities.ReserveInventoryAsync, which uses IDurableObjectFactory
     /// to update the InventoryTracker.
     /// </summary>
     [WorkflowUpdate]
-    Task PlaceOrderAsync(string productId, int quantity);
+    Task PlaceOrderAsync(string orderId, string productId, int quantity);
 
     /// <summary>Returns the history of placed orders as "{productId}:{quantity}" strings.</summary>
     [WorkflowQuery]
     IReadOnlyList<string> GetOrderHistory();
+
+    /// <summary>Returns Pending, Fulfilled, or Failed for an order ID, or null if unknown.</summary>
+    [WorkflowQuery]
+    string? GetOrderStatus(string orderId);
 }

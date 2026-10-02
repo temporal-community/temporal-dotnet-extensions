@@ -7,45 +7,40 @@ using TemporalCommunity.DurableObjects;
 
 namespace TemporalCommunity.DurableObjects.InputValidation.Objects;
 
+public sealed record BankAccountState(decimal Balance, bool Closed);
+
 /// <summary>
 /// A bank account DurableObject that demonstrates input validation patterns:
 /// - ArgumentException thrown inside an update for invalid input
 /// - [WorkflowUpdateValidator] for pre-update balance checks
-/// - Deactivate() for self-termination
+/// - Typed state carried through Continue-as-New, including permanent domain closure
 /// </summary>
 [Workflow]
-public sealed class BankAccount : DurableObjectBase, IBankAccount
+public sealed class BankAccount : DurableObjectBase<BankAccountState>, IBankAccount
 {
-    private readonly string _accountId;
-    private decimal _balance;
-
-    /// <summary>
-    /// Constructor. Temporal calls this with the workflow start arguments.
-    /// </summary>
     [WorkflowInit]
-    public BankAccount(string accountId, decimal initialBalance = 0)
-    {
-        _accountId = accountId;
-        _balance = initialBalance;
-    }
+    public BankAccount(DurableObjectSnapshot<BankAccountState>? snapshot = null)
+        : base(snapshot, new BankAccountState(0, false)) { }
 
     /// <summary>
     /// Required boilerplate. Temporal does not inherit [WorkflowRun].
     /// </summary>
     [WorkflowRun]
-    public Task RunAsync() => DurableObjectRunAsync();
+    public Task RunAsync(DurableObjectSnapshot<BankAccountState>? snapshot = null) =>
+        DurableObjectRunAsync();
 
     /// <inheritdoc/>
     [WorkflowUpdate]
     public Task DepositAsync(decimal amount)
     {
+        EnsureOpen();
         // Validate input inside the update — the exception is surfaced to the caller.
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(amount, nameof(amount));
 
-        _balance += amount;
+        State = State with { Balance = State.Balance + amount };
         Workflow.Logger.LogInformation(
             "Account {Id}: deposited {Amount:C}, new balance {Balance:C}",
-            _accountId, amount, _balance);
+            WorkflowId, amount, State.Balance);
         return Task.CompletedTask;
     }
 
@@ -57,15 +52,16 @@ public sealed class BankAccount : DurableObjectBase, IBankAccount
     [WorkflowUpdateValidator(nameof(WithdrawAsync))]
     public void ValidateWithdrawAsync(decimal amount)
     {
+        EnsureOpen();
         if (amount <= 0)
         {
             throw new ArgumentOutOfRangeException(nameof(amount), "Withdrawal amount must be positive.");
         }
 
-        if (_balance < amount)
+        if (State.Balance < amount)
         {
             throw new InvalidOperationException(
-                $"Insufficient funds: balance is {_balance:C}, cannot withdraw {amount:C}.");
+                $"Insufficient funds: balance is {State.Balance:C}, cannot withdraw {amount:C}.");
         }
     }
 
@@ -74,24 +70,33 @@ public sealed class BankAccount : DurableObjectBase, IBankAccount
     public Task WithdrawAsync(decimal amount)
     {
         // The validator (ValidateWithdrawAsync) already ensured balance >= amount.
-        _balance -= amount;
+        State = State with { Balance = State.Balance - amount };
         Workflow.Logger.LogInformation(
             "Account {Id}: withdrew {Amount:C}, new balance {Balance:C}",
-            _accountId, amount, _balance);
+            WorkflowId, amount, State.Balance);
         return Task.CompletedTask;
     }
 
     /// <inheritdoc/>
     [WorkflowQuery]
-    public decimal GetBalance() => _balance;
+    public decimal GetBalance() => State.Balance;
 
     /// <inheritdoc/>
     [WorkflowUpdate]
     public Task CloseAccountAsync()
     {
-        Workflow.Logger.LogInformation("Account {Id}: closing.", _accountId);
-        // Deactivate() sets the internal flag so the run loop exits after this handler returns.
-        Deactivate();
+        State = State with { Closed = true };
+        Workflow.Logger.LogInformation("Account {Id}: closed.", WorkflowId);
+        // Keep the execution open so this domain state remains authoritative if callers
+        // subsequently address the same workflow ID.
         return Task.CompletedTask;
+    }
+
+    private void EnsureOpen()
+    {
+        if (State.Closed)
+        {
+            throw new InvalidOperationException("The account is closed and cannot be changed.");
+        }
     }
 }

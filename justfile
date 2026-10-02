@@ -157,7 +157,7 @@ coverage-report:
         -reporttypes:Html
 
 # [unix] Run a single named test with wall-clock timeout (hang detection)
-# Example: just test-logged "ScenarioG_CanonicalObjectReminder"
+# Example: just test-logged "ReminderDeliveryTests"
 [unix]
 test-logged TEST: build
     #!/usr/bin/env bash
@@ -183,29 +183,29 @@ test-logged TEST: build
         exit "$status"
     fi
 
-# [unix] Run each integration scenario individually to isolate failures
+# [unix] Run each integration test class individually to isolate failures
 [unix]
 test-individual: build
     #!/usr/bin/env bash
     set -euo pipefail
     failed=()
-    scenarios=( A B C D E F G H I J K L M N O P )
-    for s in "${scenarios[@]}"; do
-        echo "── Scenario $s ──"
+    for test_file in "{{integration_tests_dir}}"/Behaviors/*Tests.cs "{{integration_tests_dir}}"/*Tests.cs; do
+        test_class="$(basename "$test_file" .cs)"
+        echo "── $test_class ──"
         if dotnet test "{{integration_tests_dir}}" \
             --configuration "{{configuration}}" \
             --no-build \
             --nologo \
-            --filter "FullyQualifiedName~Scenario${s}_" \
+            --filter "FullyQualifiedName~.${test_class}." \
             --logger "console;verbosity=normal" 2>&1; then
-            echo "✓ Scenario $s PASS"
+            echo "✓ $test_class PASS"
         else
-            echo "✗ Scenario $s FAIL"
-            failed+=("$s")
+            echo "✗ $test_class FAIL"
+            failed+=("$test_class")
         fi
     done
     if [ ${#failed[@]} -gt 0 ]; then
-        echo "Failed scenarios: ${failed[*]}"
+        echo "Failed test classes: ${failed[*]}"
         exit 1
     fi
 
@@ -214,6 +214,10 @@ test-individual: build
 # Run BenchmarkDotNet benchmarks (NOT in CI — requires Release build and quiet machine)
 bench:
     dotnet run --project "{{benchmarks_dir}}" --configuration Release -- --filter "*"
+
+# Run the opt-in Temporal load harness. Example: just load-test --objects 16 --concurrency 32
+load-test *ARGS:
+    dotnet run --project benchmarks/TemporalCommunity.DurableObjects.LoadTests --configuration Release -- {{ARGS}}
 
 # ── Pack + Publish ─────────────────────────────────────────
 

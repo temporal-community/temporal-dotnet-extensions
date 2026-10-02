@@ -61,63 +61,81 @@ internal sealed class ObjectToObjectDemo : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Brief startup delay so the worker is ready before we issue updates.
-        await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken).ConfigureAwait(false);
-
-        _logger.LogInformation("=== Object-to-Object Communication Demo ===");
-        _logger.LogInformation("Pattern: OrderProcessor -> Activity Bridge -> InventoryTracker");
-        _logger.LogInformation("");
-
-        // Step 1: Ensure both objects exist.
-        var order = await _factory.GetOrCreateAsync<IOrderProcessor>("order-001", stoppingToken)
-            .ConfigureAwait(false);
-        var inventory = await _factory.GetOrCreateAsync<IInventoryTracker>("global-inventory", stoppingToken)
-            .ConfigureAwait(false);
-
-        _logger.LogInformation("Objects created: OrderProcessor 'order-001', InventoryTracker 'global-inventory'");
-        _logger.LogInformation("");
-
-        // Step 2: Place two orders. Each PlaceOrderAsync call:
-        //   1. Appends to order history (in the OrderProcessor workflow)
-        //   2. Schedules FulfillmentActivities.ReserveInventoryAsync as a Temporal activity
-        //   3. That activity calls InventoryTracker.ReserveStockAsync via IDurableObjectFactory
-        _logger.LogInformation("Placing order: 5x widget-a ...");
-        await order.PlaceOrderAsync("widget-a", 5).ConfigureAwait(false);
-
-        _logger.LogInformation("Placing order: 3x gadget-b ...");
-        await order.PlaceOrderAsync("gadget-b", 3).ConfigureAwait(false);
-
-        _logger.LogInformation("");
-
-        // Step 3: Query OrderProcessor history.
-        var history = order.GetOrderHistory();
-        _logger.LogInformation("Order history ({Count} orders):", history.Count);
-        foreach (var entry in history)
+        try
         {
-            _logger.LogInformation("  - {Entry}", entry);
+            // Brief startup delay so the worker is ready before we issue updates.
+            await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken).ConfigureAwait(false);
+
+            _logger.LogInformation("=== Object-to-Object Communication Demo ===");
+            _logger.LogInformation("Pattern: OrderProcessor -> Activity Bridge -> InventoryTracker");
+            _logger.LogInformation("");
+
+            // Step 1: Ensure both objects exist.
+            var order = await _factory.GetOrCreateAsync<IOrderProcessor>("order-001", stoppingToken)
+                .ConfigureAwait(false);
+            var inventory = await _factory.GetOrCreateAsync<IInventoryTracker>("global-inventory", stoppingToken)
+                .ConfigureAwait(false);
+
+            _logger.LogInformation("Objects created: OrderProcessor 'order-001', InventoryTracker 'global-inventory'");
+            _logger.LogInformation("");
+
+            // Step 2: Place two orders with stable IDs. A caller retry must reuse that ID:
+            //   1. Marks the order Pending in OrderProcessor
+            //   2. Schedules FulfillmentActivities.ReserveInventoryAsync as a Temporal activity
+            //   3. That activity calls InventoryTracker.ReserveStockAsync via IDurableObjectFactory
+            _logger.LogInformation("Placing order: 5x widget-a ...");
+            await order.PlaceOrderAsync("order-001-widget-a", "widget-a", 5).ConfigureAwait(false);
+
+            _logger.LogInformation("Placing order: 3x gadget-b ...");
+            await order.PlaceOrderAsync("order-001-gadget-b", "gadget-b", 3).ConfigureAwait(false);
+
+            _logger.LogInformation("");
+
+            // Repeat one confirmed request with the same ID to demonstrate deduplication.
+            await order.PlaceOrderAsync("order-001-widget-a", "widget-a", 5).ConfigureAwait(false);
+
+            // Step 3: Query OrderProcessor history.
+            var history = order.GetOrderHistory();
+            _logger.LogInformation("Order history ({Count} orders):", history.Count);
+            foreach (var entry in history)
+            {
+                _logger.LogInformation("  - {Entry}", entry);
+            }
+
+            _logger.LogInformation("");
+
+            // Step 4: Query InventoryTracker reserved counts.
+            // These were updated by the activity bridge — the orders caused the inventory to change.
+            var widgetReserved = inventory.GetReservedQuantity("widget-a");
+            var gadgetReserved = inventory.GetReservedQuantity("gadget-b");
+            if (history.Count != 2 || widgetReserved != 5 || gadgetReserved != 3 ||
+                order.GetOrderStatus("order-001-widget-a") != "Fulfilled")
+                throw new InvalidOperationException("Order retry changed inventory or lost order state.");
+
+            _logger.LogInformation("InventoryTracker reserved quantities:");
+            _logger.LogInformation("  widget-a: {Count} units reserved", widgetReserved);
+            _logger.LogInformation("  gadget-b: {Count} units reserved", gadgetReserved);
+
+            _logger.LogInformation("");
+            _logger.LogInformation("=== Demo complete ===");
+            _logger.LogInformation("Trace the call chain in Temporal Web UI at http://localhost:8233:");
+            _logger.LogInformation("  OrderProcessor 'order-001': workflow history shows 2x ActivityTaskScheduled events");
+            _logger.LogInformation("  InventoryTracker 'global-inventory': workflow history shows 2x UpdateAccepted events");
+            _logger.LogInformation("The activity bridge makes DO-to-DO calls durable, retryable, and auditable.");
+
+            // Clean up.
+            await order.DeactivateAsync().ConfigureAwait(false);
+            await inventory.DeactivateAsync().ConfigureAwait(false);
+
         }
-
-        _logger.LogInformation("");
-
-        // Step 4: Query InventoryTracker reserved counts.
-        // These were updated by the activity bridge — the orders caused the inventory to change.
-        var widgetReserved = inventory.GetReservedQuantity("widget-a");
-        var gadgetReserved = inventory.GetReservedQuantity("gadget-b");
-        _logger.LogInformation("InventoryTracker reserved quantities:");
-        _logger.LogInformation("  widget-a: {Count} units reserved", widgetReserved);
-        _logger.LogInformation("  gadget-b: {Count} units reserved", gadgetReserved);
-
-        _logger.LogInformation("");
-        _logger.LogInformation("=== Demo complete ===");
-        _logger.LogInformation("Trace the call chain in Temporal Web UI at http://localhost:8233:");
-        _logger.LogInformation("  OrderProcessor 'order-001': workflow history shows 2x ActivityTaskScheduled events");
-        _logger.LogInformation("  InventoryTracker 'global-inventory': workflow history shows 2x UpdateAccepted events");
-        _logger.LogInformation("The activity bridge makes DO-to-DO calls durable, retryable, and auditable.");
-
-        // Clean up.
-        await order.DeactivateAsync().ConfigureAwait(false);
-        await inventory.DeactivateAsync().ConfigureAwait(false);
-
-        _lifetime.StopApplication();
+        catch (Exception error) when (!stoppingToken.IsCancellationRequested)
+        {
+            Environment.ExitCode = 1;
+            _logger.LogError(error, "Demo failed");
+        }
+        finally
+        {
+            _lifetime.StopApplication();
+        }
     }
 }

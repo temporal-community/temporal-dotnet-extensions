@@ -55,9 +55,11 @@ var counter = await factory.GetOrCreateAsync<IPageCounter>("home");
 All I/O must go through activities. Inside a `[WorkflowUpdate]` or `[WorkflowRun]` method:
 
 ```csharp
+var nextCount = State.Count + 1;
 await ExecuteActivityAsync(
-    (PageCounterActivities act) => act.RecordViewAsync(WorkflowId, State.Count),
+    (PageCounterActivities act) => act.RecordViewAsync(WorkflowId, nextCount),
     new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(10) });
+State = State with { Count = nextCount };
 ```
 
 `DurableObjectBase` supplies this helper so workflow code does not need to access the static
@@ -84,3 +86,7 @@ public Task RunAsync(DurableObjectSnapshot<PageCounterState>? snapshot = null) =
 ```csharp
 var count = await client.GetCountAsync();
 ```
+
+Each run adds three views to `home` and checks the increase. The object remains open after the
+host stops; rerunning against the same server demonstrates retained state. The activity only logs
+a simulated write. Activities that perform real I/O need their own idempotency policy.

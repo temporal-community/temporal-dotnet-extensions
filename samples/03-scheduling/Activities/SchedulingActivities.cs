@@ -26,7 +26,7 @@ public sealed class SchedulingActivities
 
     /// <summary>
     /// Simulates notifying a subscriber. deliveryId can be used as an idempotency key when
-    /// calling downstream systems that support it (e.g., sending exactly-once emails).
+    /// calling downstream systems that honor idempotency keys. This demo only logs a simulated send.
     /// </summary>
     [Activity]
     public Task NotifySubscriberAsync(string email, string deliveryId)

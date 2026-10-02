@@ -41,16 +41,17 @@ public sealed class FulfillmentActivities
     /// This is safe here because activities run outside the workflow determinism constraint.
     /// </summary>
     [Activity]
-    public async Task ReserveInventoryAsync(string productId, int quantity)
+    public async Task ReserveInventoryAsync(string orderId, string productId, int quantity)
     {
         _logger.LogInformation(
-            "[Activity] Reserving {Quantity} units of '{ProductId}' in global inventory", quantity, productId);
+            "[Activity] Reserving order {OrderId}: {Quantity} units of '{ProductId}' in global inventory",
+            orderId, quantity, productId);
 
         // Get a proxy for the canonical global inventory tracker.
         // Get() does not issue an RPC — the proxy is a local dispatch facade.
         // The actual RPC happens when we call ReserveStockAsync below.
         var inventory = _factory.Get<IInventoryTracker>("global-inventory");
-        await inventory.ReserveStockAsync(productId, quantity).ConfigureAwait(false);
+        await inventory.ReserveStockAsync(orderId, productId, quantity).ConfigureAwait(false);
 
         _logger.LogInformation(
             "[Activity] Reservation complete for {Quantity}x '{ProductId}'", quantity, productId);

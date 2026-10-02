@@ -38,10 +38,10 @@ await builder.Build().RunAsync();
 
 /// <summary>
 /// Drives the getting-started demo scenario:
-///   1. Obtain a proxy (no RPC).
+///   1. Obtain a generated client (no RPC).
 ///   2. Ensure the object exists (GetOrCreateAsync issues the RPC).
 ///   3. Increment three times.
-///   4. Query the count via the async factory method.
+///   4. Query the count via the generated async method.
 ///   5. List all active counters.
 /// </summary>
 internal sealed class DemoService : BackgroundService
@@ -84,6 +84,8 @@ internal sealed class DemoService : BackgroundService
             Console.WriteLine($"Ensured 'home' counter exists.");
             Console.WriteLine();
 
+            var initialCount = await client.GetCountAsync().ConfigureAwait(false);
+
             // Step 3: Send three increments. Each is a WorkflowUpdate RPC.
             for (var i = 1; i <= 3; i++)
             {
@@ -95,7 +97,8 @@ internal sealed class DemoService : BackgroundService
 
             // Step 4: Query through the generated asynchronous method.
             var count = await client.GetCountAsync().ConfigureAwait(false);
-            Console.WriteLine($"Current view count for 'home': {count}");
+            if (count != initialCount + 3) throw new InvalidOperationException("The counter did not retain all three updates.");
+            Console.WriteLine($"Current view count for 'home': {count} (started at {initialCount})");
             Console.WriteLine();
 
             // Step 5: List all active PageCounter executions.
@@ -108,10 +111,11 @@ internal sealed class DemoService : BackgroundService
             }
 
             Console.WriteLine();
-            Console.WriteLine("Demo complete. Press Ctrl+C to exit.");
+            Console.WriteLine("Demo complete. The host will stop; the counter remains open.");
         }
         catch (Exception ex)
         {
+            Environment.ExitCode = 1;
             _logger.LogError(ex, "Demo failed");
         }
         finally

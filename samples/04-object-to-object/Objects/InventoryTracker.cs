@@ -6,6 +6,10 @@ using TemporalCommunity.DurableObjects;
 
 namespace TemporalCommunity.DurableObjects.ObjectToObject.Objects;
 
+public sealed record Reservation(string ProductId, int Quantity);
+public sealed record InventoryState(
+    Dictionary<string, int> Reserved, Dictionary<string, Reservation> Reservations);
+
 /// <summary>
 /// Tracks reserved inventory quantities per product.
 /// This object is the TARGET of the activity bridge pattern: it receives updates from
@@ -15,27 +19,45 @@ namespace TemporalCommunity.DurableObjects.ObjectToObject.Objects;
 /// The activity acts as the non-deterministic boundary that safely crosses object boundaries.
 /// </summary>
 [Workflow]
-public sealed class InventoryTracker : DurableObjectBase, IInventoryTracker
+public sealed class InventoryTracker : DurableObjectBase<InventoryState>, IInventoryTracker
 {
-    // productId -> total reserved quantity
-    private readonly Dictionary<string, int> _reserved = new();
+    [WorkflowInit]
+    public InventoryTracker(DurableObjectSnapshot<InventoryState>? snapshot = null)
+        : base(snapshot, new InventoryState(new(), new())) { }
 
     [WorkflowRun]
-    public Task RunAsync() => DurableObjectRunAsync();
+    public Task RunAsync(DurableObjectSnapshot<InventoryState>? snapshot = null) => DurableObjectRunAsync();
 
     /// <inheritdoc/>
     [WorkflowUpdate]
-    public Task ReserveStockAsync(string productId, int quantity)
+    public Task ReserveStockAsync(string operationId, string productId, int quantity)
     {
-        _reserved[productId] = _reserved.GetValueOrDefault(productId, 0) + quantity;
+        ArgumentException.ThrowIfNullOrWhiteSpace(operationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(productId);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(quantity);
+
+        if (State.Reservations.TryGetValue(operationId, out var existing))
+        {
+            if (existing != new Reservation(productId, quantity))
+            {
+                throw new InvalidOperationException(
+                    $"Operation ID '{operationId}' was already used for a different reservation.");
+            }
+
+            return Task.CompletedTask;
+        }
+
+        // Carry the operation key alongside the totals so retries remain deduplicated after rollover.
+        State.Reservations.Add(operationId, new Reservation(productId, quantity));
+        State.Reserved[productId] = State.Reserved.GetValueOrDefault(productId, 0) + quantity;
         Workflow.Logger.LogInformation(
             "InventoryTracker: reserved {Quantity} units of '{ProductId}' (total reserved: {Total})",
-            quantity, productId, _reserved[productId]);
+            quantity, productId, State.Reserved[productId]);
         return Task.CompletedTask;
     }
 
     /// <inheritdoc/>
     [WorkflowQuery]
     public int GetReservedQuantity(string productId) =>
-        _reserved.GetValueOrDefault(productId, 0);
+        State.Reserved.GetValueOrDefault(productId, 0);
 }

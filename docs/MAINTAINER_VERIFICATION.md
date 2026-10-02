@@ -25,11 +25,13 @@ not claim NativeAOT support for reflection-based worker discovery or every Tempo
 
 ## Benchmarks and scale
 
-`just bench` compares generated-client creation with the compatibility proxy path using
+`just bench` compares client creation and query dispatch for generated and compatibility clients using
 BenchmarkDotNet. Run benchmarks on a quiet, dedicated machine and compare results from the same
 hardware and runtime; the repository intentionally has no machine-dependent CI threshold.
+Use [the load runner](../benchmarks/README.md) to exercise actual RPCs, history growth, and rollover
+under traffic; the BenchmarkDotNet query transport is deliberately stubbed.
 
-`ScenarioP_ConcurrentObjectScale` exercises 50 independent object IDs concurrently and asserts
+`ObjectIsolationTests` exercises 50 independent object IDs concurrently and asserts
 state isolation. It is a bounded correctness regression test, not a throughput benchmark.
 
 ## Release packages

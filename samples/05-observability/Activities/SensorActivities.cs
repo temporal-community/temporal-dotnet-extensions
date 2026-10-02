@@ -15,14 +15,14 @@ public sealed class SensorActivities
     public SensorActivities(ILogger<SensorActivities> logger) => _logger = logger;
 
     /// <summary>
-    /// Persists a sensor reading. In production this would write to a time-series database.
+    /// Logs a simulated write. In production this would write to a time-series database.
     /// The activity runs outside the workflow scheduler, so regular async I/O is safe.
     /// </summary>
     [Activity]
     public Task PersistReadingAsync(string sensorId, double celsius)
     {
         _logger.LogInformation(
-            "[Activity] Persisted reading for sensor {SensorId}: {Celsius}°C",
+            "[Activity] Simulated persistence of reading for sensor {SensorId}: {Celsius}°C",
             sensorId, celsius);
         return Task.CompletedTask;
     }

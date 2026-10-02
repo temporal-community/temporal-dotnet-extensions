@@ -43,14 +43,15 @@ public sealed class PageCounter : DurableObjectBase<PageCounterState>, IPageCoun
     [WorkflowUpdate]
     public async Task IncrementAsync()
     {
-        State = State with { Count = State.Count + 1 };
+        var nextCount = State.Count + 1;
         // Activities are the only place that can do I/O.
         // StartToCloseTimeout is required on every ActivityOptions.
         // Awaiting the DurableObjectBase helper keeps the call site concise; never use
         // ConfigureAwait(false) in workflow code.
         await ExecuteActivityAsync(
-            (PageCounterActivities act) => act.RecordViewAsync(WorkflowId, State.Count),
+            (PageCounterActivities act) => act.RecordViewAsync(WorkflowId, nextCount),
             new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(10) });
+        State = State with { Count = nextCount };
     }
 
     /// <inheritdoc/>

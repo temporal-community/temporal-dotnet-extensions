@@ -7,20 +7,23 @@ using TemporalCommunity.DurableObjects.Observability.Activities;
 
 namespace TemporalCommunity.DurableObjects.Observability.Objects;
 
+public sealed record SensorState(double LatestReading, int ReadingCount);
+
 /// <summary>
 /// IoT temperature sensor DurableObject.
 /// Demonstrates OpenTelemetry integration: each activity call produces a child span inside
 /// the workflow task span, visible in trace output.
 /// </summary>
 [Workflow]
-public sealed class TemperatureSensor : DurableObjectBase, ITemperatureSensor
+public sealed class TemperatureSensor : DurableObjectBase<SensorState>, ITemperatureSensor
 {
-    private double _latestReading;
-    private int _readingCount;
+    [WorkflowInit]
+    public TemperatureSensor(DurableObjectSnapshot<SensorState>? snapshot = null)
+        : base(snapshot, new SensorState(0, 0)) { }
 
     /// <summary>Required boilerplate — [WorkflowRun] is not inherited.</summary>
     [WorkflowRun]
-    public Task RunAsync() => DurableObjectRunAsync();
+    public Task RunAsync(DurableObjectSnapshot<SensorState>? snapshot = null) => DurableObjectRunAsync();
 
     /// <inheritdoc/>
     protected override Task OnActivateAsync()
@@ -34,12 +37,6 @@ public sealed class TemperatureSensor : DurableObjectBase, ITemperatureSensor
     [WorkflowUpdate]
     public async Task RecordReadingAsync(double celsius)
     {
-        _latestReading = celsius;
-        _readingCount++;
-
-        Workflow.Logger.LogInformation(
-            "Recording reading #{Count}: {Celsius}°C", _readingCount, celsius);
-
         // The activity call produces a child OTel span. In Jaeger you will see:
         //   workflow-task
         //     └─ update:RecordReadingAsync
@@ -47,13 +44,17 @@ public sealed class TemperatureSensor : DurableObjectBase, ITemperatureSensor
         await ExecuteActivityAsync(
             (SensorActivities act) => act.PersistReadingAsync(WorkflowId, celsius),
             new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(10) });
+
+        State = new SensorState(celsius, State.ReadingCount + 1);
+        Workflow.Logger.LogInformation(
+            "Recorded reading #{Count}: {Celsius}°C", State.ReadingCount, celsius);
     }
 
     /// <inheritdoc/>
     [WorkflowQuery]
-    public double GetLatestReading() => _latestReading;
+    public double GetLatestReading() => State.LatestReading;
 
     /// <inheritdoc/>
     [WorkflowQuery]
-    public int GetReadingCount() => _readingCount;
+    public int GetReadingCount() => State.ReadingCount;
 }
