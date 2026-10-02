@@ -8,7 +8,6 @@ set windows-shell := ["pwsh.exe", "-NoLogo", "-Command"]
 solution              := "TemporalDurableObjects.slnx"
 configuration         := "Release"
 artifacts_dir         := "artifacts/packages"
-coverage_dir          := "artifacts/coverage"
 unit_tests_dir        := "tests/TemporalCommunity.DurableObjects.Tests"
 integration_tests_dir := "tests/TemporalCommunity.DurableObjects.IntegrationTests"
 general_analyzer_tests_dir := "tests/TemporalCommunity.Extensions.Analyzers.Tests"
@@ -18,7 +17,6 @@ general_codefix_tests_dir := "tests/TemporalCommunity.Extensions.Analyzers.CodeF
 durable_codefix_tests_dir := "tests/TemporalCommunity.DurableObjects.Analyzers.CodeFixes.Tests"
 template_tests_dir    := "tests/TemporalCommunity.Templates.Tests"
 benchmarks_dir        := "benchmarks/TemporalCommunity.DurableObjects.Benchmarks"
-aot_smoke_dir         := "tests/smoke/GeneratedClientAot"
 # Backticks avoid shell()'s extra positional command argument under PowerShell. Just does not
 # interpolate variables in backticks, so query the same MSBuild property using shell-portable $().
 version := `dotnet tool run minver --tag-prefix '' --default-pre-release-identifiers "$(dotnet msbuild Directory.Build.props -getProperty:MinVerDefaultPreReleaseIdentifiers)"`
@@ -28,13 +26,6 @@ version := `dotnet tool run minver --tag-prefix '' --default-pre-release-identif
 # List all recipes
 default:
     @just --list
-
-# Show project info (version, solution, configuration, artifacts path)
-info:
-    @echo "Solution:      {{solution}}"
-    @echo "Version:       {{version}}"
-    @echo "Configuration: {{configuration}}"
-    @echo "Artifacts:     {{artifacts_dir}}"
 
 # Check required tools and services are available
 doctor:
@@ -49,57 +40,47 @@ doctor:
     @echo "==> minver-cli (local tool)"
     dotnet tool run minver --version
 
-# Publish and execute the generated-client smoke application under NativeAOT.
-[unix]
-aot-verify:
-    dotnet publish "{{aot_smoke_dir}}/GeneratedClientAot.csproj" --configuration Release --nologo --output "{{aot_smoke_dir}}/bin/aot-publish"
-    "{{aot_smoke_dir}}/bin/aot-publish/GeneratedClientAot"
-
 # ── Clean ─────────────────────────────────────────────────
 
 # [unix] Remove all build outputs, test results, and artifacts
 [unix]
-clean: clean-source clean-tests
-    rm -rf "{{artifacts_dir}}" "{{coverage_dir}}"
+clean: _clean-source _clean-tests
+    rm -rf "{{artifacts_dir}}"
 
 # [windows] Remove all build outputs, test results, and artifacts
 [windows]
-clean: clean-source clean-tests
-    Remove-Item -Path "{{artifacts_dir}}", "{{coverage_dir}}" -Recurse -Force -ErrorAction SilentlyContinue
+clean: _clean-source _clean-tests
+    Remove-Item -Path "{{artifacts_dir}}" -Recurse -Force -ErrorAction SilentlyContinue
 
 # [unix] Remove every bin/obj directory, including out-of-solution projects and all configurations
 [unix]
-clean-source:
+_clean-source:
     find . -path './.git' -prune -o -type d \( -name bin -o -name obj \) -prune -exec rm -rf {} +
 
 # [windows] Remove every bin/obj directory, including out-of-solution projects and all configurations
 [windows]
-clean-source:
+_clean-source:
     Get-ChildItem -Path . -Directory -Recurse -Force | Where-Object { $_.Name -in @("bin", "obj") } | Sort-Object { $_.FullName.Length } -Descending | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 
 # [unix] Remove stale .trx and .coverage files from every test project
 [unix]
-clean-tests:
+_clean-tests:
     find tests -type f \( -name "*.trx" -o -name "*.coverage" \) -delete
 
 # [windows] Remove stale .trx and .coverage files from every test project
 [windows]
-clean-tests:
+_clean-tests:
     Get-ChildItem -Path tests -Include "*.trx", "*.coverage" -File -Recurse | Remove-Item -Force
 
 # ── Build ─────────────────────────────────────────────────
 
-# Restore NuGet packages
-restore:
+# Restore NuGet packages before a build
+_restore:
     dotnet restore "{{solution}}"
 
 # Build in Release mode
-build: restore
+build: _restore
     dotnet build "{{solution}}" --configuration "{{configuration}}" --no-restore --nologo
-
-# Build in Debug mode
-build-debug: restore
-    dotnet build "{{solution}}" --configuration Debug --no-restore --nologo
 
 # ── Test ──────────────────────────────────────────────────
 
@@ -130,85 +111,6 @@ test-integration: build
 # Run all tests (unit + integration)
 test: test-unit test-integration
 
-# Run tests matching a filter expression
-# Example: just test-filter "FullyQualifiedName~ScenarioA"
-[env("MSBUILDDISABLENODEREUSE", "1")]
-test-filter FILTER: build
-    dotnet test "{{solution}}" \
-        --configuration "{{configuration}}" \
-        --no-build \
-        --nologo \
-        --filter "{{FILTER}}"
-
-# Run unit tests with code coverage (Coverlet XPlat)
-test-coverage: build
-    dotnet test "{{unit_tests_dir}}" \
-        --configuration "{{configuration}}" \
-        --no-build \
-        --nologo \
-        --collect "XPlat Code Coverage" \
-        --results-directory "{{coverage_dir}}"
-
-# Generate HTML coverage report from last test-coverage run
-coverage-report:
-    dotnet tool run reportgenerator \
-        -reports:"{{coverage_dir}}/**/coverage.cobertura.xml" \
-        -targetdir:"{{coverage_dir}}/report" \
-        -reporttypes:Html
-
-# [unix] Run a single named test with wall-clock timeout (hang detection)
-# Example: just test-logged "ReminderDeliveryTests"
-[unix]
-test-logged TEST: build
-    #!/usr/bin/env bash
-    set -euo pipefail
-    log="{{coverage_dir}}/{{TEST}}-$(date +%Y%m%d%H%M%S).log"
-    mkdir -p "{{coverage_dir}}"
-    echo "Running {{TEST}} — log: $log"
-    if ! command -v timeout >/dev/null 2>&1; then
-        echo "ERROR: GNU coreutils 'timeout' required. On macOS: brew install coreutils"
-        exit 1
-    fi
-    if timeout 120 dotnet test "{{integration_tests_dir}}" \
-        --configuration "{{configuration}}" \
-        --no-build \
-        --nologo \
-        --filter "FullyQualifiedName~{{TEST}}" \
-        --logger "console;verbosity=detailed" \
-        2>&1 | tee "$log"; then
-        echo "✓ PASS"
-    else
-        status=$?
-        echo "✗ FAIL — see $log"
-        exit "$status"
-    fi
-
-# [unix] Run each integration test class individually to isolate failures
-[unix]
-test-individual: build
-    #!/usr/bin/env bash
-    set -euo pipefail
-    failed=()
-    for test_file in "{{integration_tests_dir}}"/Behaviors/*Tests.cs "{{integration_tests_dir}}"/*Tests.cs; do
-        test_class="$(basename "$test_file" .cs)"
-        echo "── $test_class ──"
-        if dotnet test "{{integration_tests_dir}}" \
-            --configuration "{{configuration}}" \
-            --no-build \
-            --nologo \
-            --filter "FullyQualifiedName~.${test_class}." \
-            --logger "console;verbosity=normal" 2>&1; then
-            echo "✓ $test_class PASS"
-        else
-            echo "✗ $test_class FAIL"
-            failed+=("$test_class")
-        fi
-    done
-    if [ ${#failed[@]} -gt 0 ]; then
-        echo "Failed test classes: ${failed[*]}"
-        exit 1
-    fi
-
 # ── Benchmarks ────────────────────────────────────────────
 
 # Run BenchmarkDotNet benchmarks (NOT in CI — requires Release build and quiet machine)
@@ -221,11 +123,11 @@ load-test *ARGS:
 
 # ── Pack + Publish ─────────────────────────────────────────
 
-# Pack the library into .nupkg + .snupkg (MinVer derives version from git tags)
-pack: build pack-no-build
-
-# Pack already-built outputs, for CI jobs that build the solution before verification
-pack-no-build:
+# Pack all packages. Pass --no-build when a preceding CI step already built the solution.
+[unix]
+[arg("NO_BUILD", long="no-build", value="true")]
+pack NO_BUILD="false":
+    if [ "{{NO_BUILD}}" != "true" ]; then just build; fi
     mkdir -p "{{artifacts_dir}}"
     dotnet pack "src/TemporalCommunity.DurableObjects" \
         --configuration "{{configuration}}" \
@@ -248,17 +150,13 @@ pack-no-build:
         --nologo \
         --output "{{artifacts_dir}}"
 
-# Verify the packed nupkg: confirm net10.0 + net8.0 + netstandard2.1 lib/ folders exist,
-# then compile a netstandard2.1 consumer project against the local package.
+# Pack and verify all packages; use --no-build after an existing solution build (for example, CI).
+[arg("NO_BUILD", long="no-build", value="true")]
 [unix]
-pack-verify: pack pack-verify-output
-
-# Verify package outputs from an earlier solution build without rebuilding every project.
-[unix]
-pack-verify-prebuilt: pack-no-build pack-verify-output
+pack-verify NO_BUILD="false": (pack NO_BUILD) _pack-verify-output
 
 [unix]
-pack-verify-output:
+_pack-verify-output:
     #!/usr/bin/env bash
     set -euo pipefail
     pkg=$(ls "{{artifacts_dir}}"/TemporalCommunity.DurableObjects.{{version}}.nupkg 2>/dev/null | head -1)
@@ -538,6 +436,7 @@ pack-verify-output:
 # to pick up the change; `--force` replaces the previous install of the same package.
 
 # Pack, then install TemporalCommunity.Templates into your default `dotnet new` hive
+[unix]
 template-install: pack
     dotnet new install "{{artifacts_dir}}/TemporalCommunity.Templates.{{version}}.nupkg" --force
 
@@ -554,7 +453,7 @@ template-uninstall:
 # [unix] Standalone (IncludeAspire=false) runtime smoke test: real temporal server + Worker + Client.
 # Only one standalone smoke run per host may use the default server port at a time.
 [unix]
-template-smoke-test-standalone: pack
+_template-smoke-test-standalone: pack
     #!/usr/bin/env bash
     set -euo pipefail
     SERVER_PID=
@@ -635,7 +534,7 @@ template-smoke-test-standalone: pack
 
 # [unix] Aspire (IncludeAspire=true) runtime smoke test: AppHost auto-provisions the dev server.
 [unix]
-template-smoke-test-aspire: pack
+_template-smoke-test-aspire: pack
     #!/usr/bin/env bash
     set -euo pipefail
     APPHOST=
@@ -684,86 +583,15 @@ template-smoke-test-aspire: pack
     echo "  ✓ aspire smoke test: client logs contain the expected workflow result"
 
 # Runs both runtime smoke-test branches (each owns its own cleanup — see the comment above).
-template-smoke-test: template-smoke-test-standalone template-smoke-test-aspire
-
-# Push to NuGet.org (NUGET_API_KEY required; CI uses OIDC Trusted Publishing instead)
-publish-nuget: pack
-    dotnet nuget push "{{artifacts_dir}}/TemporalCommunity.DurableObjects.{{version}}.nupkg" \
-        --source "https://api.nuget.org/v3/index.json" \
-        --api-key "$NUGET_API_KEY" \
-        --skip-duplicate
-    dotnet nuget push "{{artifacts_dir}}/TemporalCommunity.Extensions.Analyzers.{{version}}.nupkg" \
-        --source "https://api.nuget.org/v3/index.json" \
-        --api-key "$NUGET_API_KEY" \
-        --skip-duplicate
-    dotnet nuget push "{{artifacts_dir}}/TemporalCommunity.DurableObjects.Analyzers.{{version}}.nupkg" \
-        --source "https://api.nuget.org/v3/index.json" \
-        --api-key "$NUGET_API_KEY" \
-        --skip-duplicate
-    dotnet nuget push "{{artifacts_dir}}/TemporalCommunity.Templates.{{version}}.nupkg" \
-        --source "https://api.nuget.org/v3/index.json" \
-        --api-key "$NUGET_API_KEY" \
-        --skip-duplicate
-
-# Push to all configured git remotes (with tags)
-sync-remotes:
-    git remote | xargs -I{} git push {} --follow-tags
+template-smoke-test: _template-smoke-test-standalone _template-smoke-test-aspire
 
 # ── Sample ────────────────────────────────────────────────
 
-# Run a sample project (requires a running Temporal server at localhost:7233)
-# Usage: just run-sample           → runs 01-getting-started
-#        just run-sample 03        → runs 03-scheduling
-#        just run-sample-all       → lists all available samples
+# Run a sample project (requires a running Temporal server at localhost:7233).
+# See samples/README.md for the available sample directories.
 run-sample SAMPLE="01-getting-started":
     dotnet run --project "samples/{{SAMPLE}}" --configuration "{{configuration}}"
 
-# List all available samples
-run-sample-all:
-    @echo "Available samples:"
-    @echo "  01-getting-started   — Full setup + client proxy"
-    @echo "  02-input-validation  — Update validators + error handling"
-    @echo "  03-scheduling        — Schedule vs Reminder patterns"
-    @echo "  04-object-to-object  — Activity-mediated DO-to-DO"
-    @echo "  05-observability     — OpenTelemetry traces"
-    @echo "  06-testing           — xUnit reference test suite (use: dotnet test samples/06-testing)"
-
-# ── Process Hygiene (Unix only) ────────────────────────────
-# These recipes use Unix utilities (pkill, pgrep, find) and do not run on Windows.
-# On Windows: use Task Manager or Stop-Process in PowerShell directly.
-
-# [unix] List orphaned temporal-sdk-dotnet processes from failed integration tests
-[unix]
-list-orphans:
-    @echo "== temporal-sdk-dotnet processes =="
-    @pgrep -af "temporal-sdk-dotnet" 2>/dev/null || echo "(none)"
-
-# [unix] Kill orphaned temporal-sdk-dotnet processes (SIGTERM then SIGKILL)
-[unix]
-kill-orphans:
-    @echo "Sending SIGTERM to orphaned temporal-sdk-dotnet processes..."
-    -@pkill -TERM -f "[t]emporal-sdk-dotnet" 2>/dev/null; true
-    @echo "Sending SIGKILL to any stragglers..."
-    -@pkill -9 -f "[t]emporal-sdk-dotnet" 2>/dev/null; true
-    @pgrep -af "[t]emporal-sdk-dotnet" 2>/dev/null || echo "(none remaining)"
-
-# [unix] Kill stale dotnet test hosts scoped to this repo
-[unix]
-kill-test-hosts:
-    @echo "== dotnet test processes for this repo =="
-    @pgrep -af "dotnet test" 2>/dev/null | grep -i "DurableObjects" | grep -v "just " || echo "(none)"
-    -@pkill -f "dotnet.*testhost.*DurableObjects" 2>/dev/null; true
-
-# [unix] Full cleanup: kill test hosts + kill orphans + remove stale test artifacts
-[unix]
-test-clean: kill-test-hosts kill-orphans clean-tests
-
-# ── Aliases ───────────────────────────────────────────────
-
-alias compile := build
-alias verify  := test
-alias validate := test-unit
-
 # [unix] Full local CI-equivalent: clean → build → unit tests → package verification
 [unix]
-ci: clean build test-unit pack-verify
+ci: clean build test-unit (pack-verify "true")

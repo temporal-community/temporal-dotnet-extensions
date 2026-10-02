@@ -1,7 +1,7 @@
 # Maintainer Verification
 
-The repository treats replay, scale, NativeAOT, and benchmarks as different signals. None of these
-checks is a production capacity claim.
+The repository treats replay, scale, and benchmarks as different signals. None of these checks is a
+production capacity claim.
 
 ## Replay compatibility
 
@@ -16,12 +16,6 @@ Run replay verification with:
 dotnet test tests/TemporalCommunity.DurableObjects.IntegrationTests \
   --filter FullyQualifiedName~ReplayHistoryTests
 ```
-
-## NativeAOT
-
-`just aot-verify` publishes and executes the generated-client smoke application. It verifies that
-the generated registry and concrete client survive NativeAOT compilation without `DispatchProxy`. It does
-not claim NativeAOT support for reflection-based worker discovery or every Temporal SDK feature.
 
 ## Benchmarks and scale
 
@@ -51,11 +45,10 @@ NuGet publishing workflow publishes this package set together:
 The template pack lives in `templates/TemporalCommunity.Templates/`. Available commands:
 
 ```bash
-just pack                             # packs the template nupkg into artifacts/packages
-just pack-verify                      # isolated hive; instantiate and build template variants
-just template-smoke-test-standalone   # real Temporal CLI dev server, Worker, and Client
-just template-smoke-test-aspire       # real Aspire AppHost and provisioned Temporal dev server
-just template-smoke-test              # sequentially run both runtime checks
+just pack                             # build and pack all four NuGet packages
+just pack-verify                      # pack and verify package assets and generated projects
+just pack-verify --no-build           # reuse a completed solution build (CI)
+just template-smoke-test              # run standalone and Aspire runtime checks
 ```
 
 The pack-verification item-template fixture deliberately compiles against Temporalio 1.16.0 as a

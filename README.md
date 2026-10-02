@@ -132,12 +132,12 @@ just run-sample
 | Guide | Contents |
 |---|---|
 | [Temporal .NET analyzers](docs/ANALYZERS.md) | General and Durable Objects rules, code fixes, generated clients, and installation. |
-| [Durable Objects concepts](docs/DURABLE_OBJECTS.md) | When to use the runtime, identity, lifecycle, state, scheduling, NativeAOT, and API overview. |
+| [Durable Objects concepts](docs/DURABLE_OBJECTS.md) | When to use the runtime, identity, lifecycle, state, scheduling, and API overview. |
 | [Durable Objects getting started](docs/GETTING_STARTED.md) | Reading path from first object through production readiness. |
 | [Failure handling](docs/FAILURE_HANDLING.md) | Exception taxonomy, authorization, lifecycle failures, and reminder idempotency. |
 | [Tier model](docs/TIER_MODEL.md) | Resident execution, explicit deactivation, and Continue-as-New behavior. |
-| [Troubleshooting](docs/TROUBLESHOOTING.md) | Common runtime, configuration, and NativeAOT problems. |
-| [Maintainer verification](docs/MAINTAINER_VERIFICATION.md) | Replay, packaging, NativeAOT, benchmark, scale, and release checks. |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | Common runtime and configuration problems. |
+| [Maintainer verification](docs/MAINTAINER_VERIFICATION.md) | Replay, packaging, benchmark, scale, and release checks. |
 | [Templates](docs/TEMPLATES.md) | `dotnet new` item templates for workflows, activities, and payload converters; project templates for workers and Worker+Client+Shared solutions (with optional .NET Aspire orchestration). |
 
 ## Building from source

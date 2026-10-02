@@ -43,7 +43,7 @@ dotnet run
 ### Generated client vs. GetOrCreateAsync
 
 ```csharp
-// No RPC — creates a concrete, NativeAOT-compatible client with async queries.
+// No RPC — creates a concrete generated client with async queries.
 var client = factory.GetPageCounterClient("home");
 
 // Atomically starts the execution if it is not already running, then returns a client.

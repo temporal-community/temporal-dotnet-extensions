@@ -129,16 +129,16 @@ policy for the application's load profile.
 See [performance testing](../benchmarks/README.md) for the automated Temporal load runner,
 rollover checks under sustained traffic, and BenchmarkDotNet client-overhead benchmarks.
 
-## Generated clients and NativeAOT
+## Generated clients
 
 `TemporalCommunity.DurableObjects.Analyzers` generates a concrete client and factory extension for
 every supported public contract. Updates retain their contract names; synchronous queries gain
 asynchronous methods, and every generated method has a `DurableObjectCallOptions` overload.
 
 The runtime prefers a registered generated client even when code calls `Get<T>()`. Unsupported or
-ungenerated contracts retain the `DispatchProxy` compatibility path. Only the generated client
-dispatch path is NativeAOT-compatible; this is not a claim that all Temporal worker discovery is
-reflection-free. See [analyzer and generator requirements](ANALYZERS.md).
+ungenerated contracts retain the `DispatchProxy` compatibility path. NativeAOT deployments are not
+a supported compatibility target for this library. See
+[analyzer and generator requirements](ANALYZERS.md).
 
 ## Implementation requirements
 

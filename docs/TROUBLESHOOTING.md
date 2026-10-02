@@ -289,6 +289,10 @@ public Task WithdrawAsync(decimal amount)
 
 ## Symptom: "I'm getting a `PlatformNotSupportedException` at startup"
 
+NativeAOT deployments are not a supported compatibility target for this library. The notes below
+describe a known failure mode when experimenting with NativeAOT; avoiding it does not establish
+end-to-end compatibility.
+
 **Cause:** A NativeAOT application reached the ungenerated `DispatchProxy` fallback.
 
 `DurableObjectProxy<T>` uses `DispatchProxy.Create<T, DurableObjectProxy<T>>()` internally to
@@ -321,10 +325,10 @@ If generation is not an option, disable NativeAOT for that application:
 </PropertyGroup>
 ```
 
-The generated client-dispatch path is verified under NativeAOT in CI. This does not imply that
-reflection-based worker discovery or every Temporal SDK feature is NativeAOT-compatible.
+Generated clients avoid `DispatchProxy` for supported contracts, but worker discovery and other
+Temporal SDK features may still rely on runtime capabilities that NativeAOT does not support.
 
-**See also:** [generated clients and NativeAOT](DURABLE_OBJECTS.md#generated-clients-and-nativeaot)
+**See also:** [generated clients](DURABLE_OBJECTS.md#generated-clients)
 
 ---
 

@@ -55,11 +55,7 @@ jobs:
 
       - name: Verify package assets and consumers
         if: matrix.os == 'ubuntu-latest'
-        run: just pack-verify-prebuilt
-
-      - name: Verify generated client under NativeAOT
-        if: matrix.os == 'ubuntu-latest'
-        run: just aot-verify
+        run: just pack-verify --no-build
 
       - name: Upload test results
         uses: actions/upload-artifact@v6

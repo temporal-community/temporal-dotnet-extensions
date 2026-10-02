@@ -78,10 +78,7 @@ jobs:
         run: just test
 
       - name: Pack and verify consumers
-        run: just pack-verify
-
-      - name: Verify generated client under NativeAOT
-        run: just aot-verify
+        run: just pack-verify --no-build
 
       # Exchange the GitHub OIDC JWT for a short-lived NuGet API key.
       # NuGet/login hits https://www.nuget.org/api/v2/token with the OIDC token
