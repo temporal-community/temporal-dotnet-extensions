@@ -19,10 +19,9 @@ durable_codefix_tests_dir := "tests/TemporalCommunity.DurableObjects.Analyzers.C
 template_tests_dir    := "tests/TemporalCommunity.Templates.Tests"
 benchmarks_dir        := "benchmarks/TemporalCommunity.DurableObjects.Benchmarks"
 aot_smoke_dir         := "tests/smoke/GeneratedClientAot"
-# Runs minver (local tool — .config/dotnet-tools.json) to compute the current version from git tags.
-# The sed/tr reads MinVerDefaultPreReleaseIdentifiers from Directory.Build.props so the pre-release
-# label has a single source of truth; minver-cli must be installed via `dotnet tool restore`.
-version               := `dotnet tool run minver --tag-prefix "" --default-pre-release-identifiers $(sed -n 's/.*<MinVerDefaultPreReleaseIdentifiers>\(.*\)<\/MinVerDefaultPreReleaseIdentifiers>.*/\1/p' Directory.Build.props | tr -d ' ')`
+# Backticks avoid shell()'s extra positional command argument under PowerShell. Just does not
+# interpolate variables in backticks, so query the same MSBuild property using shell-portable $().
+version := `dotnet tool run minver --tag-prefix '' --default-pre-release-identifiers "$(dotnet msbuild Directory.Build.props -getProperty:MinVerDefaultPreReleaseIdentifiers)"`
 
 # ── Meta ──────────────────────────────────────────────────
 
@@ -58,27 +57,35 @@ aot-verify:
 
 # ── Clean ─────────────────────────────────────────────────
 
-# Remove all build outputs and artifacts
+# [unix] Remove all build outputs, test results, and artifacts
+[unix]
 clean: clean-source clean-tests
-    rm -rf "{{artifacts_dir}}"
-    rm -rf "{{coverage_dir}}"
+    rm -rf "{{artifacts_dir}}" "{{coverage_dir}}"
 
-# Remove bin/obj from all projects
+# [windows] Remove all build outputs, test results, and artifacts
+[windows]
+clean: clean-source clean-tests
+    Remove-Item -Path "{{artifacts_dir}}", "{{coverage_dir}}" -Recurse -Force -ErrorAction SilentlyContinue
+
+# [unix] Remove every bin/obj directory, including out-of-solution projects and all configurations
+[unix]
 clean-source:
-    dotnet clean "{{solution}}" --configuration "{{configuration}}" --nologo -v minimal
+    find . -path './.git' -prune -o -type d \( -name bin -o -name obj \) -prune -exec rm -rf {} +
 
-# [unix] Remove stale .trx and .coverage files from test output dirs
+# [windows] Remove every bin/obj directory, including out-of-solution projects and all configurations
+[windows]
+clean-source:
+    Get-ChildItem -Path . -Directory -Recurse -Force | Where-Object { $_.Name -in @("bin", "obj") } | Sort-Object { $_.FullName.Length } -Descending | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+# [unix] Remove stale .trx and .coverage files from every test project
 [unix]
 clean-tests:
-    find "{{unit_tests_dir}}" -name "*.trx" -delete 2>/dev/null || true
-    find "{{integration_tests_dir}}" -name "*.trx" -delete 2>/dev/null || true
-    find "{{unit_tests_dir}}" -name "*.coverage" -delete 2>/dev/null || true
-    find "{{integration_tests_dir}}" -name "*.coverage" -delete 2>/dev/null || true
+    find tests -type f \( -name "*.trx" -o -name "*.coverage" \) -delete
 
-# [windows] Remove stale test artifacts (PowerShell)
+# [windows] Remove stale .trx and .coverage files from every test project
 [windows]
 clean-tests:
-    Get-ChildItem -Path "{{unit_tests_dir}}", "{{integration_tests_dir}}" -Include "*.trx", "*.coverage" -Recurse | Remove-Item -Force
+    Get-ChildItem -Path tests -Include "*.trx", "*.coverage" -File -Recurse | Remove-Item -Force
 
 # ── Build ─────────────────────────────────────────────────
 
@@ -97,47 +104,20 @@ build-debug: restore
 # ── Test ──────────────────────────────────────────────────
 
 # Run unit tests (no Temporal server required)
+[env("MSBUILDDISABLENODEREUSE", "1")]
 test-unit: build
-    dotnet test "{{unit_tests_dir}}" \
-        --configuration "{{configuration}}" \
-        --no-build \
-        --nologo \
-        --logger "trx;LogFileName=unit.trx"
-    dotnet test "{{general_analyzer_tests_dir}}" \
-        --configuration "{{configuration}}" \
-        --no-build \
-        --nologo \
-        --logger "trx;LogFileName=analyzers.trx"
-    dotnet test "{{durable_analyzer_tests_dir}}" \
-        --configuration "{{configuration}}" \
-        --no-build \
-        --nologo \
-        --logger "trx;LogFileName=durable-analyzers.trx"
-    dotnet test "{{generated_client_tests_dir}}" \
-        --configuration "{{configuration}}" \
-        --no-build \
-        --nologo \
-        --logger "trx;LogFileName=generated-clients.trx"
-    dotnet test "{{general_codefix_tests_dir}}" \
-        --configuration "{{configuration}}" \
-        --no-build \
-        --nologo \
-        --logger "trx;LogFileName=analyzer-codefixes.trx"
-    dotnet test "{{durable_codefix_tests_dir}}" \
-        --configuration "{{configuration}}" \
-        --no-build \
-        --nologo \
-        --logger "trx;LogFileName=durable-analyzer-codefixes.trx"
+    dotnet test "{{unit_tests_dir}}" --configuration "{{configuration}}" --no-build --nologo --logger "trx;LogFileName=unit.trx"
+    dotnet test "{{general_analyzer_tests_dir}}" --configuration "{{configuration}}" --no-build --nologo --logger "trx;LogFileName=analyzers.trx"
+    dotnet test "{{durable_analyzer_tests_dir}}" --configuration "{{configuration}}" --no-build --nologo --logger "trx;LogFileName=durable-analyzers.trx"
+    dotnet test "{{generated_client_tests_dir}}" --configuration "{{configuration}}" --no-build --nologo --logger "trx;LogFileName=generated-clients.trx"
+    dotnet test "{{general_codefix_tests_dir}}" --configuration "{{configuration}}" --no-build --nologo --logger "trx;LogFileName=analyzer-codefixes.trx"
+    dotnet test "{{durable_codefix_tests_dir}}" --configuration "{{configuration}}" --no-build --nologo --logger "trx;LogFileName=durable-analyzer-codefixes.trx"
     # MSBUILDDISABLENODEREUSE=1: these tests spawn many real "dotnet new"/"dotnet build"
     # subprocesses; MSBuild's default node-reuse workers can outlive the subprocess that spawned
     # them and keep its redirected stdout/stderr pipe open, which hangs
     # Process.StandardOutput.ReadToEndAsync() indefinitely — confirmed empirically (a 15+ minute
     # hang that resolved to a normal ~30s run once node reuse was disabled).
-    MSBUILDDISABLENODEREUSE=1 dotnet test "{{template_tests_dir}}" \
-        --configuration "{{configuration}}" \
-        --no-build \
-        --nologo \
-        --logger "trx;LogFileName=templates.trx"
+    dotnet test "{{template_tests_dir}}" --configuration "{{configuration}}" --no-build --nologo --logger "trx;LogFileName=templates.trx"
 
 # Run integration tests (uses WorkflowEnvironment.StartLocalAsync — no external server needed)
 test-integration: build
@@ -152,6 +132,7 @@ test: test-unit test-integration
 
 # Run tests matching a filter expression
 # Example: just test-filter "FullyQualifiedName~ScenarioA"
+[env("MSBUILDDISABLENODEREUSE", "1")]
 test-filter FILTER: build
     dotnet test "{{solution}}" \
         --configuration "{{configuration}}" \
@@ -188,14 +169,19 @@ test-logged TEST: build
         echo "ERROR: GNU coreutils 'timeout' required. On macOS: brew install coreutils"
         exit 1
     fi
-    timeout 120 dotnet test "{{integration_tests_dir}}" \
+    if timeout 120 dotnet test "{{integration_tests_dir}}" \
         --configuration "{{configuration}}" \
         --no-build \
         --nologo \
         --filter "FullyQualifiedName~{{TEST}}" \
         --logger "console;verbosity=detailed" \
-        2>&1 | tee "$log" \
-        && echo "✓ PASS" || echo "✗ FAIL — see $log"
+        2>&1 | tee "$log"; then
+        echo "✓ PASS"
+    else
+        status=$?
+        echo "✗ FAIL — see $log"
+        exit "$status"
+    fi
 
 # [unix] Run each integration scenario individually to isolate failures
 [unix]
@@ -423,9 +409,9 @@ pack-verify: pack
     unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalWorkflow/TemporalWorkflow1.cs' >/dev/null
     unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalActivity/.template.config/template.json' >/dev/null
     unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalActivity/TemporalActivity1.cs' >/dev/null
-    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalPayloadConverter/.template.config/template.json' >/dev/null
-    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalPayloadConverter/TemporalPayloadConverter1.cs' >/dev/null
-    echo "  ✓ content/TemporalWorkflow/**, content/TemporalActivity/**, and content/TemporalPayloadConverter/** present in nupkg"
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalConverter/.template.config/template.json' >/dev/null
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalConverter/TemporalConverter1.cs' >/dev/null
+    echo "  ✓ content/TemporalWorkflow/**, content/TemporalActivity/**, and content/TemporalConverter/** present in nupkg"
     # --nuget-source only selects a package source, not a hive location — point DOTNET_CLI_HOME
     # at a scratch directory so this install/instantiate round-trip never touches the real
     # user-wide template hive. Note: "dotnet new" subcommands (install/instantiate) reject
@@ -447,19 +433,19 @@ pack-verify: pack
     echo "  ✓ temporal-activity --dry-run reported without error"
     (cd "$templates_scratch" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-activity -n SampleActivity -o .)
     [ -f "$templates_scratch/SampleActivity.cs" ] || { echo "  ✗ ERROR: temporal-activity did not generate SampleActivity.cs" >&2; exit 1; }
-    (cd "$templates_scratch" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-payload-converter -n DryRunPayloadConverter -o . --dry-run)
-    echo "  ✓ temporal-payload-converter --dry-run reported without error"
-    (cd "$templates_scratch" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-payload-converter -n SamplePayloadConverter -o .)
-    [ -f "$templates_scratch/SamplePayloadConverter.cs" ] || { echo "  ✗ ERROR: temporal-payload-converter did not generate SamplePayloadConverter.cs" >&2; exit 1; }
+    (cd "$templates_scratch" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-converter -n DryRunConverter -o . --dry-run)
+    echo "  ✓ temporal-converter --dry-run reported without error"
+    (cd "$templates_scratch" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-converter -n SampleConverter -o .)
+    [ -f "$templates_scratch/SampleConverter.cs" ] || { echo "  ✗ ERROR: temporal-converter did not generate SampleConverter.cs" >&2; exit 1; }
     (cd "$templates_scratch" && dotnet add package Temporalio --version 1.16.0)
     (cd "$templates_scratch" && dotnet build --nologo)
-    echo "  ✓ real temporal-workflow, temporal-activity, and temporal-payload-converter instantiations compiled inside a scratch project"
+    echo "  ✓ real temporal-workflow, temporal-activity, and temporal-converter instantiations compiled inside a scratch project"
     echo "==> temporal-worker project template checks"
     unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalWorker/.template.config/template.json' >/dev/null
     unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalWorker/.template.config/dotnetcli.host.json' >/dev/null
     unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalWorker/TemporalWorker1.csproj' >/dev/null
     unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalWorker/Program.cs' >/dev/null
-    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalWorker/TemporalConnection.cs' >/dev/null
+    unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalWorker/TemporalWorkerConnection.cs' >/dev/null
     unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalWorker/Workflows/SampleWorkflow.cs' >/dev/null
     unzip -Z1 "$templates_pkg" | grep -Fx 'content/TemporalWorker/Activities/SampleActivities.cs' >/dev/null
     echo "  ✓ content/TemporalWorker/** present in nupkg"
@@ -475,7 +461,8 @@ pack-verify: pack
             name="Worker_${fw//./}_${otel}"
             (cd "$combo_dir" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-worker -n "$name" -o . --framework "$fw" --include-otel "$otel")
             [ -f "$combo_dir/$name.csproj" ] || { echo "  ✗ ERROR: temporal-worker (framework=$fw, include-otel=$otel) did not generate $name.csproj" >&2; exit 1; }
-            (cd "$combo_dir" && dotnet build --nologo)
+            [ -f "$combo_dir/obj/project.assets.json" ] || { echo "  ✗ ERROR: temporal-worker restore post-action did not produce assets" >&2; exit 1; }
+            (cd "$combo_dir" && dotnet build --no-restore --nologo)
             echo "  ✓ temporal-worker (framework=$fw, include-otel=$otel) instantiated and built standalone"
         done
     done
@@ -508,7 +495,15 @@ pack-verify: pack
                 else
                     [ -d "$combo_dir/$name.AppHost" ] && { echo "  ✗ ERROR: did not expect $name.AppHost with include-aspire=false" >&2; exit 1; }
                 fi
-                (cd "$combo_dir" && dotnet build "$name.sln" --nologo)
+                for project in Worker Client Shared; do
+                    [ -f "$combo_dir/$name.$project/obj/project.assets.json" ] || { echo "  ✗ ERROR: temporal-solution $project restore post-action did not produce assets" >&2; exit 1; }
+                done
+                if [ "$aspire" = "true" ]; then
+                    for project in AppHost ServiceDefaults; do
+                        [ -f "$combo_dir/$name.$project/obj/project.assets.json" ] || { echo "  ✗ ERROR: temporal-solution $project restore post-action did not produce assets" >&2; exit 1; }
+                    done
+                fi
+                (cd "$combo_dir" && dotnet build "$name.sln" --no-restore --nologo)
                 echo "  ✓ temporal-solution (framework=$fw, include-aspire=$aspire, include-otel=$otel) instantiated and built"
             done
         done
@@ -519,8 +514,22 @@ pack-verify: pack
     (cd "$xml_name_dir" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-solution -n "Contoso-Fulfillment&Orders" -o . --include-aspire)
     grep -q 'Projects.Contoso_Fulfillment_Orders_Worker' "$xml_name_dir/Contoso-Fulfillment&Orders.AppHost/AppHost.cs"
     grep -q 'Contoso-Fulfillment&amp;Orders.Shared' "$xml_name_dir/Contoso-Fulfillment&Orders.Worker/Contoso-Fulfillment&Orders.Worker.csproj"
-    (cd "$xml_name_dir" && dotnet build "Contoso-Fulfillment&Orders.sln" --nologo)
+    (cd "$xml_name_dir" && dotnet build "Contoso-Fulfillment&Orders.sln" --no-restore --nologo)
     echo "  ✓ XML-sensitive project name sanitized correctly and built"
+
+# ── Templates (local try-out) ────────────────────────────────
+# Installs/uninstalls the packed nupkg into your own default template hive (not an isolated one
+# like pack-verify/template-smoke-test use) — so `dotnet new temporal-worker` etc. work from any
+# directory afterward. Re-run `just template-install` after editing template content and re-packing
+# to pick up the change; `--force` replaces the previous install of the same package.
+
+# Pack, then install TemporalCommunity.Templates into your default `dotnet new` hive
+template-install: pack
+    dotnet new install "{{artifacts_dir}}/TemporalCommunity.Templates.{{version}}.nupkg" --force
+
+# Uninstall TemporalCommunity.Templates from your default `dotnet new` hive
+template-uninstall:
+    dotnet new uninstall TemporalCommunity.Templates
 
 # ── Template runtime smoke tests ────────────────────────────
 # Two separate recipes, each owning its own cleanup trap — a later `trap ... EXIT` within the same
@@ -529,61 +538,83 @@ pack-verify: pack
 # branch's cleanup on failure. Aggregated by `template-smoke-test` below.
 
 # [unix] Standalone (IncludeAspire=false) runtime smoke test: real temporal server + Worker + Client.
+# Only one standalone smoke run per host may use the default server port at a time.
 [unix]
 template-smoke-test-standalone: pack
     #!/usr/bin/env bash
     set -euo pipefail
     SERVER_PID=
+    SERVER_PORT="${TEMPLATE_SMOKE_TEMPORAL_PORT:-17233}"
+    SERVER_ADDRESS="127.0.0.1:$SERVER_PORT"
+    LOCK_DIR="/tmp/temporal-template-smoke-${SERVER_PORT}.lock"
     WORKER_PID=
     SCRATCH_DIR=
     HIVE_DIR=
     cleanup() {
-        # Confirmed empirically: `dotnet run` starts the compiled apphost executable as a *child*
-        # process rather than exec-replacing itself, so `kill "$WORKER_PID"` only kills the
-        # "dotnet run" wrapper and leaves the actual Worker process running indefinitely. Matching
-        # on $SCRATCH_DIR (a unique per-run temp path) catches both the wrapper and its child.
-        if [ -n "$SCRATCH_DIR" ]; then pkill -f "$SCRATCH_DIR" 2>/dev/null || true; fi
         if [ -n "$WORKER_PID" ]; then kill "$WORKER_PID" 2>/dev/null || true; wait "$WORKER_PID" 2>/dev/null || true; fi
         if [ -n "$SERVER_PID" ]; then kill "$SERVER_PID" 2>/dev/null || true; wait "$SERVER_PID" 2>/dev/null || true; fi
         if [ -n "$SCRATCH_DIR" ]; then rm -rf "$SCRATCH_DIR"; fi
         if [ -n "$HIVE_DIR" ]; then rm -rf "$HIVE_DIR"; fi
+        rmdir "$LOCK_DIR" 2>/dev/null || true
     }
+    if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+        echo "ERROR: standalone smoke test already owns port $SERVER_PORT (lock: $LOCK_DIR)" >&2
+        exit 1
+    fi
     trap cleanup EXIT
 
+    # Resolve /tmp's symlink on macOS to keep MSBuild project paths consistent.
+    SCRATCH_DIR=$(realpath "$(mktemp -d /tmp/template-smoke-standalone.XXXXXX)")
+    HIVE_DIR=$(realpath "$(mktemp -d /tmp/template-smoke-standalone-hive.XXXXXX)")
     echo "==> Starting temporal server"
-    temporal server start-dev >/tmp/template-smoke-server.log 2>&1 &
+    temporal server start-dev --headless --ip 127.0.0.1 --port "$SERVER_PORT" >"$SCRATCH_DIR/server.log" 2>&1 &
     SERVER_PID=$!
     ready=false
     for _ in $(seq 1 30); do
-        if temporal operator cluster health >/dev/null 2>&1; then
+        if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+            echo "  ✗ ERROR: temporal server exited before becoming ready" >&2
+            cat "$SCRATCH_DIR/server.log" >&2
+            exit 1
+        fi
+        if temporal operator cluster health --address "$SERVER_ADDRESS" >/dev/null 2>&1; then
             ready=true
             break
         fi
         sleep 1
     done
-    [ "$ready" = true ] || { echo "  ✗ ERROR: temporal server did not become ready" >&2; cat /tmp/template-smoke-server.log >&2; exit 1; }
-    echo "  ✓ temporal server ready"
+    [ "$ready" = true ] || { echo "  ✗ ERROR: temporal server did not become ready" >&2; cat "$SCRATCH_DIR/server.log" >&2; exit 1; }
+    kill -0 "$SERVER_PID" 2>/dev/null || { echo "  ✗ ERROR: temporal server exited after readiness check" >&2; cat "$SCRATCH_DIR/server.log" >&2; exit 1; }
+    echo "  ✓ temporal server ready at $SERVER_ADDRESS"
 
-    # realpath: on macOS /tmp is a symlink to /private/tmp — resolving it once here keeps every
-    # later reference (this script's own and any project-to-project paths dotnet new/MSBuild
-    # record internally) consistently spelled, avoiding NuGet/MSBuild treating the same file as
-    # two different projects when reached through different-looking (but identical) paths.
-    SCRATCH_DIR=$(realpath "$(mktemp -d /tmp/template-smoke-standalone.XXXXXX)")
-    HIVE_DIR=$(realpath "$(mktemp -d /tmp/template-smoke-standalone-hive.XXXXXX)")
     export DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1
     DOTNET_CLI_HOME="$HIVE_DIR" dotnet new install "{{artifacts_dir}}/TemporalCommunity.Templates.{{version}}.nupkg"
     (cd "$SCRATCH_DIR" && DOTNET_CLI_HOME="$HIVE_DIR" dotnet new temporal-solution -n SmokeStandalone -o .)
+    dotnet build "$SCRATCH_DIR/SmokeStandalone.sln" --nologo -m:1
 
     echo "==> Starting worker"
-    (cd "$SCRATCH_DIR/SmokeStandalone.Worker" && dotnet run --nologo) >/tmp/template-smoke-worker.log 2>&1 &
+    (cd "$SCRATCH_DIR/SmokeStandalone.Worker" && TEMPORAL_ADDRESS="$SERVER_ADDRESS" exec dotnet bin/Debug/net10.0/SmokeStandalone.Worker.dll) >"$SCRATCH_DIR/worker.log" 2>&1 &
     WORKER_PID=$!
-    sleep 5
+    ready=false
+    for _ in $(seq 1 30); do
+        if ! kill -0 "$WORKER_PID" 2>/dev/null; then
+            echo "  ✗ ERROR: worker exited before becoming ready" >&2
+            cat "$SCRATCH_DIR/worker.log" >&2
+            exit 1
+        fi
+        if grep -q 'Application started. Press Ctrl+C to shut down.' "$SCRATCH_DIR/worker.log"; then
+            ready=true
+            break
+        fi
+        sleep 1
+    done
+    [ "$ready" = true ] || { echo "  ✗ ERROR: worker did not become ready" >&2; cat "$SCRATCH_DIR/worker.log" >&2; exit 1; }
+    kill -0 "$WORKER_PID" 2>/dev/null || { echo "  ✗ ERROR: worker exited after readiness check" >&2; cat "$SCRATCH_DIR/worker.log" >&2; exit 1; }
 
     echo "==> Running client"
-    (cd "$SCRATCH_DIR/SmokeStandalone.Client" && dotnet run --nologo) | tee /tmp/template-smoke-client.log
-    grep -q 'Workflow result: Hello, world!' /tmp/template-smoke-client.log || {
+    (cd "$SCRATCH_DIR/SmokeStandalone.Client" && TEMPORAL_ADDRESS="$SERVER_ADDRESS" dotnet run --no-build --no-restore --nologo) | tee "$SCRATCH_DIR/client.log"
+    grep -q 'Workflow result: Hello, world!' "$SCRATCH_DIR/client.log" || {
         echo "  ✗ ERROR: client did not report the expected workflow result" >&2
-        echo "worker log:" >&2; cat /tmp/template-smoke-worker.log >&2
+        echo "worker log:" >&2; cat "$SCRATCH_DIR/worker.log" >&2
         exit 1
     }
     echo "  ✓ standalone smoke test: client received the expected workflow result"
@@ -597,7 +628,7 @@ template-smoke-test-aspire: pack
     SCRATCH_DIR=
     HIVE_DIR=
     cleanup() {
-        if [ -n "$APPHOST" ]; then aspire stop --apphost "$APPHOST" >/dev/null 2>&1 || true; fi
+        if [ -n "$APPHOST" ]; then (cd "$SCRATCH_DIR" && aspire stop --apphost "$APPHOST") >/dev/null 2>&1 || true; fi
         if [ -n "$SCRATCH_DIR" ]; then rm -rf "$SCRATCH_DIR"; fi
         if [ -n "$HIVE_DIR" ]; then rm -rf "$HIVE_DIR"; fi
     }
@@ -626,11 +657,11 @@ template-smoke-test-aspire: pack
     # "Could not load file or assembly 'SmokeAspire.ServiceDefaults'" even though restore succeeded.
     solution_file=$(find "$SCRATCH_DIR" -maxdepth 1 -name '*.sln')
     dotnet build "$solution_file" --nologo -m:1
-    aspire start --apphost "$APPHOST" --non-interactive
-    aspire wait temporal --apphost "$APPHOST" --status healthy
-    aspire wait worker --apphost "$APPHOST" --status up
-    aspire wait client --apphost "$APPHOST" --status down
-    aspire logs client --apphost "$APPHOST" --format Json > "$SCRATCH_DIR/client-logs.json"
+    (cd "$SCRATCH_DIR" && aspire start --apphost "$APPHOST" --non-interactive)
+    (cd "$SCRATCH_DIR" && aspire wait temporal --apphost "$APPHOST" --status healthy)
+    (cd "$SCRATCH_DIR" && aspire wait worker --apphost "$APPHOST" --status up)
+    (cd "$SCRATCH_DIR" && aspire wait client --apphost "$APPHOST" --status down)
+    (cd "$SCRATCH_DIR" && aspire logs client --apphost "$APPHOST" --format Json) > "$SCRATCH_DIR/client-logs.json"
     grep -q 'Workflow result: Hello, world!' "$SCRATCH_DIR/client-logs.json" || {
         echo "  ✗ ERROR: client logs did not contain the expected workflow result" >&2
         cat "$SCRATCH_DIR/client-logs.json" >&2
@@ -643,7 +674,19 @@ template-smoke-test: template-smoke-test-standalone template-smoke-test-aspire
 
 # Push to NuGet.org (NUGET_API_KEY required; CI uses OIDC Trusted Publishing instead)
 publish-nuget: pack
-    dotnet nuget push "{{artifacts_dir}}/*.nupkg" \
+    dotnet nuget push "{{artifacts_dir}}/TemporalCommunity.DurableObjects.{{version}}.nupkg" \
+        --source "https://api.nuget.org/v3/index.json" \
+        --api-key "$NUGET_API_KEY" \
+        --skip-duplicate
+    dotnet nuget push "{{artifacts_dir}}/TemporalCommunity.Extensions.Analyzers.{{version}}.nupkg" \
+        --source "https://api.nuget.org/v3/index.json" \
+        --api-key "$NUGET_API_KEY" \
+        --skip-duplicate
+    dotnet nuget push "{{artifacts_dir}}/TemporalCommunity.DurableObjects.Analyzers.{{version}}.nupkg" \
+        --source "https://api.nuget.org/v3/index.json" \
+        --api-key "$NUGET_API_KEY" \
+        --skip-duplicate
+    dotnet nuget push "{{artifacts_dir}}/TemporalCommunity.Templates.{{version}}.nupkg" \
         --source "https://api.nuget.org/v3/index.json" \
         --api-key "$NUGET_API_KEY" \
         --skip-duplicate
@@ -707,5 +750,6 @@ alias compile := build
 alias verify  := test
 alias validate := test-unit
 
-# CI pipeline: clean → build → unit tests → pack (all pure dotnet, cross-platform)
+# [unix] Full local CI-equivalent: clean → build → unit tests → package verification
+[unix]
 ci: clean build test-unit pack-verify

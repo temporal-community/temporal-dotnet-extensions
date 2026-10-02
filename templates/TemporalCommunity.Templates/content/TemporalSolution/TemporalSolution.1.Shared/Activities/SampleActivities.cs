@@ -1,10 +1,10 @@
 using Temporalio.Activities;
 
-namespace GeneratedClassNamePrefix.Shared.Activities;
+namespace GeneratedNamespacePrefix.Shared.Activities;
 
 /// <summary>
-/// A starter activity class. Activities (unlike workflow code) can freely do I/O, use
-/// <c>ILogger</c>, and access DI — they run outside the workflow scheduler.
+/// A starter activity. Activities can do I/O and use DI;
+/// see https://docs.temporal.io/develop/dotnet/activities/basics.
 /// </summary>
 public sealed class SampleActivities
 {

@@ -8,19 +8,19 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Temporalio.Extensions.Hosting" Version="1.17.0" />
+    <PackageReference Include="Temporalio.Extensions.Hosting" Version="1.20.0" />
   </ItemGroup>
 
   <!--#if (IncludeOtel) -->
   <ItemGroup>
-    <PackageReference Include="Temporalio.Extensions.OpenTelemetry" Version="1.17.0" />
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />
+    <PackageReference Include="Temporalio.Extensions.OpenTelemetry" Version="1.20.0" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />
   </ItemGroup>
   <!--#endif -->
 
   <!--#if (OtelWithoutAspire) -->
   <ItemGroup>
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.17.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.18.0" />
   </ItemGroup>
   <!--#endif -->
 

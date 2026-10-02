@@ -8,25 +8,25 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Temporalio" Version="1.17.0" />
-    <!-- Client uses the Generic Host for its builder infrastructure (config, DI, logging) but
-         never calls Temporalio.Extensions.Hosting's AddTemporalClient — see SharedTemporalConnection
-         and the registration pattern in Program.cs. Microsoft.Extensions.Hosting is referenced
-         directly here (rather than transitively via Temporalio.Extensions.Hosting, as Worker gets
-         it) because Client has no other reason to reference that package. -->
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.0" />
+    <PackageReference Include="Temporalio" Version="1.20.0" />
+    <!-- Temporalio.Extensions.Hosting provides AddTemporalClient, which Program.cs uses to register
+         ITemporalClient the same way Worker does. Microsoft.Extensions.Hosting stays referenced
+         directly because Client builds on the Generic Host (config, DI, logging) and pins that
+         version itself rather than relying on the transitive one. -->
+    <PackageReference Include="Temporalio.Extensions.Hosting" Version="1.20.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.11" />
   </ItemGroup>
 
   <!--#if (IncludeOtel) -->
   <ItemGroup>
-    <PackageReference Include="Temporalio.Extensions.OpenTelemetry" Version="1.17.0" />
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />
+    <PackageReference Include="Temporalio.Extensions.OpenTelemetry" Version="1.20.0" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />
   </ItemGroup>
   <!--#endif -->
 
   <!--#if (OtelWithoutAspire) -->
   <ItemGroup>
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.17.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.18.0" />
   </ItemGroup>
   <!--#endif -->
 

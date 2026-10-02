@@ -138,7 +138,7 @@ just run-sample
 | [Tier model](docs/TIER_MODEL.md) | Resident execution, explicit deactivation, and Continue-as-New behavior. |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Common runtime, configuration, and NativeAOT problems. |
 | [Maintainer verification](docs/MAINTAINER_VERIFICATION.md) | Replay, packaging, NativeAOT, benchmark, scale, and release checks. |
-| [Templates](docs/TEMPLATES.md) | `dotnet new` templates for scaffolding Temporal .NET workflows, activities, workers, and full Worker+Client+Shared solutions (with optional .NET Aspire orchestration). |
+| [Templates](docs/TEMPLATES.md) | `dotnet new` item templates for workflows, activities, and payload converters; project templates for workers and Worker+Client+Shared solutions (with optional .NET Aspire orchestration). |
 | [Architecture decisions](adr/) | Lasting design decisions and compatibility constraints. |
 
 ## Building from source
@@ -150,17 +150,20 @@ Prerequisites: [.NET 10 SDK](https://dotnet.microsoft.com/download) and
 dotnet tool restore
 just build
 just test
-just pack-verify
 ```
 
 Run `just` to list all recipes. Integration tests use an embedded Temporal test server; samples
-require a server at `localhost:7233`.
+require a server at `localhost:7233`. Full package verification (`just pack-verify`) and the local
+CI-equivalent (`just ci`) use Unix/Bash tooling and are supported on Linux and macOS. On Windows,
+after `dotnet tool restore`, run `just test-unit` from PowerShell 7 (`pwsh`); that recipe uses
+PowerShell-safe single-line `dotnet test` commands. GitHub Actions repeats the build and tests on
+Windows and runs package verification on Ubuntu.
 
 ## Contributing
 
 1. Fork and clone the repository.
 2. Run `dotnet tool restore` once.
-3. Run `just ci` before opening a pull request.
+3. Before opening a pull request, run `just ci` on Linux/macOS or `just test-unit` on Windows.
 4. Add or update meaningful tests and user documentation when behavior changes.
 5. Record architectural decisions and compatibility constraints in [`adr/`](adr/).
 

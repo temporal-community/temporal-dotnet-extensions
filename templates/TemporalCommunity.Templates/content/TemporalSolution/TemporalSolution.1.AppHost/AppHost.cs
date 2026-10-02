@@ -8,13 +8,13 @@ var builder = DistributedApplication.CreateBuilder(args);
 // (run your own `temporal server start-dev`).
 var temporal = builder.AddTemporalLocalDevServer("temporal");
 
-var worker = builder.AddProject<Projects.GeneratedClassNamePrefix_Worker>("worker")
+var worker = builder.AddProject<Projects.GeneratedAspirePrefix_Worker>("worker")
     .WaitFor(temporal)
     .WithReference(temporal);
 
-builder.AddProject<Projects.GeneratedClassNamePrefix_Client>("client")
+builder.AddProject<Projects.GeneratedAspirePrefix_Client>("client")
     .WaitFor(temporal)
     .WithReference(temporal)
     .WaitFor(worker);
 
-await builder.Build().RunAsync().ConfigureAwait(false);
+await builder.Build().RunAsync();

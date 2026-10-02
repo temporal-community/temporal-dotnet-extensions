@@ -17,11 +17,19 @@ internal sealed record TemporalConnectionResolverResult(
 /// <summary>
 /// Shared harness program source and output parsing for the five connection-resolver precedence
 /// scenarios, reused by both <see cref="TemporalConnectionResolverHarness"/> (temporal-worker's own
-/// <c>TemporalConnection.Resolve</c>) and <see cref="SharedTemporalConnectionResolverHarness"/>
+/// <c>TemporalWorkerConnection.Resolve</c>) and <see cref="SharedTemporalConnectionResolverHarness"/>
 /// (temporal-solution's <c>SharedTemporalConnection.Resolve</c>) — the two are separate
 /// implementations of the same design (no shared assembly between the single-project and
 /// multi-project templates), so both need coverage, but the scenario logic itself is identical.
 /// </summary>
+/// <summary>
+/// Parsed harness output: the resolver precedence scenarios plus the <c>ApplyTo</c> registration
+/// scenario.
+/// </summary>
+internal sealed record TemporalConnectionResolverRun(
+    IReadOnlyDictionary<string, TemporalConnectionResolverResult> Scenarios,
+    IReadOnlyDictionary<string, string> ApplyTo);
+
 internal static class TemporalConnectionResolverHarnessProgram
 {
     public static Dictionary<string, TemporalConnectionResolverResult> ParseResults(string stdOut)
@@ -50,22 +58,202 @@ internal static class TemporalConnectionResolverHarnessProgram
         return results;
     }
 
+    /// <summary>
+    /// Parses the <c>APPLY|key|value</c> lines emitted by the <c>ApplyTo</c> scenario, which runs the
+    /// generated helper through the SDK's real <c>AddTemporalClient</c> options pipeline.
+    /// </summary>
+    public static Dictionary<string, string> ParseApplyResults(string stdOut)
+    {
+        var results = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var line in stdOut.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (!line.StartsWith("APPLY|", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            var parts = line.Split('|', 3);
+            Assert.Equal(3, parts.Length);
+            results[parts[1]] = parts[2];
+        }
+
+        return results;
+    }
+
+    public static TemporalConnectionResolverRun ParseRun(string stdOut) =>
+        new(ParseResults(stdOut), ParseApplyResults(stdOut));
+
+    /// <summary>
+    /// Asserts the <c>ApplyTo</c> contract: every resolved setting reaches the options instance the
+    /// SDK's <c>AddTemporalClient</c> builds, the host logger factory set by the SDK survives,
+    /// existing interceptors are kept with the tracing interceptor appended exactly once, and the
+    /// resulting client is still lazy.
+    /// </summary>
+    public static void AssertApplyToContract(IReadOnlyDictionary<string, string> apply)
+    {
+        Assert.Equal("apply-host:7233", apply["TargetHost"]);
+        Assert.Equal("apply-domain", apply["TlsDomain"]);
+        Assert.Equal("True", apply["TlsIsCopy"]);
+        Assert.Equal("7", apply["RpcRetryMaxRetries"]);
+        Assert.Equal("True", apply["RpcRetryIsCopy"]);
+        Assert.Equal("True", apply["KeepAliveIsNull"]);
+        Assert.Equal("proxy-host:8080", apply["HttpConnectProxyTargetHost"]);
+        Assert.Equal("42", apply["DnsResolutionSeconds"]);
+        Assert.Equal("True", apply["DnsIsCopy"]);
+        Assert.Equal("12345", apply["PayloadsWarnSize"]);
+        Assert.Equal("True", apply["PayloadLimitsIsCopy"]);
+        Assert.Equal("True", apply["GrpcCompressionIsNone"]);
+        Assert.Equal("x-apply=text-value", apply["RpcMetadata"]);
+        Assert.Equal("x-apply-bin=010203", apply["RpcBinaryMetadata"]);
+        Assert.Equal("apply-api-key", apply["ApiKey"]);
+        Assert.Equal("apply-identity", apply["Identity"]);
+        Assert.Equal("True", apply["RuntimeIsResolved"]);
+        Assert.Equal("apply-namespace", apply["Namespace"]);
+        Assert.Equal("True", apply["DataConverterIsResolved"]);
+        Assert.Equal("NotOpen", apply["QueryRejectCondition"]);
+        Assert.Equal("True", apply["PluginsAreResolved"]);
+        Assert.Equal("existing,tracing", apply["Interceptors"]);
+        Assert.Equal("True", apply["LoggerFactoryIsHost"]);
+        Assert.Equal("True", apply["ResolvedUnchanged"]);
+        Assert.Equal("True", apply["ClientLoggerFactoryIsHost"]);
+        Assert.Equal("2", apply["ClientInterceptorCount"]);
+        Assert.Equal("apply-namespace", apply["ClientNamespace"]);
+        Assert.Equal("apply-host:7233", apply["ClientTargetHost"]);
+        Assert.Equal("False", apply["ClientIsConnected"]);
+
+        // Every settable TemporalClientConnectOptions property in Temporalio 1.20.0. ApplyTo copies
+        // all of them except LoggerFactory; if an SDK upgrade changes this list, ApplyTo must be
+        // reviewed so a new setting is not silently dropped.
+        Assert.Equal(
+            "ApiKey,DataConverter,DnsLoadBalancing,GrpcCompression,HttpConnectProxy,Identity,Interceptors," +
+            "KeepAlive,LoggerFactory,Namespace,PayloadLimits,Plugins,QueryRejectCondition,RpcBinaryMetadata,RpcMetadata," +
+            "RpcRetry,Runtime,TargetHost,Tls",
+            apply["SettableProperties"]);
+    }
+
+    /// <summary>
+    /// The exact TracingInterceptor composition expression the generated Program.cs files use when
+    /// IncludeOtel is enabled. The harness runs the same expression with a stand-in interceptor so it
+    /// does not need the OpenTelemetry packages.
+    /// </summary>
+    public const string OtelInterceptorComposition =
+        "options.Interceptors = [.. options.Interceptors ?? [], new TracingInterceptor()];";
+
     /// <param name="resolverExpression">
-    /// Fully qualified static method expression, e.g. <c>"MyNamespace.TemporalConnection.Resolve"</c>.
+    /// Fully qualified static method expression, e.g. <c>"MyNamespace.TemporalWorkerConnection.Resolve"</c>.
     /// </param>
-    public static string Build(string resolverExpression) =>
+    /// <param name="applyToExpression">
+    /// Fully qualified static method expression, e.g. <c>"MyNamespace.TemporalWorkerConnection.ApplyTo"</c>.
+    /// </param>
+    public static string Build(string resolverExpression, string applyToExpression) =>
         $$""""
         using System.Globalization;
         using System.Linq;
         using Microsoft.Extensions.Configuration;
+        using Microsoft.Extensions.DependencyInjection;
+        using Microsoft.Extensions.Logging;
+        using Microsoft.Extensions.Options;
+        using Temporalio.Api.Enums.V1;
         using Temporalio.Client;
+        using Temporalio.Client.Interceptors;
+        using Temporalio.Common;
         using Temporalio.Common.EnvConfig;
+        using Temporalio.Converters;
+        using Temporalio.Runtime;
 
         Print(Scenario1EnvWinsOverConfig());
         Print(Scenario2ConfigWinsOverDefault());
         Print(Scenario3NeitherPresentDefaultsToLocalhost());
         Print(Scenario4BlankConfigFallsThroughToLocalhost());
         Print(Scenario5ProfilePropertiesSurvive());
+        RunApplyToScenario();
+
+        // Mirrors the generated Program.cs registration: AddTemporalClient + ApplyTo, plus the
+        // IncludeOtel interceptor composition (with a stand-in for TracingInterceptor).
+        static void RunApplyToScenario()
+        {
+            var existingInterceptor = new MarkerInterceptor();
+            var tracingStandIn = new MarkerInterceptor();
+            var plugin = new SimplePlugin("apply-plugin");
+            using var resolvedLoggerFactory = new LoggerFactory();
+            using var hostLoggerFactory = new LoggerFactory();
+            var dataConverter = DataConverter.Default with { };
+            var runtime = TemporalRuntime.Default;
+            var resolved = new TemporalClientConnectOptions("apply-host:7233")
+            {
+                Tls = new TlsOptions { Domain = "apply-domain" },
+                RpcRetry = new RpcRetryOptions { MaxRetries = 7 },
+                KeepAlive = null,
+                HttpConnectProxy = new HttpConnectProxyOptions("proxy-host:8080"),
+                DnsLoadBalancing = new DnsLoadBalancingOptions { ResolutionInterval = TimeSpan.FromSeconds(42) },
+                PayloadLimits = new PayloadLimitsOptions { PayloadsWarnSize = 12345 },
+                GrpcCompression = new GrpcCompression.None(),
+                RpcMetadata = new List<KeyValuePair<string, string>> { new("x-apply", "text-value") },
+                RpcBinaryMetadata = new List<KeyValuePair<string, byte[]>> { new("x-apply-bin", new byte[] { 1, 2, 3 }) },
+                ApiKey = "apply-api-key",
+                Identity = "apply-identity",
+                Runtime = runtime,
+                Namespace = "apply-namespace",
+                DataConverter = dataConverter,
+                Interceptors = new IClientInterceptor[] { existingInterceptor },
+                LoggerFactory = resolvedLoggerFactory,
+                QueryRejectCondition = QueryRejectCondition.NotOpen,
+                Plugins = new ITemporalClientPlugin[] { plugin },
+            };
+
+            var services = new ServiceCollection();
+            services.AddSingleton<ILoggerFactory>(hostLoggerFactory);
+            services.AddTemporalClient(options =>
+            {
+                {{applyToExpression}}(resolved, options);
+                {{OtelInterceptorComposition.Replace("new TracingInterceptor()", "tracingStandIn", StringComparison.Ordinal)}}
+            });
+            using var provider = services.BuildServiceProvider();
+            var options = provider.GetRequiredService<IOptions<TemporalClientConnectOptions>>().Value;
+            var client = provider.GetRequiredService<ITemporalClient>();
+
+            Apply("TargetHost", options.TargetHost);
+            Apply("TlsDomain", options.Tls?.Domain);
+            Apply("TlsIsCopy", options.Tls is not null && !ReferenceEquals(options.Tls, resolved.Tls));
+            Apply("RpcRetryMaxRetries", options.RpcRetry?.MaxRetries);
+            Apply("RpcRetryIsCopy", options.RpcRetry is not null && !ReferenceEquals(options.RpcRetry, resolved.RpcRetry));
+            Apply("KeepAliveIsNull", options.KeepAlive is null);
+            Apply("HttpConnectProxyTargetHost", options.HttpConnectProxy?.TargetHost);
+            Apply("DnsResolutionSeconds", options.DnsLoadBalancing?.ResolutionInterval.TotalSeconds);
+            Apply("DnsIsCopy", options.DnsLoadBalancing is not null && !ReferenceEquals(options.DnsLoadBalancing, resolved.DnsLoadBalancing));
+            Apply("PayloadsWarnSize", options.PayloadLimits?.PayloadsWarnSize);
+            Apply("PayloadLimitsIsCopy", options.PayloadLimits is not null && !ReferenceEquals(options.PayloadLimits, resolved.PayloadLimits));
+            Apply("GrpcCompressionIsNone", options.GrpcCompression is GrpcCompression.None);
+            Apply("RpcMetadata", string.Join(",", (options.RpcMetadata ?? []).Select(kv => $"{kv.Key}={kv.Value}")));
+            Apply("RpcBinaryMetadata", string.Join(",", (options.RpcBinaryMetadata ?? []).Select(kv => $"{kv.Key}={Convert.ToHexString(kv.Value)}")));
+            Apply("ApiKey", options.ApiKey);
+            Apply("Identity", options.Identity);
+            Apply("RuntimeIsResolved", ReferenceEquals(options.Runtime, runtime));
+            Apply("Namespace", options.Namespace);
+            Apply("DataConverterIsResolved", ReferenceEquals(options.DataConverter, dataConverter) && !ReferenceEquals(dataConverter, DataConverter.Default));
+            Apply("QueryRejectCondition", options.QueryRejectCondition);
+            Apply("PluginsAreResolved", options.Plugins is { Count: 1 } && ReferenceEquals(options.Plugins.First(), plugin));
+            Apply("Interceptors", string.Join(",", (options.Interceptors ?? []).Select(i =>
+                ReferenceEquals(i, existingInterceptor) ? "existing" : ReferenceEquals(i, tracingStandIn) ? "tracing" : "other")));
+            Apply("LoggerFactoryIsHost", ReferenceEquals(options.LoggerFactory, hostLoggerFactory));
+            Apply("ResolvedUnchanged",
+                resolved.Interceptors.Count == 1 && ReferenceEquals(resolved.LoggerFactory, resolvedLoggerFactory));
+            Apply("ClientLoggerFactoryIsHost", ReferenceEquals(client.Options.LoggerFactory, hostLoggerFactory));
+            Apply("ClientInterceptorCount", client.Options.Interceptors?.Count ?? 0);
+            Apply("ClientNamespace", client.Options.Namespace);
+            Apply("ClientTargetHost", client.Connection.Options.TargetHost);
+            Apply("ClientIsConnected", client.Connection.IsConnected);
+
+            // Guard against SDK upgrades adding settings that ApplyTo would silently drop.
+            Apply("SettableProperties", string.Join(",", typeof(TemporalClientConnectOptions)
+                .GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+                .Where(p => p.CanWrite)
+                .Select(p => p.Name)
+                .OrderBy(n => n, StringComparer.Ordinal)));
+        }
+
+        static void Apply(string key, object? value) =>
+            Console.WriteLine($"APPLY|{key}|{Convert.ToString(value, CultureInfo.InvariantCulture) ?? "<null>"}");
 
         static (string Scenario, TemporalClientConnectOptions Options) Scenario1EnvWinsOverConfig()
         {
@@ -165,6 +353,10 @@ internal static class TemporalConnectionResolverHarnessProgram
                 tlsServerName,
                 rpcMetadataCount.ToString(CultureInfo.InvariantCulture),
                 rpcMetadataFirst));
+        }
+
+        sealed class MarkerInterceptor : IClientInterceptor
+        {
         }
         """";
 }

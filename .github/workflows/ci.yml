@@ -34,6 +34,8 @@ jobs:
         run: dotnet build TemporalDurableObjects.slnx --configuration Release --no-restore --nologo
 
       - name: Unit tests
+        env:
+          MSBUILDDISABLENODEREUSE: "1"
         run: |
           dotnet test tests/TemporalCommunity.DurableObjects.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=unit.trx"
           dotnet test tests/TemporalCommunity.Extensions.Analyzers.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=analyzers.trx"
@@ -41,7 +43,7 @@ jobs:
           dotnet test tests/TemporalCommunity.DurableObjects.GeneratedClients.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=generated-clients.trx"
           dotnet test tests/TemporalCommunity.Extensions.Analyzers.CodeFixes.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=analyzer-codefixes.trx"
           dotnet test tests/TemporalCommunity.DurableObjects.Analyzers.CodeFixes.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=durable-analyzer-codefixes.trx"
-          MSBUILDDISABLENODEREUSE=1 dotnet test tests/TemporalCommunity.Templates.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=templates.trx"
+          dotnet test tests/TemporalCommunity.Templates.Tests --configuration Release --no-build --nologo --logger "trx;LogFileName=templates.trx"
 
       - name: Install just
         if: matrix.os == 'ubuntu-latest'
@@ -85,7 +87,7 @@ jobs:
       - name: Install Aspire CLI
         # --version is a named flag, not positional (confirmed by downloading and reading the
         # real install script) — a bare positional version argument would be silently ignored.
-        run: curl -sSL https://aspire.dev/install.sh | bash -s -- --version 13.4.6
+        run: curl -sSL https://aspire.dev/install.sh | bash -s -- --version 13.6.0
 
       - name: Add Aspire CLI to PATH
         run: echo "$HOME/.aspire/bin" >> "$GITHUB_PATH"

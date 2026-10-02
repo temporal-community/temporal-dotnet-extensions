@@ -1,14 +1,11 @@
 using Temporalio.Workflows;
-using GeneratedClassNamePrefix.Shared.Activities;
+using GeneratedNamespacePrefix.Shared.Activities;
 
-namespace GeneratedClassNamePrefix.Shared.Workflows;
+namespace GeneratedNamespacePrefix.Shared.Workflows;
 
 /// <summary>
-/// A starter workflow class. Replace with real workflow logic. Workflow code must be
-/// deterministic: only use <c>Workflow.*</c> APIs for time, randomness, and async coordination
-/// (never <c>DateTime.UtcNow</c>, <c>Task.Delay</c>, <c>Guid.NewGuid</c>, etc. directly). Declared
-/// in Shared (not Worker) so Client can reference it for type-safe
-/// <c>StartWorkflowAsync&lt;SampleWorkflow&gt;(...)</c> calls.
+/// A starter workflow in Shared so Client can start it by type.
+/// Workflows must be deterministic; see https://docs.temporal.io/develop/dotnet/workflows/basics.
 /// </summary>
 [Workflow]
 public sealed class SampleWorkflow

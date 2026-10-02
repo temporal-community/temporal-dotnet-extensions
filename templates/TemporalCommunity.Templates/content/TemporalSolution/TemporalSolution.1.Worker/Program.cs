@@ -1,11 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using Temporalio.Client;
 using Temporalio.Extensions.Hosting;
-using GeneratedClassNamePrefix.Shared;
-using GeneratedClassNamePrefix.Shared.Activities;
-using GeneratedClassNamePrefix.Shared.Workflows;
+using GeneratedNamespacePrefix.Shared;
+using GeneratedNamespacePrefix.Shared.Activities;
+using GeneratedNamespacePrefix.Shared.Workflows;
 //#if (IncludeOtel)
 using OpenTelemetry;
 using OpenTelemetry.Trace;
@@ -42,18 +41,19 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOIN
 // ---------------------------------------------------------------------------
 // Resolve connection options via SharedTemporalConnection.Resolve's three-step
 // precedence (environment/profile -> "Temporal:Address" config ->
-// localhost:7233) and register a lazily-connecting ITemporalClient. See
-// docs/TEMPLATES.md's "Connecting to Temporal" section for the full order.
+// localhost:7233), then register ITemporalClient via the SDK's AddTemporalClient.
+// ApplyTo copies every resolved setting onto the SDK-managed options, leaving
+// the host ILoggerFactory the SDK already assigned in place; the SDK creates a
+// lazily-connecting client. See docs/TEMPLATES.md's "Connecting to Temporal"
+// section for the full order.
 // ---------------------------------------------------------------------------
 var connectOptions = SharedTemporalConnection.Resolve(builder.Configuration);
-builder.Services.AddSingleton<ITemporalClient>(provider =>
+builder.Services.AddTemporalClient(options =>
 {
-    var options = (TemporalClientConnectOptions)connectOptions.Clone();
-    options.LoggerFactory = provider.GetRequiredService<ILoggerFactory>();
+    SharedTemporalConnection.ApplyTo(connectOptions, options);
 //#if (IncludeOtel)
-    options.Interceptors = new[] { new TracingInterceptor() };
+    options.Interceptors = [.. options.Interceptors ?? [], new TracingInterceptor()];
 //#endif
-    return TemporalClient.CreateLazy(options);
 });
 
 // ---------------------------------------------------------------------------
@@ -66,9 +66,27 @@ builder.Services.AddSingleton<ITemporalClient>(provider =>
 // double every span.
 //#endif
 // ---------------------------------------------------------------------------
-const string taskQueue = "temporal-solution-tq";
-builder.Services.AddHostedTemporalWorker(taskQueue)
+const string taskQueue = "TemporalSolution.1-tq";
+var resolvedTaskQueue = ResolveTaskQueue(builder.Configuration, taskQueue);
+builder.Services.AddHostedTemporalWorker(resolvedTaskQueue)
     .AddWorkflow<SampleWorkflow>()
     .AddScopedActivities<SampleActivities>();
 
-await builder.Build().RunAsync().ConfigureAwait(false);
+await builder.Build().RunAsync();
+
+static string ResolveTaskQueue(IConfiguration configuration, string defaultTaskQueue)
+{
+    var configured = configuration["Temporal:TaskQueue"];
+    if (configured is null)
+    {
+        return defaultTaskQueue;
+    }
+
+    if (string.IsNullOrWhiteSpace(configured))
+    {
+        throw new InvalidOperationException(
+            "Configuration value 'Temporal:TaskQueue' must not be blank. Set it to a valid task queue name or remove it.");
+    }
+
+    return configured;
+}

@@ -4,10 +4,11 @@ namespace TemplateNamespace;
 
 public sealed class TemporalActivity1
 {
-    // Activities CAN do I/O, use ILogger, and access DI (unlike workflow code, which must stay
-    // deterministic) — they run outside the workflow scheduler.
+    // Activities can do I/O and use DI. See https://docs.temporal.io/develop/dotnet/activities/basics.
+    //
+    // The method name is generated from the class name to keep Temporal activity type names unique.
     [Activity]
-    public async Task<string> RunAsync(string input)
+    public async Task<string> GeneratedActivityMethodName(string input)
     {
         // Replace with real activity logic.
         await Task.CompletedTask;

@@ -3,8 +3,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <PackageType>Template</PackageType>
     <PackageId>TemporalCommunity.Templates</PackageId>
-    <Description>dotnet new templates for scaffolding Temporal .NET workflows, activities, and workers.</Description>
-    <PackageTags>temporal;dotnet-new;templates;workflow;scaffolding</PackageTags>
+    <Description>dotnet new templates for Temporal .NET: item templates for a workflow, an activity, and a payload converter with a custom encoding; a single-project worker host; and a Worker + Client + Shared solution with optional .NET Aspire orchestration and OpenTelemetry tracing.</Description>
+    <PackageTags>temporal;dotnet-new;templates;workflow;activity;worker;encoding-converter;payload-converter;aspire;opentelemetry;scaffolding</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>

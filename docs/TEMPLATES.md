@@ -52,43 +52,46 @@ Omit `-n` to get the default placeholder name `TemporalActivity1`. The generated
 is bound to the target project's `RootNamespace`. Activities (unlike workflow code) can freely do
 I/O, use `ILogger`, and access DI — they run outside the workflow scheduler.
 
-### `temporal-payload-converter`
+The generated method name is derived from the requested class name, so each activity item has a
+distinct Temporal activity type. The item template deliberately contains one activity method and
+does not configure a task queue; queue routing belongs to a Worker.
 
-Creates a new `IEncodingConverter` implementation for a custom payload encoding.
+### `temporal-converter`
+
+Creates a custom payload converter with a nested encoding class in one file:
+
+- `MyConverter.MyConverterEncoding` — a nested `IEncodingConverter` for one custom wire format. Implement
+  `TryToPayload` and `ToValue` here.
+- `MyConverter` — a `DefaultPayloadConverter` subclass that keeps the SDK's default encoding
+  converters in their default order and puts `MyConverter.MyConverterEncoding` just before
+  `JsonPlainConverter`. Converters are tried in order, and `JsonPlainConverter` accepts any value.
 
 ```bash
-dotnet new temporal-payload-converter -n MyEncodingConverter
+dotnet new temporal-converter -n MyConverter
 ```
 
-Omit `-n` to get the default placeholder name `TemporalPayloadConverter1`. The generated class's
-namespace is bound to the target project's `RootNamespace`.
-
-The generated `IEncodingConverter` implementation is meant to be composed into a
-`DefaultPayloadConverter` alongside the built-in converters — order matters, since converters are
-tried in order when converting to a payload, so put custom ones first:
+Omit `-n` to get the default name `TemporalConverter1`. The generated classes' namespace is bound
+to the target project's `RootNamespace`. Pass the converter through a data converter in the
+Temporal client or worker options:
 
 ```csharp
-var payloadConverter = new DefaultPayloadConverter(
-    new MyEncodingConverter(),
-    new BinaryNullConverter(),
-    new BinaryPlainConverter(),
-    new JsonProtoConverter(),
-    new BinaryProtoConverter(),
-    new JsonPlainConverter(new System.Text.Json.JsonSerializerOptions()));
-var dataConverter = DataConverter.Default with { PayloadConverter = payloadConverter };
-// Set dataConverter on TemporalClientConnectOptions.DataConverter (client) and/or
-// TemporalWorkerOptions.DataConverter (worker) before connecting/running.
+var dataConverter = DataConverter.Default with { PayloadConverter = new MyConverter() };
 ```
 
-Composing into `DefaultPayloadConverter` is not the only supported customization path — the SDK's
-own `DefaultPayloadConverter` doc comment notes that subclassing `DefaultPayloadConverter` directly
-is also valid, and is a better fit if you need to change more than a single encoding (e.g.
-reordering or replacing several of the built-in converters at once). The item template scaffolds
-an `IEncodingConverter` because composition is the more surgical fit for adding one custom
-encoding to an existing project.
+Until `TryToPayload` is implemented it returns `false`, so values fall through to the default
+converters.
 
-The target project must already reference the `Temporalio` package — item templates cannot add a
-`PackageReference` to an existing `.csproj`. Add it first if needed:
+The generated encoding identifier includes the namespace and type name and ends in `/v1`. It is a
+persistent wire contract; keep it stable for existing payloads and add a new version if the format
+changes incompatibly.
+
+To change only JSON serializer settings, you don't need this template; use
+`new DefaultPayloadConverter(jsonSerializerOptions)` instead.
+
+See [Temporal data conversion best practices](https://docs.temporal.io/develop/dotnet/best-practices/data-handling/data-conversion).
+
+All item templates require the target project to reference the `Temporalio` package; they cannot
+add a `PackageReference` to an existing `.csproj`. Add it first if needed:
 
 ```bash
 dotnet add package Temporalio
@@ -119,13 +122,14 @@ Generated files:
 |---|---|
 | `<Name>.csproj` | Console project referencing `Temporalio`, `Temporalio.Extensions.Hosting`, and `TemporalCommunity.Extensions.Analyzers`. |
 | `Program.cs` | Host setup: resolves connection options, registers `ITemporalClient`, and registers the worker. |
-| `TemporalConnection.cs` | `public static class TemporalConnection` with the `Resolve(...)` method described below. |
+| `TemporalWorkerConnection.cs` | `public static class TemporalWorkerConnection` with the `Resolve(...)` method described below. |
 | `Workflows/SampleWorkflow.cs`, `Activities/SampleActivities.cs` | A starter `[Workflow]`/`[Activity]` pair, wired up in `Program.cs` via `AddWorkflow<T>()`/`AddScopedActivities<T>()`. |
 
 **Package version pins.** `Temporalio`, `Temporalio.Extensions.Hosting`,
 `Temporalio.Extensions.OpenTelemetry`, `OpenTelemetry.Extensions.Hosting`, and
 `OpenTelemetry.Exporter.OpenTelemetryProtocol` are pinned to exact versions directly in the
 generated `.csproj`'s `PackageReference` items — bump them there when newer stable releases ship.
+The current generated project templates use Temporalio 1.20.0.
 The `TemporalCommunity.Extensions.Analyzers` version is pinned once, in a
 `TemporalCommunityAnalyzersVersion` MSBuild property near the top of the same `.csproj`, so bumping
 it is a one-line change independent of this template package's own version.
@@ -153,17 +157,21 @@ Creates a Worker + Client + Shared multi-project solution running plain Temporal
 workflows/activities, with optional .NET Aspire orchestration.
 
 ```bash
-dotnet new temporal-solution -n Contoso.Fulfillment
+dotnet new temporal-solution -n Contoso.Fulfillment -o Contoso.Fulfillment
 ```
+
+When `-n` is omitted, the generated name is derived from the output/current directory; it is not
+automatically `TemporalSolution.1` because this template does not set `preferDefaultName: true`.
+Use `-n TemporalSolution.1` explicitly when testing the digit-after-dot naming case.
 
 Options:
 
-- `--framework <net8.0|net10.0>` (default `net10.0`) — applied to Worker, Client, and Shared.
+- `--framework <net8.0|net10.0>` (default `net10.0`) — applied to Worker, Client, and Shared,
+  plus AppHost and ServiceDefaults when `--include-aspire` is enabled.
 - `--include-aspire` (default off) — adds an `AppHost` and `ServiceDefaults` project. The AppHost
   references `TemporalCommunity.Aspire.Hosting` and calls `AddTemporalLocalDevServer`, which
-  auto-provisions a local Temporal dev server as part of `aspire run`/`dotnet run` — no separately
-  installed Temporal CLI required for this path (it uses
-  `Temporalio.Testing.WorkflowEnvironment`'s self-managed ephemeral server under the hood). With
+  auto-provisions a local Temporal dev server when the AppHost starts — no separately
+  installed Temporal CLI required for this path. With
   `--include-aspire` off (the default), you run your own `temporal server start-dev` (or point at
   Temporal Cloud), exactly like `temporal-worker` and every sample in `samples/`.
 - `--include-otel` (default off) — adds a `"Temporalio"` `ActivitySource` and the client-side
@@ -181,22 +189,94 @@ Generated projects:
 | `<Name>.AppHost` *(--include-aspire only)* | Aspire orchestrator: provisions the local Temporal dev server and runs Worker + Client as Aspire resources. |
 | `<Name>.ServiceDefaults` *(--include-aspire only)* | Service discovery, HTTP resilience, and OpenTelemetry wiring shared by Worker and Client. Trimmed from Aspire's own ServiceDefaults template to what applies to plain Generic Host console apps — no ASP.NET Core instrumentation or health-check endpoints, since neither Worker nor Client is a web application. |
 
+### Run a generated solution
+
+For a standalone solution, start a Temporal server separately (or configure a remote one), then
+run the Worker and Client in separate terminals:
+
+```bash
+dotnet new temporal-solution -n Contoso.Fulfillment -o Contoso.Fulfillment
+cd Contoso.Fulfillment
+temporal server start-dev
+# In another terminal, from the generated solution directory:
+dotnet run --project Contoso.Fulfillment.Worker
+# In a third terminal, from the same directory:
+dotnet run --project Contoso.Fulfillment.Client
+```
+
+The standalone example requires the [Temporal CLI](https://docs.temporal.io/cli) for
+`temporal server start-dev`; if using a remote server instead, configure the connection as
+described below. The generated Client is a one-shot demo; the Worker keeps running.
+
+For an Aspire-enabled solution, use **one** of these launch methods from the generated solution
+directory:
+
+```bash
+dotnet new temporal-solution -n Contoso.Fulfillment -o Contoso.Fulfillment --include-aspire
+cd Contoso.Fulfillment
+dotnet run --project Contoso.Fulfillment.AppHost
+# Or, with the Aspire CLI installed:
+aspire run --apphost Contoso.Fulfillment.AppHost/Contoso.Fulfillment.AppHost.csproj
+# Or, with the Aspire CLI installed, for a background session:
+dotnet build
+aspire start --apphost Contoso.Fulfillment.AppHost/Contoso.Fulfillment.AppHost.csproj
+```
+
+The AppHost sets `AspireUseCliBundle=true`. For `dotnet run`, the Aspire SDK selects an installed
+compatible `aspire` on `PATH` when available, or invokes the Aspire CLI version paired with the
+AppHost SDK through DNX. The DNX fallback requires the .NET 10 SDK and access to the configured
+NuGet sources. `aspire run` and `aspire start` instead require the
+[Aspire CLI](https://aspire.dev/get-started/install-cli/) installed and on `PATH`; use
+`aspire stop --apphost Contoso.Fulfillment.AppHost/Contoso.Fulfillment.AppHost.csproj` to stop a
+background session. Aspire mode provisions the Temporal dev server through
+`TemporalCommunity.Aspire.Hosting`; it does **not** require a separately installed Temporal CLI.
+Build the generated solution before `aspire start` so its resource projects have all referenced
+assemblies in their output; `aspire start` launches those projects with `--no-build`.
+See the official [Aspire SDK CLI-bundle and launch documentation](https://aspire.dev/get-started/aspire-sdk/)
+and [DNX documentation](https://learn.microsoft.com/dotnet/core/tools/dotnet-tool-exec).
+
+If `dotnet run` cannot find a compatible installed Aspire CLI, check that .NET 10's `dnx` is
+available and that NuGet restore can reach its sources; alternatively install the Aspire CLI.
+If `aspire run` or `aspire start` is not recognized, install the Aspire CLI first. A successful
+restore or build does not, by itself, confirm the AppHost or the Temporal dev server started.
+
 **Non-trivial project names.** A single `sourceName` token replace isn't enough for a
-multi-project solution with strongly-typed Aspire project references and XML project files, so two
-additional symbols handle the edge cases: `GeneratedClassNamePrefix` sanitizes the name into a
-valid C# identifier (used for `Projects.<Name>_Worker`-style references in `AppHost.cs`), and
-`XmlEncodedProjectName` XML-escapes the name for use inside `.csproj` `ProjectReference` paths.
+multi-project solution with strongly-typed Aspire project references and XML project files, so
+separate symbols handle the edge cases: `GeneratedNamespacePrefix` preserves a valid C# namespace
+prefix, `GeneratedAspirePrefix` sanitizes the name into a valid identifier (used for
+`Projects.<Name>_Worker`-style references in `AppHost.cs`), and `XmlEncodedProjectName` XML-escapes
+the name for use inside `.csproj` `ProjectReference` paths.
 Both track the folder names on disk (which use the raw, unescaped name), so a name like
 `Contoso-Fulfillment&Orders` produces valid C# (`Contoso_Fulfillment_Orders`) and valid XML
 (`Contoso-Fulfillment&amp;Orders`) even though the actual directory on disk keeps the literal `&`.
 
+The namespace and Aspire identifiers are intentionally separate. Dots in a C# namespace are
+preserved, C# keyword segments are escaped with `@`, and invalid or digit-leading segments are
+sanitized for C#. Aspire's `Projects.*` identifiers use a separate flattened valid identifier:
+
+| `-n` | C# namespace prefix | Aspire project prefix |
+|---|---|---|
+| `class` | `@class` | `class` |
+| `Acme.class` | `Acme.@class` | `Acme_class` |
+| `Contoso.Fulfillment` | `Contoso.Fulfillment` | `Contoso_Fulfillment` |
+| `TemporalSolution.1` | `TemporalSolution._1` | `TemporalSolution__1` |
+
+Omitting `-n` is a separate case: the CLI derives the name from the output/current directory
+instead of using the template's `defaultName` (`TemporalSolution.1`), because
+`preferDefaultName` is not enabled.
+
 **Package version pins** follow the same one-place-per-package convention as `temporal-worker`.
+Generated project templates pin Temporalio 1.20.0. When upgrading from a version before 1.18.0,
+note that workers now enforce outbound payload/memo size limits before sending: over-limit task
+completions fail retryably instead of reaching the server and failing non-retryably. Review payload
+size warnings (`TMPRL1103`) and [Temporal .NET SDK 1.18.0 release notes](https://github.com/temporalio/sdk-dotnet/blob/main/CHANGELOG.md#1180---2026-08-13)
+before upgrading workloads that use large payloads or a size-changing payload proxy.
 
 ## Connecting to Temporal
 
-`temporal-worker`'s generated `TemporalConnection.cs` resolves a `TemporalClientConnectOptions`
-using a fixed three-step precedence, implemented in `TemporalConnection.Resolve(IConfiguration,
-ClientEnvConfig.ProfileLoadOptions?)`:
+`temporal-worker`'s generated `TemporalWorkerConnection.cs` resolves a
+`TemporalClientConnectOptions` using a fixed three-step precedence, implemented in
+`TemporalWorkerConnection.Resolve(IConfiguration, ClientEnvConfig.ProfileLoadOptions?)`:
 
 1. **Environment variables or a Temporal CLI profile** — `ClientEnvConfig.LoadClientConnectOptions(...)`
    picks up `TEMPORAL_ADDRESS`/`TEMPORAL_NAMESPACE`/etc., or a named profile from a
@@ -221,15 +301,56 @@ pointed at different servers. When `--include-aspire` is enabled, `AddTemporalLo
 is what typically satisfies step 1 above — Temporal Cloud credentials, TLS, namespace, and RPC
 metadata still come from environment/profile configuration, not from anything Aspire-specific.
 
-## Building from source
+Every generated host (`temporal-worker`, and `temporal-solution`'s Worker and Client) registers
+`ITemporalClient` through the SDK's `AddTemporalClient(Action<TemporalClientConnectOptions>)` from
+`Temporalio.Extensions.Hosting`. Because that callback mutates the SDK's own options instance
+rather than replacing it, the generated `ApplyTo(resolved, options)` helper next to `Resolve`
+explicitly copies every resolved connection and client setting — target host, namespace, TLS,
+API key, RPC metadata and binary metadata, RPC retry, keepalive, HTTP CONNECT proxy, DNS load
+balancing, gRPC compression, payload limits, identity, runtime, data converter, interceptors, query reject
+condition, and plugins. It deliberately leaves `LoggerFactory` alone so the host's
+`ILoggerFactory`, which the SDK assigns first, is kept. With `--include-otel`, the
+`TracingInterceptor` is appended after any interceptors already present, exactly once. The SDK
+creates the client lazily, so it connects on first use.
 
-The template pack lives in `templates/TemporalCommunity.Templates/`. Packing and verification
-follow this repo's usual `just` workflow:
+### Task queues and application routing
 
-```bash
-just pack                          # packs TemporalCommunity.Templates.<version>.nupkg into artifacts/packages
-just pack-verify                   # installs it into an isolated hive and instantiates/builds each template
-just template-smoke-test-standalone  # real Temporal dev server + Worker + Client runtime check
-just template-smoke-test-aspire      # real Aspire AppHost + auto-provisioned dev server runtime check
-just template-smoke-test             # runs both of the above
+Each generated project application receives a stable, name-derived default task queue rather than
+a fixed literal shared by every generated project, so independent generated applications in the
+same Temporal namespace do not collide by default. The default is the template's substituted name
+followed by `-tq`, with no additional prefix — for example, `temporal-worker -n
+OrderProcessing.Worker` defaults to `OrderProcessing.Worker-tq`, and `temporal-solution -n Alpha`
+defaults to `Alpha-tq` for both the generated Worker and Client, since both derive the default from
+the same generated name and always agree when no override is configured. All generated project
+applications read the same configuration key:
+
+```text
+Temporal:TaskQueue
 ```
+
+A non-empty `Temporal:TaskQueue` value overrides the applicable default. A missing or `null` value
+uses the default. A blank or whitespace-only value is rejected explicitly with
+`InvalidOperationException`:
+
+```text
+Configuration value 'Temporal:TaskQueue' must not be blank. Set it to a valid task queue name or remove it.
+```
+
+Configure the value through the normal .NET configuration providers when deploying. Changing a
+queue for an already deployed application is a routing migration: deploy compatible consumers,
+drain or complete work on the old queue, and only then remove the old routing.
+
+The standalone Worker and solution Worker use separate generated connection helpers. The standalone
+helper is `TemporalWorkerConnection`, avoiding ambiguity with the Temporal SDK's own
+`TemporalConnection` type. The solution helper remains `SharedTemporalConnection` because it is
+intentionally shared by the Worker and Client.
+
+### Client lifecycle and restore behavior
+
+The generated solution Client is a one-shot `BackgroundService`: it starts the sample workflow,
+waits for the result, logs it, and requests host shutdown. It passes the host stopping token to
+both the start RPC and the separate result-wait RPC. Cancellation caused by ordinary local
+shutdown is treated as a normal stop; genuine workflow or RPC failures are logged and produce a
+nonzero process exit status. Local RPC cancellation does not cancel the server-side workflow.
+
+Both `temporal-worker` and `temporal-solution` restore their generated projects after creation.

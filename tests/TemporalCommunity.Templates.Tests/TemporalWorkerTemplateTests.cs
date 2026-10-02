@@ -10,6 +10,100 @@ namespace TemporalCommunity.Templates.Tests;
 /// </summary>
 public sealed class TemporalWorkerTemplateTests
 {
+    [Fact]
+    public async Task HelperNameAsProjectNameGeneratesAndBuilds()
+    {
+        const string name = "TemporalWorkerConnection";
+        var outputDirectory = TestFixtures.CreateTempDirectory();
+        var settingsDirectory = TestFixtures.CreateTempDirectory();
+        try
+        {
+            await TemporalWorkerTestHelper.InstantiateAsync(
+                name, "net10.0", includeOtel: false, outputDirectory, settingsDirectory);
+
+            var programContent = await File.ReadAllTextAsync(Path.Combine(outputDirectory, "Program.cs"));
+            Assert.Contains(
+                $"global::{name}.TemporalWorkerConnection.Resolve(builder.Configuration);",
+                programContent, StringComparison.Ordinal);
+            Assert.Contains(
+                $"global::{name}.TemporalWorkerConnection.ApplyTo(connectOptions, options);",
+                programContent, StringComparison.Ordinal);
+            await DotnetCli.RunAsync(outputDirectory, "build", "--nologo");
+        }
+        finally
+        {
+            TestFixtures.DeleteDirectory(outputDirectory);
+            TestFixtures.DeleteDirectory(settingsDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task GenerationRunsRestoreBeforeNoRestoreBuild()
+    {
+        var rootDirectory = TestFixtures.CreateTempDirectory();
+        var outputDirectory = Path.Combine(rootDirectory, "WorkerRestoreProbe");
+        var hiveDirectory = Path.Combine(rootDirectory, "hive");
+        Directory.CreateDirectory(outputDirectory);
+        try
+        {
+            await DotnetCli.RunAsync(
+                rootDirectory,
+                "new", "install", RepoPaths.ContentRoot("TemporalWorker"),
+                "--debug:custom-hive", hiveDirectory);
+            await DotnetCli.RunAsync(
+                rootDirectory,
+                "new", "temporal-worker",
+                "-n", "WorkerRestoreProbe",
+                "-o", outputDirectory,
+                "--framework", "net10.0",
+                "--debug:custom-hive", hiveDirectory);
+
+            var assetsPath = Path.Combine(outputDirectory, "obj", "project.assets.json");
+            Assert.True(
+                File.Exists(assetsPath),
+                $"Template restore post-action did not create '{assetsPath}' before build.");
+            await DotnetCli.RunAsync(outputDirectory, "build", "--no-restore", "--nologo");
+        }
+        finally
+        {
+            TestFixtures.DeleteDirectory(rootDirectory);
+        }
+    }
+
+    [Fact]
+    public async Task OmittingNameUsesOutputDirectoryName()
+    {
+        var rootDirectory = TestFixtures.CreateTempDirectory();
+        var outputDirectory = Path.Combine(rootDirectory, "WorkerDefault");
+        var hiveDirectory = Path.Combine(rootDirectory, "hive");
+        Directory.CreateDirectory(outputDirectory);
+        try
+        {
+            await DotnetCli.RunAsync(
+                rootDirectory,
+                "new", "install", RepoPaths.ContentRoot("TemporalWorker"),
+                "--debug:custom-hive", hiveDirectory);
+            await DotnetCli.RunAsync(
+                outputDirectory,
+                "new", "temporal-worker",
+                "-o", ".",
+                "--debug:custom-hive", hiveDirectory);
+
+            var projectPath = Path.Combine(outputDirectory, "WorkerDefault.csproj");
+            var programPath = Path.Combine(outputDirectory, "Program.cs");
+            Assert.True(File.Exists(projectPath), $"Expected generated project at '{projectPath}'.");
+            Assert.True(File.Exists(programPath), $"Expected generated program at '{programPath}'.");
+
+            var programContent = await File.ReadAllTextAsync(programPath);
+            Assert.Equal("WorkerDefault-tq", ExtractQueueDefault(programContent));
+            await DotnetCli.RunAsync(outputDirectory, "build", "--no-restore", "--nologo");
+        }
+        finally
+        {
+            TestFixtures.DeleteDirectory(rootDirectory);
+        }
+    }
+
     [Theory]
     [InlineData("net8.0", false)]
     [InlineData("net8.0", true)]
@@ -37,6 +131,14 @@ public sealed class TemporalWorkerTemplateTests
             var programContent = await File.ReadAllTextAsync(programPath);
 
             Assert.Contains($"<TargetFramework>{framework}</TargetFramework>", csprojContent, StringComparison.Ordinal);
+            Assert.Contains("Temporal:TaskQueue", programContent, StringComparison.Ordinal);
+            Assert.Contains("IsNullOrWhiteSpace", programContent, StringComparison.Ordinal);
+            Assert.Equal($"{name}-tq", ExtractQueueDefault(programContent));
+            Assert.Contains(
+                $"global::{name}.TemporalWorkerConnection.Resolve(builder.Configuration);",
+                programContent, StringComparison.Ordinal);
+            Assert.True(File.Exists(Path.Combine(outputDirectory, "TemporalWorkerConnection.cs")));
+            Assert.False(File.Exists(Path.Combine(outputDirectory, "TemporalConnection.cs")));
 
             if (includeOtel)
             {
@@ -57,23 +159,56 @@ public sealed class TemporalWorkerTemplateTests
                 Assert.DoesNotContain("OpenTelemetry.Exporter.OpenTelemetryProtocol", csprojContent, StringComparison.Ordinal);
             }
 
-            // TracingInterceptor is only ever assigned once (on the cloned client options, inside
-            // the ITemporalClient factory) — never a second time on TemporalWorkerOptions, which
-            // would double every span since the client interceptor already carries over into the
-            // worker automatically. Counted rather than checked textually, since IncludeOtel's own
-            // explanatory comment legitimately mentions "TemporalWorkerOptions.Interceptors" by name.
-            var interceptorAssignmentCount = System.Text.RegularExpressions.Regex.Count(
-                programContent, "\\.Interceptors = new\\[\\] \\{ new TracingInterceptor\\(\\) \\};");
-            Assert.Equal(includeOtel ? 1 : 0, interceptorAssignmentCount);
+            // ITemporalClient is registered through the SDK's AddTemporalClient, with ApplyTo
+            // transferring the resolved settings (its behavior is covered by
+            // TemporalConnectionResolverTests), rather than a hand-rolled lazy-client singleton.
+            Assert.Contains("builder.Services.AddTemporalClient(options =>", programContent, StringComparison.Ordinal);
+            Assert.Contains(
+                $"global::{name}.TemporalWorkerConnection.ApplyTo(connectOptions, options);",
+                programContent, StringComparison.Ordinal);
+            Assert.DoesNotContain("AddSingleton<ITemporalClient>", programContent, StringComparison.Ordinal);
+            Assert.DoesNotContain("CreateLazy", programContent, StringComparison.Ordinal);
+            Assert.DoesNotContain("options.LoggerFactory", programContent, StringComparison.Ordinal);
+
+            // TracingInterceptor is only ever composed once (appended to the client options'
+            // existing interceptors inside the AddTemporalClient callback) — never a second time on
+            // TemporalWorkerOptions, which would double every span since the client interceptor
+            // already carries over into the worker automatically.
+            AssertSingleTracingInterceptorComposition(programContent, includeOtel);
 
             // Standalone build: the generated project must compile on its own, not just as part of
             // the repo's own solution.
             await DotnetCli.RunAsync(outputDirectory, "build", "--nologo");
+            if (framework == "net10.0" && !includeOtel)
+            {
+                await TaskQueueResolverHarness.AssertContractAsync(
+                    programPath,
+                    $"{name}-tq",
+                    "ResolveWorkerTaskQueue");
+            }
         }
         finally
         {
             TestFixtures.DeleteDirectory(outputDirectory);
             TestFixtures.DeleteDirectory(settingsDirectory);
         }
+    }
+
+    internal static void AssertSingleTracingInterceptorComposition(string programContent, bool includeOtel)
+    {
+        var expected = includeOtel ? 1 : 0;
+        Assert.Equal(expected, System.Text.RegularExpressions.Regex.Count(
+            programContent,
+            System.Text.RegularExpressions.Regex.Escape(TemporalConnectionResolverHarnessProgram.OtelInterceptorComposition)));
+        Assert.Equal(expected, System.Text.RegularExpressions.Regex.Count(programContent, "new TracingInterceptor\\(\\)"));
+    }
+
+    private static string ExtractQueueDefault(string content)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(
+            content,
+            "const string taskQueue\\s*=\\s*\"(?<queue>[^\"]+)\"");
+        Assert.True(match.Success, "Generated queue default was not found.");
+        return match.Groups["queue"].Value;
     }
 }

@@ -10,7 +10,7 @@ namespace TemporalCommunity.Templates.Tests;
 /// </summary>
 internal static class SharedTemporalConnectionResolverHarness
 {
-    public static async Task<IReadOnlyDictionary<string, TemporalConnectionResolverResult>> RunAllScenariosAsync()
+    public static async Task<TemporalConnectionResolverRun> RunAllScenariosAsync()
     {
         var targetDirectory = TestFixtures.CreateTempDirectory();
         var settingsDirectory = TestFixtures.CreateTempDirectory();
@@ -37,6 +37,7 @@ internal static class SharedTemporalConnectionResolverHarness
                   </PropertyGroup>
                   <ItemGroup>
                     <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.0" />
+                    <PackageReference Include="Temporalio.Extensions.Hosting" Version="1.20.0" />
                   </ItemGroup>
                   <ItemGroup>
                     <ProjectReference Include="{sharedCsprojPath}" />
@@ -47,7 +48,8 @@ internal static class SharedTemporalConnectionResolverHarness
             await File.WriteAllTextAsync(
                 Path.Combine(harnessDirectory, "Program.cs"),
                 TemporalConnectionResolverHarnessProgram.Build(
-                    resolverExpression: $"{targetName}.Shared.SharedTemporalConnection.Resolve")).ConfigureAwait(false);
+                    resolverExpression: $"{targetName}.Shared.SharedTemporalConnection.Resolve",
+                    applyToExpression: $"{targetName}.Shared.SharedTemporalConnection.ApplyTo")).ConfigureAwait(false);
 
             await DotnetCli.RunAsync(harnessDirectory, "build", "--nologo", "-c", "Debug").ConfigureAwait(false);
 
@@ -55,7 +57,7 @@ internal static class SharedTemporalConnectionResolverHarness
             Assert.True(File.Exists(harnessDllPath), $"Expected built harness at '{harnessDllPath}'.");
 
             var stdOut = await DotnetCli.RunAsync(harnessDirectory, harnessDllPath).ConfigureAwait(false);
-            return TemporalConnectionResolverHarnessProgram.ParseResults(stdOut);
+            return TemporalConnectionResolverHarnessProgram.ParseRun(stdOut);
         }
         finally
         {

@@ -5,7 +5,7 @@ namespace TemporalCommunity.Templates.Tests;
 /// <summary>
 /// Builds and runs a small harness console app that references the generated
 /// <c>temporal-worker</c> project via <c>ProjectReference</c> and calls its
-/// <c>TemporalConnection.Resolve</c> directly — the same "reference the generated project from a
+/// <c>TemporalWorkerConnection.Resolve</c> directly — the same "reference the generated project from a
 /// separate harness assembly" mechanism <see cref="SharedTemporalConnectionResolverHarness"/> uses
 /// for <c>temporal-solution</c>'s analogous <c>SharedTemporalConnection</c> helper. A
 /// <c>ProjectReference</c> (rather than loading the built assembly via reflection) guarantees the
@@ -17,11 +17,11 @@ internal static class TemporalConnectionResolverHarness
 {
     /// <summary>
     /// Instantiates <c>temporal-worker</c> (default Framework/IncludeOtel — this template's
-    /// TemporalConnection.cs content does not vary with either symbol), generates a harness project
+    /// TemporalWorkerConnection.cs content does not vary with either symbol), generates a harness project
     /// that references it, runs all five precedence scenarios in one process, and returns the
     /// parsed results.
     /// </summary>
-    public static async Task<IReadOnlyDictionary<string, TemporalConnectionResolverResult>> RunAllScenariosAsync()
+    public static async Task<TemporalConnectionResolverRun> RunAllScenariosAsync()
     {
         var targetDirectory = TestFixtures.CreateTempDirectory();
         var settingsDirectory = TestFixtures.CreateTempDirectory();
@@ -48,6 +48,7 @@ internal static class TemporalConnectionResolverHarness
                   </PropertyGroup>
                   <ItemGroup>
                     <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.0" />
+                    <PackageReference Include="Temporalio.Extensions.Hosting" Version="1.20.0" />
                   </ItemGroup>
                   <ItemGroup>
                     <ProjectReference Include="{targetCsprojPath}" />
@@ -58,7 +59,8 @@ internal static class TemporalConnectionResolverHarness
             await File.WriteAllTextAsync(
                 Path.Combine(harnessDirectory, "Program.cs"),
                 TemporalConnectionResolverHarnessProgram.Build(
-                    resolverExpression: $"{targetName}.TemporalConnection.Resolve")).ConfigureAwait(false);
+                    resolverExpression: $"{targetName}.TemporalWorkerConnection.Resolve",
+                    applyToExpression: $"{targetName}.TemporalWorkerConnection.ApplyTo")).ConfigureAwait(false);
 
             await DotnetCli.RunAsync(harnessDirectory, "build", "--nologo", "-c", "Debug").ConfigureAwait(false);
 
@@ -66,7 +68,7 @@ internal static class TemporalConnectionResolverHarness
             Assert.True(File.Exists(harnessDllPath), $"Expected built harness at '{harnessDllPath}'.");
 
             var stdOut = await DotnetCli.RunAsync(harnessDirectory, harnessDllPath).ConfigureAwait(false);
-            return TemporalConnectionResolverHarnessProgram.ParseResults(stdOut);
+            return TemporalConnectionResolverHarnessProgram.ParseRun(stdOut);
         }
         finally
         {

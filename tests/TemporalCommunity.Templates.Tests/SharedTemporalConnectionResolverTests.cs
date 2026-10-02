@@ -12,9 +12,10 @@ namespace TemporalCommunity.Templates.Tests;
 public sealed class SharedTemporalConnectionResolverTests
 {
     [Fact]
-    public async Task ResolvePrecedenceAndPropertyPreservation()
+    public async Task ResolvePrecedencePropertyPreservationAndApplyToRegistration()
     {
-        var results = await SharedTemporalConnectionResolverHarness.RunAllScenariosAsync();
+        var run = await SharedTemporalConnectionResolverHarness.RunAllScenariosAsync();
+        var results = run.Scenarios;
 
         Assert.Equal(5, results.Count);
 
@@ -37,5 +38,10 @@ public sealed class SharedTemporalConnectionResolverTests
         Assert.Equal("profile-server-name", profileSurvives.TlsServerName);
         Assert.Equal(1, profileSurvives.RpcMetadataCount);
         Assert.Equal("x-custom-header=profile-header-value", profileSurvives.RpcMetadataFirst);
+
+        // (6) ApplyTo, run through the SDK's real AddTemporalClient options pipeline exactly as the
+        // generated Program.cs files use it, transfers every resolved setting while keeping the
+        // host ILoggerFactory and appending the tracing interceptor after existing ones.
+        TemporalConnectionResolverHarnessProgram.AssertApplyToContract(run.ApplyTo);
     }
 }

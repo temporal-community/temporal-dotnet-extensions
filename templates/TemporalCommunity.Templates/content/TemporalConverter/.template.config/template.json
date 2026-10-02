@@ -3,25 +3,25 @@
   "author": "Temporal Community",
   "classifications": [
     "Temporal",
-    "Payload Converter"
+    "Converter"
   ],
-  "name": "Temporal Payload Converter class",
+  "name": "Temporal Converter class",
   "generatorVersions": "[1.0.0.0-*)",
-  "description": "Creates a new Temporal .NET IEncodingConverter implementation for composing into a DefaultPayloadConverter.",
-  "groupIdentity": "TemporalCommunity.Templates.Item.PayloadConverter",
+  "description": "Creates a Temporal .NET IEncodingConverter for one custom payload encoding, composed with the SDK default converters in a DefaultPayloadConverter subclass.",
+  "groupIdentity": "TemporalCommunity.Templates.Item.Converter",
   "precedence": "0",
-  "identity": "TemporalCommunity.Templates.Item.PayloadConverter.CSharp",
-  "shortName": "temporal-payload-converter",
+  "identity": "TemporalCommunity.Templates.Item.Converter.CSharp",
+  "shortName": "temporal-converter",
   "tags": {
     "language": "C#",
     "type": "item"
   },
-  "sourceName": "TemporalPayloadConverter1",
+  "sourceName": "TemporalConverter1",
   "preferDefaultName": true,
-  "defaultName": "TemporalPayloadConverter1",
+  "defaultName": "TemporalConverter1",
   "primaryOutputs": [
     {
-      "path": "TemporalPayloadConverter1.cs"
+      "path": "TemporalConverter1.cs"
     }
   ],
   "symbols": {
@@ -33,7 +33,7 @@
   },
   "postActions": [
     {
-      "description": "This template does not add a Temporalio package reference. Add one to the target project before building.",
+      "description": "Creates a Temporal .NET IEncodingConverter for one custom payload encoding, composed with the SDK default converters in a DefaultPayloadConverter subclass.",
       "manualInstructions": [
         {
           "text": "Run 'dotnet add package Temporalio' in the target project if it does not already reference the Temporalio SDK."

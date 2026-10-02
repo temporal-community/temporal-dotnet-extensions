@@ -34,19 +34,53 @@ state isolation. It is a bounded correctness regression test, not a throughput b
 
 ## Release packages
 
-Run `just pack-verify` before publishing a release. It builds all four NuGet packages, checks
-their assets, and compiles representative consumers. The NuGet publishing workflow publishes this
-package set together:
+### Template packages and runtime smoke tests
+
+Run `just pack-verify` on Linux or macOS before publishing a release. The recipe uses Unix/Bash
+tooling; Windows maintainers can rely on the Ubuntu package-verification job in GitHub Actions. It
+builds all four NuGet packages, checks their assets, and compiles representative consumers. The
+NuGet publishing workflow publishes this package set together:
 
 - `TemporalCommunity.DurableObjects`
 - `TemporalCommunity.Extensions.Analyzers`
 - `TemporalCommunity.DurableObjects.Analyzers`
 - `TemporalCommunity.Templates`
 
+The template pack lives in `templates/TemporalCommunity.Templates/`. Available commands:
+
+```bash
+just pack                             # packs the template nupkg into artifacts/packages
+just pack-verify                      # isolated hive; instantiate and build template variants
+just template-smoke-test-standalone   # real Temporal CLI dev server, Worker, and Client
+just template-smoke-test-aspire       # real Aspire AppHost and provisioned Temporal dev server
+just template-smoke-test              # sequentially run both runtime checks
+```
+
+The pack-verification item-template fixture deliberately compiles against Temporalio 1.16.0 as a
+minimum-compatibility check; generated worker and solution projects pin Temporalio 1.20.0. This
+fixture is not a generated-project dependency pin.
+
 Additionally run `just template-smoke-test` before publishing a release that touches
 `temporal-solution` — it exercises both the standalone (real `temporal server start-dev`) and
 Aspire (real `aspire start`, auto-provisioned dev server) runtime paths against a real Worker and
 Client, not just `dotnet build`. `pack-verify` alone only proves the generated code compiles.
+The standalone branch binds its isolated dev server to `127.0.0.1:17233`, passes that address
+explicitly to the health check, Worker, and Client, and verifies the server process remains alive.
+Set `TEMPLATE_SMOKE_TEMPORAL_PORT` to use a different port when required.
+Standalone smoke runs are one-at-a-time per host unless a coordinated strategy owns every
+Temporal-bound port for each run; selecting a free port and releasing the probe is not sufficient
+to make concurrent runs safe.
+
+The standalone smoke recipe enforces a single invocation per host for its port with an atomic
+`/tmp/temporal-template-smoke-17233.lock` (the lock name follows
+`TEMPLATE_SMOKE_TEMPORAL_PORT`). A lock failure means another run owns the port; do not bypass it
+with a probed "free" port. The recipe launches the built Worker DLL directly, tracks its PID,
+uses per-run scratch/log directories, and waits up to 30 seconds for observable Worker readiness
+before starting the Client. The
+aggregate recipe runs standalone and Aspire sequentially; cleanup targets tracked processes
+rather than broad process names. For the Aspire branch, build the generated solution before
+`aspire start`: project resources launch via `dotnet run --no-build` and need all transitive
+dependencies (including ServiceDefaults) in the output.
 
 When dispatching `publish.yml`, choose the release type that matches the selected ref:
 

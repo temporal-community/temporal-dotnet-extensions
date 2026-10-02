@@ -9,7 +9,7 @@ namespace TemporalWorker1;
 /// following a fixed three-step precedence. See the "Connecting to Temporal" section of
 /// docs/TEMPLATES.md for the full rationale.
 /// </summary>
-public static class TemporalConnection
+public static class TemporalWorkerConnection
 {
     /// <summary>
     /// Resolves connection options using this precedence:
@@ -53,5 +53,49 @@ public static class TemporalConnection
         }
 
         return options;
+    }
+
+    /// <summary>
+    /// Copies every client connection setting from <paramref name="resolved"/> (typically the
+    /// result of <see cref="Resolve"/>) onto <paramref name="target"/>, the DI-managed options
+    /// instance passed to <c>AddTemporalClient</c>'s configure callback. That callback can only
+    /// mutate its options instance, not replace it, so each setting is transferred explicitly.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="TemporalClientConnectOptions.LoggerFactory"/> is intentionally not copied:
+    /// <c>AddTemporalClient</c> sets it to the host's <c>ILoggerFactory</c> before the callback runs.
+    /// <paramref name="resolved"/> is cloned first so <paramref name="target"/> never shares the
+    /// mutable TLS, RPC retry, keepalive, DNS load-balancing, or payload-limit option objects with it.
+    /// </remarks>
+    /// <param name="resolved">The resolved connection options to copy from.</param>
+    /// <param name="target">The options instance to copy onto.</param>
+    public static void ApplyTo(TemporalClientConnectOptions resolved, TemporalClientConnectOptions target)
+    {
+        ArgumentNullException.ThrowIfNull(resolved);
+        ArgumentNullException.ThrowIfNull(target);
+
+        var source = (TemporalClientConnectOptions)resolved.Clone();
+
+        // TemporalConnectionOptions
+        target.TargetHost = source.TargetHost;
+        target.Tls = source.Tls;
+        target.RpcRetry = source.RpcRetry;
+        target.KeepAlive = source.KeepAlive;
+        target.HttpConnectProxy = source.HttpConnectProxy;
+        target.DnsLoadBalancing = source.DnsLoadBalancing;
+        target.GrpcCompression = source.GrpcCompression;
+        target.PayloadLimits = source.PayloadLimits;
+        target.RpcMetadata = source.RpcMetadata;
+        target.RpcBinaryMetadata = source.RpcBinaryMetadata;
+        target.ApiKey = source.ApiKey;
+        target.Identity = source.Identity;
+        target.Runtime = source.Runtime;
+
+        // TemporalClientConnectOptions (LoggerFactory deliberately excluded, see remarks)
+        target.Namespace = source.Namespace;
+        target.DataConverter = source.DataConverter;
+        target.Interceptors = source.Interceptors;
+        target.QueryRejectCondition = source.QueryRejectCondition;
+        target.Plugins = source.Plugins;
     }
 }
