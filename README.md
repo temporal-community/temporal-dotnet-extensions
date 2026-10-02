@@ -14,6 +14,7 @@ using the analyzers does not require adopting Durable Objects.
 | [`TemporalCommunity.Extensions.Analyzers`](https://www.nuget.org/packages/TemporalCommunity.Extensions.Analyzers) | Replay-safety analyzers and code fixes for ordinary Temporal .NET workflows. |
 | [`TemporalCommunity.DurableObjects`](https://www.nuget.org/packages/TemporalCommunity.DurableObjects) | An opinionated durable-actor model for long-lived entities addressed by stable ID. |
 | [`TemporalCommunity.DurableObjects.Analyzers`](https://www.nuget.org/packages/TemporalCommunity.DurableObjects.Analyzers) | Durable Objects contract analyzers, code fixes, and generated asynchronous clients. |
+| [`TemporalCommunity.Templates`](https://www.nuget.org/packages/TemporalCommunity.Templates) | `dotnet new` templates for Temporal workflows, activities, workers, and Worker + Client + Shared solutions, with optional Aspire and OpenTelemetry. |
 
 The analyzer packages contain both the compiler-safe analyzer and the IDE code-fix assembly. There
 are no separate code-fix packages to install.
