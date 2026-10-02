@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <OutputType>Exe</OutputType>
+    <!-- Console load runner and workflow entry points intentionally use public types and methods. -->
+    <NoWarn>$(NoWarn);CA1515;CA1024;CA1822;CA2007;CA1031;CA1303;CA1848;CA1859</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/TemporalCommunity.DurableObjects/TemporalCommunity.DurableObjects.csproj" />
+    <ProjectReference Include="../../src/TemporalCommunity.DurableObjects.Analyzers/TemporalCommunity.DurableObjects.Analyzers.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+</Project>

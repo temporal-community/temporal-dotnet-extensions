@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/benchmarks/">
     <Project Path="benchmarks/TemporalCommunity.DurableObjects.Benchmarks/TemporalCommunity.DurableObjects.Benchmarks.csproj" />
+    <Project Path="benchmarks/TemporalCommunity.DurableObjects.LoadTests/TemporalCommunity.DurableObjects.LoadTests.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/01-getting-started/TemporalCommunity.DurableObjects.GettingStarted.csproj" />
