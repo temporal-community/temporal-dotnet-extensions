@@ -11,7 +11,19 @@ public sealed class DotnetCliTests
         try
         {
             var programPath = Path.Combine(workingDirectory, "Program.cs");
+            var projectPath = Path.Combine(workingDirectory, "TimeoutChild.csproj");
             var pidPath = Path.Combine(workingDirectory, "child.pid");
+            await File.WriteAllTextAsync(
+                projectPath,
+                """
+                <Project Sdk="Microsoft.NET.Sdk">
+                  <PropertyGroup>
+                    <OutputType>Exe</OutputType>
+                    <ImplicitUsings>enable</ImplicitUsings>
+                    <TargetFramework>net10.0</TargetFramework>
+                  </PropertyGroup>
+                </Project>
+                """);
             await File.WriteAllTextAsync(
                 programPath,
                 $$"""
@@ -19,11 +31,19 @@ public sealed class DotnetCliTests
                 await Task.Delay(Timeout.InfiniteTimeSpan);
                 """);
 
+            // Build before starting the timed process. Compiling a file-based app inside the
+            // timeout can consume the whole budget on a busy CI runner before the child executes.
+            await DotnetCli.RunAsync(workingDirectory, "build", projectPath, "--nologo", "--verbosity", "quiet");
+
             var exception = await Assert.ThrowsAsync<TimeoutException>(() =>
                 DotnetCli.RunAsync(
                     workingDirectory,
-                    TimeSpan.FromSeconds(2),
-                    programPath,
+                    TimeSpan.FromSeconds(10),
+                    "run",
+                    "--no-build",
+                    "--project",
+                    projectPath,
+                    "--",
                     pidPath));
 
             Assert.Contains("did not exit within", exception.Message, StringComparison.Ordinal);

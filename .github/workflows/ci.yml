@@ -78,6 +78,9 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      - name: Restore tools
+        run: dotnet tool restore
+
       - name: Install just
         uses: taiki-e/install-action@just
 
