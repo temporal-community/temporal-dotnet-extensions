@@ -222,7 +222,10 @@ load-test *ARGS:
 # ── Pack + Publish ─────────────────────────────────────────
 
 # Pack the library into .nupkg + .snupkg (MinVer derives version from git tags)
-pack: build
+pack: build pack-no-build
+
+# Pack already-built outputs, for CI jobs that build the solution before verification
+pack-no-build:
     mkdir -p "{{artifacts_dir}}"
     dotnet pack "src/TemporalCommunity.DurableObjects" \
         --configuration "{{configuration}}" \
@@ -248,7 +251,14 @@ pack: build
 # Verify the packed nupkg: confirm net10.0 + net8.0 + netstandard2.1 lib/ folders exist,
 # then compile a netstandard2.1 consumer project against the local package.
 [unix]
-pack-verify: pack
+pack-verify: pack pack-verify-output
+
+# Verify package outputs from an earlier solution build without rebuilding every project.
+[unix]
+pack-verify-prebuilt: pack-no-build pack-verify-output
+
+[unix]
+pack-verify-output:
     #!/usr/bin/env bash
     set -euo pipefail
     pkg=$(ls "{{artifacts_dir}}"/TemporalCommunity.DurableObjects.{{version}}.nupkg 2>/dev/null | head -1)

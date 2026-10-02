@@ -49,9 +49,13 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         uses: taiki-e/install-action@just
 
+      - name: Remove no-longer-needed build outputs
+        if: matrix.os == 'ubuntu-latest'
+        run: find samples tests benchmarks -type d -name bin -prune -exec rm -rf {} +
+
       - name: Verify package assets and consumers
         if: matrix.os == 'ubuntu-latest'
-        run: just pack-verify
+        run: just pack-verify-prebuilt
 
       - name: Verify generated client under NativeAOT
         if: matrix.os == 'ubuntu-latest'
