@@ -2,16 +2,16 @@ using TemporalCommunity.DurableObjects.IntegrationTests.Infrastructure;
 using TemporalCommunity.DurableObjects.IntegrationTests.Objects;
 using Xunit;
 
-namespace TemporalCommunity.DurableObjects.IntegrationTests.Scenarios;
+namespace TemporalCommunity.DurableObjects.IntegrationTests.Behaviors;
 
 /// <summary>
-/// Scenario E: A recurring in-object timer increments a counter every second. The object must
+/// A recurring in-object timer increments a counter every second. The object must
 /// stay resident (no idle-triggered CAN or passivation) so the count can climb. Success = ticks
 /// count >= 3 after ~3.5 seconds.
 /// </summary>
-public sealed class ScenarioE_DurableInObjectTimer : DurableObjectTestBase
+public sealed class TimerExecutionTests : DurableObjectTestBase
 {
-    public ScenarioE_DurableInObjectTimer(WorkflowEnvironmentFixture fixture) : base(fixture) { }
+    public TimerExecutionTests(WorkflowEnvironmentFixture fixture) : base(fixture) { }
 
     [Fact]
     public async Task RecurringTimer_FiresDurably_ObjectStaysResident()
@@ -19,7 +19,7 @@ public sealed class ScenarioE_DurableInObjectTimer : DurableObjectTestBase
         const string id = "scenario-e-obj";
         var tq = UniqueTaskQueue();
 
-        using var worker = ScenarioWorkerBuilder.Build(
+        using var worker = TestWorkerBuilder.Build(
             Client, tq,
             workflowTypes: [typeof(TimerCounter)]);
 

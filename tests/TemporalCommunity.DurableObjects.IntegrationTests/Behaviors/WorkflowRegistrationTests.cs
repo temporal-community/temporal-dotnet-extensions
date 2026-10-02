@@ -2,15 +2,15 @@ using TemporalCommunity.DurableObjects.IntegrationTests.Infrastructure;
 using TemporalCommunity.DurableObjects.IntegrationTests.Objects;
 using Xunit;
 
-namespace TemporalCommunity.DurableObjects.IntegrationTests.Scenarios;
+namespace TemporalCommunity.DurableObjects.IntegrationTests.Behaviors;
 
 /// <summary>
-/// Scenario L: Assembly scan registers correct types. Active objects of a type are enumerable
+/// Assembly scan registers correct types. Active objects of a type are enumerable
 /// via ListDurableObjectsAsync (polled since visibility is eventually consistent).
 /// </summary>
-public sealed class ScenarioL_AutoRegistrationVisibility : DurableObjectTestBase
+public sealed class WorkflowRegistrationTests : DurableObjectTestBase
 {
-    public ScenarioL_AutoRegistrationVisibility(WorkflowEnvironmentFixture fixture) : base(fixture) { }
+    public WorkflowRegistrationTests(WorkflowEnvironmentFixture fixture) : base(fixture) { }
 
     [Fact]
     public async Task AssemblyScan_RegistersCorrectTypes_AndListReturnsActiveInstances()
@@ -24,7 +24,7 @@ public sealed class ScenarioL_AutoRegistrationVisibility : DurableObjectTestBase
         var workerOptions = new Temporalio.Worker.TemporalWorkerOptions(tq);
         // Register by assembly scan of this test assembly (integration tests).
         workerOptions.AddDurableObjectWorkflows(typeof(AuditedCounter).Assembly, options);
-        workerOptions.AddAllActivities(new ScenarioActivities());
+        workerOptions.AddAllActivities(new AuditActivities());
 
         using var worker = new Temporalio.Worker.TemporalWorker(Client, workerOptions);
         var cts = new CancellationTokenSource();

@@ -97,7 +97,8 @@ internal class DurableObjectProxy<T> : DispatchProxy
         }
     }
 
-    // Atomic "start-if-needed + apply update" — no read-then-start race, one round trip on cold start.
+    // Start-if-needed plus update submission in one operation; this avoids a read-then-start race,
+    // but a failed update may still leave the workflow started.
     // UseExisting means an already-running object is updated rather than starting a duplicate.
     private async Task ExecuteUpdateAsync(string updateName, object?[] args)
     {
@@ -201,13 +202,13 @@ internal class DurableObjectProxy<T> : DispatchProxy
             var hasQuery = method.GetCustomAttribute<WorkflowQueryAttribute>() is not null;
             var hasSignal = method.GetCustomAttribute<WorkflowSignalAttribute>() is not null;
 
-            // Signals are banned in v1 — no exceptions. See ADR 005.
+            // Signals are unsupported; mutations use acknowledged updates.
             if (hasSignal)
             {
                 throw new InvalidOperationException(
                     $"Method '{method.Name}' on '{interfaceType.Name}' carries [WorkflowSignal]. " +
                     "Signals are not supported on DurableObjects in v1. Use [WorkflowUpdate] instead. " +
-                    "See adr/005-signals-banned.md for rationale.");
+                    "See docs/DURABLE_OBJECTS.md for supported contract methods.");
             }
 
             var returnsTask = method.ReturnType == typeof(Task);

@@ -2,16 +2,16 @@ using TemporalCommunity.DurableObjects.IntegrationTests.Infrastructure;
 using TemporalCommunity.DurableObjects.IntegrationTests.Objects;
 using Xunit;
 
-namespace TemporalCommunity.DurableObjects.IntegrationTests.Scenarios;
+namespace TemporalCommunity.DurableObjects.IntegrationTests.Behaviors;
 
 /// <summary>
-/// Scenario C: Fire N concurrent cold callers at one object ID simultaneously.
+/// Fire N concurrent cold callers at one object ID simultaneously.
 /// Single-activation holds if exactly one execution exists, all updates serialize,
 /// the final count == N, and no WorkflowAlreadyStartedException leaks to callers.
 /// </summary>
-public sealed class ScenarioC_ConcurrencySingleActivation : DurableObjectTestBase
+public sealed class ConcurrentActivationTests : DurableObjectTestBase
 {
-    public ScenarioC_ConcurrencySingleActivation(WorkflowEnvironmentFixture fixture) : base(fixture) { }
+    public ConcurrentActivationTests(WorkflowEnvironmentFixture fixture) : base(fixture) { }
 
     [Fact]
     public async Task NconcurrentColdCallers_ProduceSingleExecution_AndCorrectCount()
@@ -20,10 +20,10 @@ public sealed class ScenarioC_ConcurrencySingleActivation : DurableObjectTestBas
         const string id = "scenario-c-obj";
         var tq = UniqueTaskQueue();
 
-        using var worker = ScenarioWorkerBuilder.Build(
+        using var worker = TestWorkerBuilder.Build(
             Client, tq,
             workflowTypes: [typeof(AuditedCounter)],
-            activityInstances: [new ScenarioActivities()]);
+            activityInstances: [new AuditActivities()]);
 
         var cts = new CancellationTokenSource();
         var run = worker.ExecuteAsync(cts.Token);

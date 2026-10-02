@@ -45,7 +45,7 @@ public static class DurableObjectSchedule
     /// <strong>Self-completion required:</strong> Implementations must call <c>Deactivate()</c> at
     /// the end of <c>OnActivateAsync</c>. Without self-completion, <see cref="ScheduleOverlapPolicy.Skip"/>
     /// (the default) will suppress subsequent ticks once the first execution remains open.
-    /// See <c>docs/BOILERPLATE.md</c> under "Scheduled Objects."
+    /// See <c>docs/DURABLE_OBJECTS.md#implementation-requirements</c> under "Implementation requirements."
     /// </para>
     /// </remarks>
     /// <typeparam name="T">The DurableObject contract interface type.</typeparam>

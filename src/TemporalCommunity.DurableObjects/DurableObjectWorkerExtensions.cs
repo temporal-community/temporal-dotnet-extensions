@@ -38,7 +38,7 @@ namespace TemporalCommunity.DurableObjects;
 ///   </description></item>
 ///   <item><description>
 ///     Rejects any scanned type that declares a <c>[WorkflowSignal]</c> method — signals are
-///     banned in v1 (see ADR <c>005-signals-banned.md</c>).
+///     unsupported; use updates for acknowledged mutations.
 ///   </description></item>
 ///   <item><description>
 ///     Registers each valid type as a workflow, plus <see cref="ReminderDispatcher"/> (always —
@@ -167,7 +167,7 @@ public static class DurableObjectWorkerExtensions
                 throw new InvalidOperationException(
                     $"DurableObject type '{type.FullName}' declares '{method.Name}' with " +
                     $"[WorkflowSignal]. Signals are banned in v1 — all handlers must use " +
-                    $"[WorkflowUpdate] or [WorkflowQuery]. See adr/005-signals-banned.md.");
+                    $"[WorkflowUpdate] or [WorkflowQuery]. See docs/DURABLE_OBJECTS.md for supported contract methods.");
             }
         }
     }

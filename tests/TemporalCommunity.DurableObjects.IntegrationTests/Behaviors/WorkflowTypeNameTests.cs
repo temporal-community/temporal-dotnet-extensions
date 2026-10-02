@@ -2,16 +2,16 @@ using TemporalCommunity.DurableObjects.IntegrationTests.Infrastructure;
 using TemporalCommunity.DurableObjects.IntegrationTests.Objects;
 using Xunit;
 
-namespace TemporalCommunity.DurableObjects.IntegrationTests.Scenarios;
+namespace TemporalCommunity.DurableObjects.IntegrationTests.Behaviors;
 
 /// <summary>
-/// Scenario K: The workflow type name is resolved from ITallyBox's explicit [Workflow("TallyMachine")]
+/// The workflow type name is resolved from ITallyBox's explicit [Workflow("TallyMachine")]
 /// rather than the blind I-strip convention (which would derive "TallyBox" and never find the
 /// registered workflow). Success = the update and query both reach TallyMachine.
 /// </summary>
-public sealed class ScenarioK_ExplicitWorkflowTypeName : DurableObjectTestBase
+public sealed class WorkflowTypeNameTests : DurableObjectTestBase
 {
-    public ScenarioK_ExplicitWorkflowTypeName(WorkflowEnvironmentFixture fixture) : base(fixture) { }
+    public WorkflowTypeNameTests(WorkflowEnvironmentFixture fixture) : base(fixture) { }
 
     [Fact]
     public async Task ExplicitWorkflowName_ResolvesCorrectly()
@@ -19,7 +19,7 @@ public sealed class ScenarioK_ExplicitWorkflowTypeName : DurableObjectTestBase
         const string id = "scenario-k-obj";
         var tq = UniqueTaskQueue();
 
-        using var worker = ScenarioWorkerBuilder.Build(
+        using var worker = TestWorkerBuilder.Build(
             Client, tq,
             workflowTypes: [typeof(TallyMachine)]);
 

@@ -2,16 +2,16 @@ using TemporalCommunity.DurableObjects.IntegrationTests.Infrastructure;
 using TemporalCommunity.DurableObjects.IntegrationTests.Objects;
 using Xunit;
 
-namespace TemporalCommunity.DurableObjects.IntegrationTests.Scenarios;
+namespace TemporalCommunity.DurableObjects.IntegrationTests.Behaviors;
 
 /// <summary>
-/// Scenario H: Tier-1 (resident) state lifecycle. An object increments to 5, then sits idle.
+/// Tier-1 (resident) state lifecycle. An object increments to 5, then sits idle.
 /// Because idle is a no-op in the resident tier (Tier 2 cold passivation excluded from v1),
 /// the object stays open on the SAME run ID — no completion, no data loss, no churn.
 /// </summary>
-public sealed class ScenarioH_IdleResidentNoCAN : DurableObjectTestBase
+public sealed class IdleLifecycleTests : DurableObjectTestBase
 {
-    public ScenarioH_IdleResidentNoCAN(WorkflowEnvironmentFixture fixture) : base(fixture) { }
+    public IdleLifecycleTests(WorkflowEnvironmentFixture fixture) : base(fixture) { }
 
     [Fact]
     public async Task State_SurvivesIdleWindow_SameRunId()
@@ -19,7 +19,7 @@ public sealed class ScenarioH_IdleResidentNoCAN : DurableObjectTestBase
         const string id = "scenario-h-obj";
         var tq = UniqueTaskQueue();
 
-        using var worker = ScenarioWorkerBuilder.Build(
+        using var worker = TestWorkerBuilder.Build(
             Client, tq,
             workflowTypes: [typeof(IdlingCounter)]);
 

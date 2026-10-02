@@ -4,16 +4,16 @@ using TemporalCommunity.DurableObjects.IntegrationTests.Infrastructure;
 using TemporalCommunity.DurableObjects.IntegrationTests.Objects;
 using Xunit;
 
-namespace TemporalCommunity.DurableObjects.IntegrationTests.Scenarios;
+namespace TemporalCommunity.DurableObjects.IntegrationTests.Behaviors;
 
 /// <summary>
-/// Scenario D: Start a slow update (increment + durable timer), kill the worker while it is
+/// Start a slow update (increment + durable timer), kill the worker while it is
 /// parked, then bring a fresh worker up. The update must complete after restart with the
 /// correct incremented value, proving replay/recovery.
 /// </summary>
-public sealed class ScenarioD_DurabilityWorkerFailure : DurableObjectTestBase
+public sealed class WorkerRestartTests : DurableObjectTestBase
 {
-    public ScenarioD_DurabilityWorkerFailure(WorkflowEnvironmentFixture fixture) : base(fixture) { }
+    public WorkerRestartTests(WorkflowEnvironmentFixture fixture) : base(fixture) { }
 
     [Fact]
     public async Task Update_CompletesAfterWorkerRestart()
@@ -81,8 +81,8 @@ public sealed class ScenarioD_DurabilityWorkerFailure : DurableObjectTestBase
         }
     }
 
-    private TemporalWorker BuildWorker(string tq) => ScenarioWorkerBuilder.Build(
+    private TemporalWorker BuildWorker(string tq) => TestWorkerBuilder.Build(
         Client, tq,
         workflowTypes: [typeof(AuditedCounter)],
-        activityInstances: [new ScenarioActivities()]);
+        activityInstances: [new AuditActivities()]);
 }

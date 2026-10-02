@@ -6,7 +6,8 @@ namespace TemporalCommunity.DurableObjects;
 /// </summary>
 /// <remarks>
 /// Queries are read-only and must never materialize (start) an object as a side effect. Unlike
-/// updates (which use update-with-start and atomically activate the object on first contact),
+/// updates (which use update-with-start to activate the object on first contact without a
+/// read-then-start race),
 /// the query path does not auto-activate. When the target workflow execution is not found, the
 /// proxy surfaces this exception instead of silently returning a default value.
 /// </remarks>

@@ -19,11 +19,13 @@ public readonly record struct RollingCounterState(int Count)
     public RollingCounterState Increment(int amount) => this with { Count = Count + amount };
 }
 
+public sealed record TimerRolloverState(int Updates, int Ticks);
+
 // ---------------------------------------------------------------------------
 // Activities
 // ---------------------------------------------------------------------------
 
-public class ScenarioActivities
+public class AuditActivities
 {
     [Temporalio.Activities.Activity]
     public Task<string> AuditAsync(string objectId, int newCount)
@@ -34,7 +36,7 @@ public class ScenarioActivities
 }
 
 // ---------------------------------------------------------------------------
-// Scenario A, C, D, I, J — AuditedCounter
+// AuditedCounter (activities, concurrency, and worker recovery)
 // ---------------------------------------------------------------------------
 
 [Workflow]
@@ -72,7 +74,7 @@ public class AuditedCounter : DurableObjectBase, IAuditedCounter
         RecordActivity();
         _state = _state.Increment(amount);
         return await ExecuteActivityAsync(
-            (ScenarioActivities activities) => activities.AuditAsync(WorkflowId, _state.Count),
+            (AuditActivities activities) => activities.AuditAsync(WorkflowId, _state.Count),
             new ActivityOptions { StartToCloseTimeout = TimeSpan.FromSeconds(30) });
     }
 
@@ -99,7 +101,7 @@ public class AuditedCounter : DurableObjectBase, IAuditedCounter
 }
 
 // ---------------------------------------------------------------------------
-// Scenario B — RollingCounter (low CAN threshold)
+// RollingCounter (low CAN threshold)
 // ---------------------------------------------------------------------------
 
 [Workflow]
@@ -136,8 +138,62 @@ public class RollingCounter : DurableObjectBase<RollingCounterState>, IRollingCo
     public int GetCount() => State.Count;
 }
 
+// A pending one-shot timer is explicitly re-armed on each run from carried state.
+[Workflow]
+public interface ITimerRolloverCounter : IDurableObject
+{
+    [WorkflowUpdate] Task IncrementAsync();
+    [WorkflowQuery] TimerRolloverState ReadTimerState();
+}
+
+[Workflow]
+public class TimerRolloverCounter : DurableObjectBase<TimerRolloverState>, ITimerRolloverCounter
+{
+    [WorkflowInit]
+    public TimerRolloverCounter(DurableObjectSnapshot<TimerRolloverState>? snapshot = null)
+        : base(snapshot, new TimerRolloverState(0, 0)) { }
+
+    [WorkflowRun]
+    public Task RunAsync(DurableObjectSnapshot<TimerRolloverState>? snapshot = null) =>
+        DurableObjectRunAsync();
+
+    protected override bool ShouldContinueAsNew() =>
+        base.ShouldContinueAsNew() || Workflow.CurrentHistoryLength >= 30;
+
+    protected override Task OnActivateAsync()
+    {
+        if (State.Ticks == 0)
+        {
+            ScheduleTimer("once", TimeSpan.FromSeconds(3));
+        }
+
+        return Task.CompletedTask;
+    }
+
+    protected override Task OnTimerAsync(string name)
+    {
+        if (name == "once")
+        {
+            State = State with { Ticks = State.Ticks + 1 };
+        }
+
+        return Task.CompletedTask;
+    }
+
+    [WorkflowUpdate]
+    public Task IncrementAsync()
+    {
+        State = State with { Updates = State.Updates + 1 };
+        RecordActivity();
+        return Task.CompletedTask;
+    }
+
+    [WorkflowQuery]
+    public TimerRolloverState ReadTimerState() => State;
+}
+
 // ---------------------------------------------------------------------------
-// Scenario E — TimerCounter (durable recurring timer)
+// TimerCounter (durable recurring timer)
 // ---------------------------------------------------------------------------
 
 [Workflow]
@@ -171,7 +227,7 @@ public class TimerCounter : DurableObjectBase, ITimerCounter
 }
 
 // ---------------------------------------------------------------------------
-// Scenario F — ScheduledGreeter (self-deactivates each tick)
+// ScheduledGreeter (self-deactivates each tick)
 // ---------------------------------------------------------------------------
 
 [Workflow]
@@ -196,7 +252,7 @@ public class ScheduledGreeter : DurableObjectBase, IScheduledGreeter
 }
 
 // ---------------------------------------------------------------------------
-// Scenario G — ReminderTarget (canonical reminder receiver)
+// ReminderTarget (canonical reminder receiver)
 // ---------------------------------------------------------------------------
 
 [Workflow]
@@ -232,7 +288,7 @@ public class ReminderTarget : DurableObjectBase, IReminderTarget
 }
 
 // ---------------------------------------------------------------------------
-// Scenario H — IdlingCounter (stays resident past idle window)
+// IdlingCounter (stays resident past idle window)
 // ---------------------------------------------------------------------------
 
 [Workflow]
@@ -269,7 +325,7 @@ public class IdlingCounter : DurableObjectBase, IIdlingCounter
 }
 
 // ---------------------------------------------------------------------------
-// Scenario K — TallyMachine (explicit workflow type name via ITallyBox interface)
+// TallyMachine (explicit workflow type name via ITallyBox interface)
 // ---------------------------------------------------------------------------
 
 [Workflow("TallyMachine")]
@@ -300,7 +356,7 @@ public class TallyMachine : DurableObjectBase, ITallyBox
 }
 
 // ---------------------------------------------------------------------------
-// Scenario N — GuardedCounter (used by interceptor tests)
+// GuardedCounter (used by interceptor tests)
 // ---------------------------------------------------------------------------
 
 [Workflow]
@@ -358,7 +414,7 @@ public class GuardedCounter : DurableObjectBase, IGuardedCounter
 }
 
 // ---------------------------------------------------------------------------
-// Scenario O — FailingOnActivateCounter (OnActivateAsync throws on first activation)
+// FailingOnActivateCounter (OnActivateAsync throws on first activation)
 // ---------------------------------------------------------------------------
 
 [Workflow]

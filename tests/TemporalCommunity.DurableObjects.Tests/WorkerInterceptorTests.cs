@@ -6,7 +6,7 @@ namespace TemporalCommunity.DurableObjects.Tests;
 /// <summary>
 /// Static property checks for DurableObjectWorkerInterceptor. No live Temporal server needed.
 /// Interceptor behavioral invariants (auth, serialization, drain-window, exception wrapping)
-/// require live workflow context and are covered by Scenario N integration tests.
+/// require live workflow context and are covered by the WorkerInterceptorTests integration class.
 /// </summary>
 public sealed class WorkerInterceptorTests
 {

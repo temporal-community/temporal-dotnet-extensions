@@ -4,16 +4,16 @@ using TemporalCommunity.DurableObjects.IntegrationTests.Infrastructure;
 using TemporalCommunity.DurableObjects.IntegrationTests.Objects;
 using Xunit;
 
-namespace TemporalCommunity.DurableObjects.IntegrationTests.Scenarios;
+namespace TemporalCommunity.DurableObjects.IntegrationTests.Behaviors;
 
 /// <summary>
-/// Scenario F: A Temporal Schedule activates the ScheduledGreeter on a 2s interval.
+/// A Temporal Schedule activates the ScheduledGreeter on a 2s interval.
 /// Each tick creates a fresh time-suffixed execution that runs the Audit activity and self-deactivates.
 /// Success = at least 2 schedule actions recorded.
 /// </summary>
-public sealed class ScenarioF_SchedulePeriodicActivation : DurableObjectTestBase
+public sealed class ScheduledActivationTests : DurableObjectTestBase
 {
-    public ScenarioF_SchedulePeriodicActivation(WorkflowEnvironmentFixture fixture) : base(fixture) { }
+    public ScheduledActivationTests(WorkflowEnvironmentFixture fixture) : base(fixture) { }
 
     [Fact]
     public async Task Schedule_CreatesFreshExecutionPerTick()
@@ -22,10 +22,10 @@ public sealed class ScenarioF_SchedulePeriodicActivation : DurableObjectTestBase
         var scheduleId = $"sched-f-{Guid.NewGuid():N}";
         const string objectId = "scenario-f-obj";
 
-        using var worker = ScenarioWorkerBuilder.Build(
+        using var worker = TestWorkerBuilder.Build(
             Client, tq,
             workflowTypes: [typeof(ScheduledGreeter)],
-            activityInstances: [new ScenarioActivities()]);
+            activityInstances: [new AuditActivities()]);
 
         var cts = new CancellationTokenSource();
         var run = worker.ExecuteAsync(cts.Token);

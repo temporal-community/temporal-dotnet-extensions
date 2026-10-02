@@ -2,15 +2,45 @@ using TemporalCommunity.DurableObjects.IntegrationTests.Infrastructure;
 using TemporalCommunity.DurableObjects.IntegrationTests.Objects;
 using Xunit;
 
-namespace TemporalCommunity.DurableObjects.IntegrationTests.Scenarios;
+namespace TemporalCommunity.DurableObjects.IntegrationTests.Behaviors;
 
 /// <summary>
-/// Scenario B: Drive enough updates to cross RollingCounter's low history threshold.
+/// Drive enough updates to cross RollingCounter's low history threshold.
 /// Verifies: run ID changes (CAN actually fired) AND count equals total updates (state survived).
 /// </summary>
-public sealed class ScenarioB_ContinueAsNewStateSurvival : DurableObjectTestBase
+public sealed class ContinueAsNewStateTests : DurableObjectTestBase
 {
-    public ScenarioB_ContinueAsNewStateSurvival(WorkflowEnvironmentFixture fixture) : base(fixture) { }
+    public ContinueAsNewStateTests(WorkflowEnvironmentFixture fixture) : base(fixture) { }
+
+    [Fact]
+    public async Task ConcurrentUpdatesNearLowThreshold_AllSurviveContinueAsNew()
+    {
+        const int updates = 50;
+        const string id = "scenario-b-concurrent-rollover";
+        var tq = UniqueTaskQueue();
+        using var worker = TestWorkerBuilder.Build(
+            Client, tq, workflowTypes: [typeof(RollingCounter)]);
+
+        var cts = new CancellationTokenSource();
+        var run = worker.ExecuteAsync(cts.Token);
+        try
+        {
+            var factory = TestFactory.Create(Client, tq);
+            var counter = await factory.GetOrCreateAsync<IRollingCounter>(id);
+            var initialRunId = (await Client.GetWorkflowHandle(id).DescribeAsync()).RunId;
+            var tasks = Enumerable.Range(0, updates).Select(_ => counter.IncrementAsync(1)).ToArray();
+            await Task.WhenAll(tasks);
+
+            var finalRunId = (await Client.GetWorkflowHandle(id).DescribeAsync()).RunId;
+            Assert.Equal(updates, counter.GetCount());
+            Assert.NotEqual(initialRunId, finalRunId);
+        }
+        finally
+        {
+            await cts.CancelAsync();
+            try { await run; } catch (OperationCanceledException) { }
+        }
+    }
 
     [Fact]
     public async Task State_SurvivesContinueAsNew_AndRunIdChanges()
@@ -19,7 +49,7 @@ public sealed class ScenarioB_ContinueAsNewStateSurvival : DurableObjectTestBase
         var tq = UniqueTaskQueue();
         const string id = "scenario-b-obj";
 
-        using var worker = ScenarioWorkerBuilder.Build(
+        using var worker = TestWorkerBuilder.Build(
             Client, tq,
             workflowTypes: [typeof(RollingCounter)]);
 

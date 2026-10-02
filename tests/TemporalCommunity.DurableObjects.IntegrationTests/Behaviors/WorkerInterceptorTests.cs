@@ -1,24 +1,58 @@
 using Temporalio.Exceptions;
+using Temporalio.Client;
 using Temporalio.Worker.Interceptors;
+using Temporalio.Workflows;
 using TemporalCommunity.DurableObjects;
 using TemporalCommunity.DurableObjects.IntegrationTests.Infrastructure;
 using TemporalCommunity.DurableObjects.IntegrationTests.Objects;
 using Xunit;
 
-namespace TemporalCommunity.DurableObjects.IntegrationTests.Scenarios;
+namespace TemporalCommunity.DurableObjects.IntegrationTests.Behaviors;
 
 /// <summary>
-/// Scenario N: ONE worker interceptor applies four cross-cutting concerns.
+/// ONE worker interceptor applies four cross-cutting concerns.
 /// (a) Unauthorized update rejected → caller sees WorkflowUpdateFailedException; object alive.
 /// (b) Two overlapping slow updates serialize correctly (8 then 9, not 9,9).
 /// (c) After DeactivateAsync, subsequent update rejected with ObjectDeactivating; object terminates.
 /// (d) Arbitrary exception from user handler → WorkflowUpdateFailedException(UnhandledUpdateException); object alive.
 /// </summary>
-public sealed class ScenarioN_WorkerInterceptorInvariants : DurableObjectTestBase
+public sealed class WorkerInterceptorTests : DurableObjectTestBase
 {
     private const string Token = "s3cr3t";
 
-    public ScenarioN_WorkerInterceptorInvariants(WorkflowEnvironmentFixture fixture) : base(fixture) { }
+    public WorkerInterceptorTests(WorkflowEnvironmentFixture fixture) : base(fixture) { }
+
+    [Fact]
+    public async Task InterceptorAuthorizationAlsoAppliesToUnrelatedWorkflowTypesOnTheWorker()
+    {
+        var tq = UniqueTaskQueue();
+        using var worker = TestWorkerBuilder.Build(
+            Client,
+            tq,
+            workflowTypes: [typeof(UnrelatedWorkflow)],
+            options: new DurableObjectWorkerOptions { Authorize = _ => false });
+
+        var cts = new CancellationTokenSource();
+        var run = worker.ExecuteAsync(cts.Token);
+        try
+        {
+            var handle = await Client.StartWorkflowAsync(
+                "UnrelatedWorkflow",
+                Array.Empty<object?>(),
+                new WorkflowOptions("unrelated-with-interceptor", tq));
+
+            var failure = await Assert.ThrowsAsync<WorkflowUpdateFailedException>(
+                () => handle.ExecuteUpdateAsync<object?>("Change", Array.Empty<object?>()));
+
+            Assert.IsType<ApplicationFailureException>(failure.InnerException);
+            await handle.TerminateAsync("test complete");
+        }
+        finally
+        {
+            await cts.CancelAsync();
+            try { await run; } catch (OperationCanceledException) { }
+        }
+    }
 
     [Fact]
     public async Task Interceptor_EnforcesAuth_Serialization_DrainWindow_ExceptionWrapping()
@@ -32,7 +66,7 @@ public sealed class ScenarioN_WorkerInterceptorInvariants : DurableObjectTestBas
 
         var interceptorOptions = new DurableObjectWorkerOptions { Authorize = Authorize };
 
-        using var worker = ScenarioWorkerBuilder.Build(
+        using var worker = TestWorkerBuilder.Build(
             Client, tq,
             workflowTypes: [typeof(GuardedCounter)],
             options: interceptorOptions);
@@ -130,4 +164,14 @@ public sealed class ScenarioN_WorkerInterceptorInvariants : DurableObjectTestBas
             try { await run; } catch (OperationCanceledException) { }
         }
     }
+}
+
+[Workflow]
+public sealed class UnrelatedWorkflow
+{
+    [WorkflowRun]
+    public async Task RunAsync() => await Workflow.WaitConditionAsync(() => false);
+
+    [WorkflowUpdate]
+    public Task ChangeAsync() => Task.CompletedTask;
 }

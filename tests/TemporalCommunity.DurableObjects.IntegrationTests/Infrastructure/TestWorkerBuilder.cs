@@ -10,7 +10,7 @@ namespace TemporalCommunity.DurableObjects.IntegrationTests.Infrastructure;
 /// pre-installed. Each test calls Build() with a unique task queue (from UniqueTaskQueue()) and
 /// the workflow/activity types needed for that scenario.
 /// </summary>
-public static class ScenarioWorkerBuilder
+public static class TestWorkerBuilder
 {
     /// <summary>
     /// Builds a TemporalWorker configured for DurableObject scenarios.

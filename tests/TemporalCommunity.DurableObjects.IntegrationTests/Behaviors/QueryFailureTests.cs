@@ -3,15 +3,15 @@ using TemporalCommunity.DurableObjects.IntegrationTests.Infrastructure;
 using TemporalCommunity.DurableObjects.IntegrationTests.Objects;
 using Xunit;
 
-namespace TemporalCommunity.DurableObjects.IntegrationTests.Scenarios;
+namespace TemporalCommunity.DurableObjects.IntegrationTests.Behaviors;
 
 /// <summary>
-/// Scenario J: QueryDurableObjectAsync returns the correct value for an active object.
+/// QueryDurableObjectAsync returns the correct value for an active object.
 /// A query against a missing object throws DurableObjectNotFoundException (not a default value).
 /// </summary>
-public sealed class ScenarioJ_AsyncQueryMissingObject : DurableObjectTestBase
+public sealed class QueryFailureTests : DurableObjectTestBase
 {
-    public ScenarioJ_AsyncQueryMissingObject(WorkflowEnvironmentFixture fixture) : base(fixture) { }
+    public QueryFailureTests(WorkflowEnvironmentFixture fixture) : base(fixture) { }
 
     [Fact]
     public async Task Query_ReturnsValue_AndMissingObjectThrowsNotFound()
@@ -20,10 +20,10 @@ public sealed class ScenarioJ_AsyncQueryMissingObject : DurableObjectTestBase
         const string missingId = "scenario-j-missing";
         var tq = UniqueTaskQueue();
 
-        using var worker = ScenarioWorkerBuilder.Build(
+        using var worker = TestWorkerBuilder.Build(
             Client, tq,
             workflowTypes: [typeof(AuditedCounter)],
-            activityInstances: [new ScenarioActivities()]);
+            activityInstances: [new AuditActivities()]);
 
         var cts = new CancellationTokenSource();
         var run = worker.ExecuteAsync(cts.Token);

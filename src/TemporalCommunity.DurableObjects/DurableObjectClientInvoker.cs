@@ -29,7 +29,7 @@ public sealed class DurableObjectClientInvoker
         _defaultCallOptions = defaultCallOptions ?? new DurableObjectCallOptions();
     }
 
-    /// <summary>Executes a void update, starting the object atomically when needed.</summary>
+    /// <summary>Starts the object when needed and submits the update without a read-then-start race.</summary>
     public async Task ExecuteUpdateAsync(
         string updateName,
         IReadOnlyCollection<object?> args,
@@ -48,7 +48,7 @@ public sealed class DurableObjectClientInvoker
         }
     }
 
-    /// <summary>Executes a result-returning update, starting the object atomically when needed.</summary>
+    /// <summary>Starts the object when needed and submits the update without a read-then-start race.</summary>
     public async Task<TResult> ExecuteUpdateAsync<TResult>(
         string updateName,
         IReadOnlyCollection<object?> args,

@@ -3,16 +3,16 @@ using TemporalCommunity.DurableObjects.IntegrationTests.Infrastructure;
 using TemporalCommunity.DurableObjects.IntegrationTests.Objects;
 using Xunit;
 
-namespace TemporalCommunity.DurableObjects.IntegrationTests.Scenarios;
+namespace TemporalCommunity.DurableObjects.IntegrationTests.Behaviors;
 
 /// <summary>
-/// Scenario O: OnActivateAsync throw terminates the workflow. The next update-with-start on the
+/// OnActivateAsync throw terminates the workflow. The next update-with-start on the
 /// same object ID starts a fresh clean execution (count == 0, new run ID). This is the
 /// "terminated object is recoverable" invariant.
 /// </summary>
-public sealed class ScenarioO_ActivationFailureRecovery : DurableObjectTestBase
+public sealed class ActivationFailureTests : DurableObjectTestBase
 {
-    public ScenarioO_ActivationFailureRecovery(WorkflowEnvironmentFixture fixture) : base(fixture) { }
+    public ActivationFailureTests(WorkflowEnvironmentFixture fixture) : base(fixture) { }
 
     [Fact]
     public async Task ActivationFailure_TerminatesWorkflow_NextStartCreatesCleanExecution()
@@ -21,7 +21,7 @@ public sealed class ScenarioO_ActivationFailureRecovery : DurableObjectTestBase
         var id = $"scenario-o-{Guid.NewGuid():N}";
         var tq = UniqueTaskQueue();
 
-        using var worker = ScenarioWorkerBuilder.Build(
+        using var worker = TestWorkerBuilder.Build(
             Client, tq,
             workflowTypes: [typeof(ActivationFailureCounter)]);
 

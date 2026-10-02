@@ -3,24 +3,24 @@ using TemporalCommunity.DurableObjects.IntegrationTests.Infrastructure;
 using TemporalCommunity.DurableObjects.IntegrationTests.Objects;
 using Xunit;
 
-namespace TemporalCommunity.DurableObjects.IntegrationTests.Scenarios;
+namespace TemporalCommunity.DurableObjects.IntegrationTests.Behaviors;
 
 /// <summary>
-/// Scenario A: A durable object performs external I/O only through an Activity.
+/// A durable object performs external I/O only through an Activity.
 /// Verifies that an update can call an Activity and return its result round-trip.
 /// </summary>
-public sealed class ScenarioA_ActivityRoundTrip : DurableObjectTestBase
+public sealed class ActivityExecutionTests : DurableObjectTestBase
 {
-    public ScenarioA_ActivityRoundTrip(WorkflowEnvironmentFixture fixture) : base(fixture) { }
+    public ActivityExecutionTests(WorkflowEnvironmentFixture fixture) : base(fixture) { }
 
     [Fact]
     public async Task ActivityResult_RoundTripsCorrectly()
     {
         var tq = UniqueTaskQueue();
-        using var worker = ScenarioWorkerBuilder.Build(
+        using var worker = TestWorkerBuilder.Build(
             Client, tq,
             workflowTypes: [typeof(AuditedCounter)],
-            activityInstances: [new ScenarioActivities()]);
+            activityInstances: [new AuditActivities()]);
 
         var cts = new CancellationTokenSource();
         var run = worker.ExecuteAsync(cts.Token);

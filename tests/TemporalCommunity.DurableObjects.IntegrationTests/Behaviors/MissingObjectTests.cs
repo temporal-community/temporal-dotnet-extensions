@@ -3,16 +3,16 @@ using TemporalCommunity.DurableObjects.IntegrationTests.Infrastructure;
 using TemporalCommunity.DurableObjects.IntegrationTests.Objects;
 using Xunit;
 
-namespace TemporalCommunity.DurableObjects.IntegrationTests.Scenarios;
+namespace TemporalCommunity.DurableObjects.IntegrationTests.Behaviors;
 
 /// <summary>
-/// Scenario M: Two explicit options for a read against a missing object.
+/// Two explicit options for a read against a missing object.
 /// (1) QueryOrDefaultAsync returns default without creating anything (side-effect-free try-get).
 /// (2) GetOrCreateAsync materializes the object explicitly, after which reads succeed.
 /// </summary>
-public sealed class ScenarioM_MissingObjectTryGetVsGetOrCreate : DurableObjectTestBase
+public sealed class MissingObjectTests : DurableObjectTestBase
 {
-    public ScenarioM_MissingObjectTryGetVsGetOrCreate(WorkflowEnvironmentFixture fixture) : base(fixture) { }
+    public MissingObjectTests(WorkflowEnvironmentFixture fixture) : base(fixture) { }
 
     [Fact]
     public async Task TryGet_ReturnsDefault_WithoutMaterializing_ThenGetOrCreate_Materializes()
@@ -20,10 +20,10 @@ public sealed class ScenarioM_MissingObjectTryGetVsGetOrCreate : DurableObjectTe
         const string id = "scenario-m-obj";
         var tq = UniqueTaskQueue();
 
-        using var worker = ScenarioWorkerBuilder.Build(
+        using var worker = TestWorkerBuilder.Build(
             Client, tq,
             workflowTypes: [typeof(AuditedCounter)],
-            activityInstances: [new ScenarioActivities()]);
+            activityInstances: [new AuditActivities()]);
 
         var cts = new CancellationTokenSource();
         var run = worker.ExecuteAsync(cts.Token);

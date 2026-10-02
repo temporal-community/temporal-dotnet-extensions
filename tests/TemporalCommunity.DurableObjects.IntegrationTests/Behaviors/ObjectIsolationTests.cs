@@ -2,15 +2,15 @@ using TemporalCommunity.DurableObjects.IntegrationTests.Infrastructure;
 using TemporalCommunity.DurableObjects.IntegrationTests.Objects;
 using Xunit;
 
-namespace TemporalCommunity.DurableObjects.IntegrationTests.Scenarios;
+namespace TemporalCommunity.DurableObjects.IntegrationTests.Behaviors;
 
 /// <summary>
 /// Activates a bounded set of independent object IDs concurrently and verifies that updates and
 /// queries remain isolated. This is a regression check, not a throughput benchmark.
 /// </summary>
-public sealed class ScenarioP_ConcurrentObjectScale : DurableObjectTestBase
+public sealed class ObjectIsolationTests : DurableObjectTestBase
 {
-    public ScenarioP_ConcurrentObjectScale(WorkflowEnvironmentFixture fixture) : base(fixture) { }
+    public ObjectIsolationTests(WorkflowEnvironmentFixture fixture) : base(fixture) { }
 
     [Fact]
     public async Task ConcurrentObjects_KeepIndependentState()
@@ -18,7 +18,7 @@ public sealed class ScenarioP_ConcurrentObjectScale : DurableObjectTestBase
         const int objectCount = 50;
         var taskQueue = UniqueTaskQueue();
 
-        using var worker = ScenarioWorkerBuilder.Build(
+        using var worker = TestWorkerBuilder.Build(
             Client,
             taskQueue,
             workflowTypes: [typeof(AuditedCounter)]);
