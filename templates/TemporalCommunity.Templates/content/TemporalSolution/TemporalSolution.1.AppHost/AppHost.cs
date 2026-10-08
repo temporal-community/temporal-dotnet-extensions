@@ -10,6 +10,9 @@ var temporal = builder.AddTemporalLocalDevServer("temporal");
 var worker = builder.AddProject<Projects.GeneratedAspirePrefix_Worker>("worker")
     .WaitFor(temporal)
     .WithReference(temporal);
+//#if (UseMinimalApi)
+worker.WithHttpHealthCheck("/health");
+//#endif
 
 builder.AddProject<Projects.GeneratedAspirePrefix_Client>("client")
     .WaitFor(temporal)

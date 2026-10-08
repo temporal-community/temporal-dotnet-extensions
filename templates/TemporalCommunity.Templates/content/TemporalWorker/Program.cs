@@ -1,5 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+//#if (UseMinimalApi)
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+//#endif
 using Temporalio.Extensions.Hosting;
 using TemporalWorker1;
 using TemporalWorker1.Activities;
@@ -10,7 +14,11 @@ using OpenTelemetry.Trace;
 using Temporalio.Extensions.OpenTelemetry;
 //#endif
 
+//#if (UseMinimalApi)
+var builder = WebApplication.CreateBuilder(args);
+//#else
 var builder = Host.CreateApplicationBuilder(args);
+//#endif
 
 //#if (IncludeOtel)
 // Trace Temporal spans; export them when an OTLP endpoint is configured.
@@ -46,4 +54,10 @@ builder.Services.AddHostedTemporalWorker(taskQueue)
     .AddWorkflow<SampleWorkflow>()
     .AddScopedActivities<SampleActivities>();
 
+//#if (UseMinimalApi)
+var app = builder.Build();
+app.MapGet("/", () => Results.Ok(new { service = "Temporal worker" }));
+await app.RunAsync();
+//#else
 await builder.Build().RunAsync();
+//#endif

@@ -3,7 +3,7 @@ using Xunit;
 namespace TemporalCommunity.Templates.Tests;
 
 /// <summary>
-/// Covers the full <c>Framework</c> x <c>IncludeOtel</c> 2x2 matrix for the <c>temporal-worker</c>
+/// Covers the full <c>Framework</c> x <c>IncludeOtel</c> x <c>UseMinimalApi</c> matrix for the <c>temporal-worker</c>
 /// project template: asserts the generated <c>Program.cs</c>/<c>.csproj</c> contain (or omit) the
 /// OpenTelemetry wiring correctly, and that the generated project builds standalone for both
 /// target frameworks.
@@ -105,11 +105,15 @@ public sealed class TemporalWorkerTemplateTests
     }
 
     [Theory]
-    [InlineData("net8.0", false)]
-    [InlineData("net8.0", true)]
-    [InlineData("net10.0", false)]
-    [InlineData("net10.0", true)]
-    public async Task GeneratesExpectedContentAndBuilds(string framework, bool includeOtel)
+    [InlineData("net8.0", false, false)]
+    [InlineData("net8.0", false, true)]
+    [InlineData("net8.0", true, false)]
+    [InlineData("net8.0", true, true)]
+    [InlineData("net10.0", false, false)]
+    [InlineData("net10.0", false, true)]
+    [InlineData("net10.0", true, false)]
+    [InlineData("net10.0", true, true)]
+    public async Task GeneratesExpectedContentAndBuilds(string framework, bool includeOtel, bool useMinimalApi)
     {
         ArgumentNullException.ThrowIfNull(framework);
 
@@ -117,10 +121,10 @@ public sealed class TemporalWorkerTemplateTests
         var settingsDirectory = TestFixtures.CreateTempDirectory();
         try
         {
-            var name = $"Worker{framework.Replace(".", string.Empty, StringComparison.Ordinal)}{(includeOtel ? "Otel" : "Plain")}";
+            var name = $"Worker{framework.Replace(".", string.Empty, StringComparison.Ordinal)}{(includeOtel ? "Otel" : "Plain")}{(useMinimalApi ? "MinimalApi" : "Console")}";
 
             await TemporalWorkerTestHelper.InstantiateAsync(
-                name, framework, includeOtel, outputDirectory, settingsDirectory);
+                name, framework, includeOtel, outputDirectory, settingsDirectory, useMinimalApi);
 
             var csprojPath = Path.Combine(outputDirectory, $"{name}.csproj");
             var programPath = Path.Combine(outputDirectory, "Program.cs");
@@ -131,6 +135,21 @@ public sealed class TemporalWorkerTemplateTests
             var programContent = await File.ReadAllTextAsync(programPath);
 
             Assert.Contains($"<TargetFramework>{framework}</TargetFramework>", csprojContent, StringComparison.Ordinal);
+            if (useMinimalApi)
+            {
+                Assert.Contains("<Sdk Name=\"Microsoft.NET.Sdk.Web\" />", csprojContent, StringComparison.Ordinal);
+                Assert.Contains("WebApplication.CreateBuilder(args)", programContent, StringComparison.Ordinal);
+                Assert.Contains("app.MapGet(\"/\"", programContent, StringComparison.Ordinal);
+                Assert.Contains("app.RunAsync()", programContent, StringComparison.Ordinal);
+                Assert.DoesNotContain("Host.CreateApplicationBuilder(args)", programContent, StringComparison.Ordinal);
+            }
+            else
+            {
+                Assert.Contains("<Sdk Name=\"Microsoft.NET.Sdk\" />", csprojContent, StringComparison.Ordinal);
+                Assert.Contains("Host.CreateApplicationBuilder(args)", programContent, StringComparison.Ordinal);
+                Assert.Contains("builder.Build().RunAsync()", programContent, StringComparison.Ordinal);
+                Assert.DoesNotContain("WebApplication.CreateBuilder(args)", programContent, StringComparison.Ordinal);
+            }
             Assert.DoesNotContain("Temporal:TaskQueue", programContent, StringComparison.Ordinal);
             Assert.DoesNotContain("ResolveTaskQueue", programContent, StringComparison.Ordinal);
             Assert.Contains("builder.Services.AddHostedTemporalWorker(taskQueue)", programContent, StringComparison.Ordinal);

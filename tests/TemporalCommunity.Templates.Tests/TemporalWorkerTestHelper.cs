@@ -19,14 +19,16 @@ internal static class TemporalWorkerTestHelper
 {
     /// <summary>
     /// Instantiates <c>temporal-worker</c> into <paramref name="outputDirectory"/> (must already
-    /// exist and be empty) with the given <c>Framework</c>/<c>IncludeOtel</c> symbols.
+    /// exist and be empty) with the given <c>Framework</c>/<c>IncludeOtel</c>/<c>UseMinimalApi</c>
+    /// symbols.
     /// </summary>
     public static async Task InstantiateAsync(
         string name,
         string framework,
         bool includeOtel,
         string outputDirectory,
-        string settingsDirectory)
+        string settingsDirectory,
+        bool useMinimalApi = false)
     {
         var options = new TemplateVerifierOptions(templateName: "temporal-worker")
         {
@@ -39,6 +41,7 @@ internal static class TemporalWorkerTestHelper
                 "-o", ".",
                 "--framework", framework,
                 "--include-otel", includeOtel ? "true" : "false",
+                "--api", useMinimalApi ? "true" : "false",
             },
             // Matches no file — see class remarks. This template's tests assert on content and
             // build success directly rather than via checked-in snapshots.

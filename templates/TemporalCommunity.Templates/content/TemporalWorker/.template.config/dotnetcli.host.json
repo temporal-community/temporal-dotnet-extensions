@@ -7,10 +7,15 @@
     "IncludeOtel": {
       "longName": "include-otel",
       "shortName": ""
+    },
+    "UseMinimalApi": {
+      "longName": "api",
+      "shortName": ""
     }
   },
   "usageExamples": [
     "--include-otel",
+    "--api",
     "--framework net8.0"
   ]
 }

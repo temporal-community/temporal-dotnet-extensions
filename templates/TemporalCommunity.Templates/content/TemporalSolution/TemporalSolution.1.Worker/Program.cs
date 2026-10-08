@@ -1,6 +1,9 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+//#if (UseMinimalApi)
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+//#endif
 using Temporalio.Extensions.Hosting;
 using GeneratedNamespacePrefix.Shared;
 using GeneratedNamespacePrefix.Shared.Activities;
@@ -12,7 +15,11 @@ using OpenTelemetry;
 using Temporalio.Extensions.OpenTelemetry;
 //#endif
 
+//#if (UseMinimalApi)
+var builder = WebApplication.CreateBuilder(args);
+//#else
 var builder = Host.CreateApplicationBuilder(args);
+//#endif
 
 //#if (IncludeAspire)
 builder.AddServiceDefaults();
@@ -59,26 +66,17 @@ builder.Services.AddTemporalClient(options =>
 // TemporalWorkerOptions.Interceptors to avoid duplicates
 //#endif
 const string taskQueue = "TemporalSolution.1-tq";
-var resolvedTaskQueue = ResolveTaskQueue(builder.Configuration, taskQueue);
-builder.Services.AddHostedTemporalWorker(resolvedTaskQueue)
+builder.Services.AddHostedTemporalWorker(taskQueue)
     .AddWorkflow<SampleWorkflow>()
     .AddScopedActivities<SampleActivities>();
 
+//#if (UseMinimalApi)
+var app = builder.Build();
+app.MapGet("/", () => Results.Ok(new { service = "Temporal worker" }));
+//#if (IncludeAspire)
+app.MapDefaultEndpoints();
+//#endif
+await app.RunAsync();
+//#else
 await builder.Build().RunAsync();
-
-static string ResolveTaskQueue(IConfiguration configuration, string defaultTaskQueue)
-{
-    var configured = configuration["Temporal:TaskQueue"];
-    if (configured is null)
-    {
-        return defaultTaskQueue;
-    }
-
-    if (string.IsNullOrWhiteSpace(configured))
-    {
-        throw new InvalidOperationException(
-            "Configuration value 'Temporal:TaskQueue' must not be blank. Set it to a valid task queue name or remove it.");
-    }
-
-    return configured;
-}
+//#endif

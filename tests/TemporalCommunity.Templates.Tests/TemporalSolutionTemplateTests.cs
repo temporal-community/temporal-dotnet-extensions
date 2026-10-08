@@ -3,7 +3,7 @@ using Xunit;
 namespace TemporalCommunity.Templates.Tests;
 
 /// <summary>
-/// Covers the full <c>Framework</c> x <c>IncludeAspire</c> x <c>IncludeOtel</c> matrix for the
+/// Covers the full <c>Framework</c> x <c>IncludeAspire</c> x <c>IncludeOtel</c> x <c>UseMinimalApi</c> matrix for the
 /// <c>temporal-solution</c> multi-project template: asserts AppHost/ServiceDefaults presence,
 /// the two OTel-related conditions tracked separately (<c>IncludeOtel</c> for the
 /// AddSource/TracingInterceptor registration, <c>OtelWithoutAspire</c> for the standalone OTLP
@@ -19,7 +19,10 @@ public sealed class TemporalSolutionTemplateTests
             {
                 foreach (var includeOtel in new[] { false, true })
                 {
-                    yield return new object[] { framework, includeAspire, includeOtel };
+                    foreach (var useMinimalApi in new[] { false, true })
+                    {
+                        yield return new object[] { framework, includeAspire, includeOtel, useMinimalApi };
+                    }
                 }
             }
         }
@@ -27,7 +30,8 @@ public sealed class TemporalSolutionTemplateTests
 
     [Theory]
     [MemberData(nameof(Combinations))]
-    public async Task GeneratesExpectedShapeAndBuilds(string framework, bool includeAspire, bool includeOtel)
+    public async Task GeneratesExpectedShapeAndBuilds(
+        string framework, bool includeAspire, bool includeOtel, bool useMinimalApi)
     {
         ArgumentNullException.ThrowIfNull(framework);
 
@@ -36,10 +40,11 @@ public sealed class TemporalSolutionTemplateTests
         try
         {
             var name = $"Sol{framework.Replace(".", string.Empty, StringComparison.Ordinal)}" +
-                $"{(includeAspire ? "Aspire" : "NoAspire")}{(includeOtel ? "Otel" : "NoOtel")}";
+                $"{(includeAspire ? "Aspire" : "NoAspire")}{(includeOtel ? "Otel" : "NoOtel")}" +
+                $"{(useMinimalApi ? "MinimalApi" : "Console")}";
 
             await TemporalSolutionTestHelper.InstantiateAsync(
-                name, framework, includeAspire, includeOtel, outputDirectory, settingsDirectory);
+                name, framework, includeAspire, includeOtel, outputDirectory, settingsDirectory, useMinimalApi);
 
             var slnPath = Path.Combine(outputDirectory, $"{name}.sln");
             var workerCsprojPath = Path.Combine(outputDirectory, $"{name}.Worker", $"{name}.Worker.csproj");
@@ -64,12 +69,30 @@ public sealed class TemporalSolutionTemplateTests
             var clientProgramContent = await File.ReadAllTextAsync(clientProgramPath);
             var clientDemoServiceContent = await File.ReadAllTextAsync(clientDemoServicePath);
 
+            if (useMinimalApi)
+            {
+                var workerCsprojContent = await File.ReadAllTextAsync(workerCsprojPath);
+                Assert.Contains("<Sdk Name=\"Microsoft.NET.Sdk.Web\" />", workerCsprojContent, StringComparison.Ordinal);
+                Assert.Contains("WebApplication.CreateBuilder(args)", workerProgramContent, StringComparison.Ordinal);
+                Assert.Contains("app.MapGet(\"/\"", workerProgramContent, StringComparison.Ordinal);
+                Assert.Contains("app.RunAsync()", workerProgramContent, StringComparison.Ordinal);
+                Assert.DoesNotContain("Host.CreateApplicationBuilder(args)", workerProgramContent, StringComparison.Ordinal);
+            }
+            else
+            {
+                var workerCsprojContent = await File.ReadAllTextAsync(workerCsprojPath);
+                Assert.Contains("<Sdk Name=\"Microsoft.NET.Sdk\" />", workerCsprojContent, StringComparison.Ordinal);
+                Assert.Contains("Host.CreateApplicationBuilder(args)", workerProgramContent, StringComparison.Ordinal);
+                Assert.Contains("builder.Build().RunAsync()", workerProgramContent, StringComparison.Ordinal);
+                Assert.DoesNotContain("WebApplication.CreateBuilder(args)", workerProgramContent, StringComparison.Ordinal);
+            }
+
             Assert.Contains("Environment.ExitCode = 1;", clientDemoServiceContent, StringComparison.Ordinal);
-            Assert.Contains("Temporal:TaskQueue", workerProgramContent, StringComparison.Ordinal);
+            Assert.DoesNotContain("Temporal:TaskQueue", workerProgramContent, StringComparison.Ordinal);
             Assert.DoesNotContain("ResolveTaskQueue", clientProgramContent + clientDemoServiceContent, StringComparison.Ordinal);
             Assert.DoesNotContain("Temporal:TaskQueue", clientProgramContent + clientDemoServiceContent, StringComparison.Ordinal);
             Assert.DoesNotContain("class DemoService", clientProgramContent, StringComparison.Ordinal);
-            Assert.Contains("IsNullOrWhiteSpace", workerProgramContent, StringComparison.Ordinal);
+            Assert.DoesNotContain("ResolveTaskQueue", workerProgramContent, StringComparison.Ordinal);
             var workerQueue = ExtractQueueDefault(workerProgramContent);
             var clientQueue = ExtractQueueDefault(clientDemoServiceContent);
             var expectedQueue = $"{name}-tq";
@@ -88,11 +111,35 @@ public sealed class TemporalSolutionTemplateTests
                 Assert.Contains("AddServiceDefaults()", workerProgramContent, StringComparison.Ordinal);
                 var appHostCsprojPath = Path.Combine(appHostDirectory, $"{name}.AppHost.csproj");
                 var appHostCsprojContent = await File.ReadAllTextAsync(appHostCsprojPath);
+                var appHostContent = await File.ReadAllTextAsync(Path.Combine(appHostDirectory, "AppHost.cs"));
                 Assert.Contains("<AspireUseCliBundle>true</AspireUseCliBundle>", appHostCsprojContent, StringComparison.Ordinal);
                 AssertTargetFramework(appHostCsprojPath, framework);
                 AssertTargetFramework(
                     Path.Combine(serviceDefaultsDirectory, $"{name}.ServiceDefaults.csproj"),
                     framework);
+
+                var serviceDefaultsCsprojPath = Path.Combine(
+                    serviceDefaultsDirectory, $"{name}.ServiceDefaults.csproj");
+                var serviceDefaultsCsprojContent = await File.ReadAllTextAsync(serviceDefaultsCsprojPath);
+                var serviceDefaultsExtensionsContent = await File.ReadAllTextAsync(
+                    Path.Combine(serviceDefaultsDirectory, "Extensions.cs"));
+                if (useMinimalApi)
+                {
+                    Assert.Contains("WithHttpHealthCheck(\"/health\")", appHostContent, StringComparison.Ordinal);
+                    Assert.Contains("MapDefaultEndpoints()", workerProgramContent, StringComparison.Ordinal);
+                    Assert.Contains("FrameworkReference Include=\"Microsoft.AspNetCore.App\"", serviceDefaultsCsprojContent, StringComparison.Ordinal);
+                    Assert.Contains("OpenTelemetry.Instrumentation.AspNetCore", serviceDefaultsCsprojContent, StringComparison.Ordinal);
+                    Assert.Contains("AddDefaultHealthChecks", serviceDefaultsExtensionsContent, StringComparison.Ordinal);
+                    Assert.Contains("MapDefaultEndpoints", serviceDefaultsExtensionsContent, StringComparison.Ordinal);
+                    Assert.Contains("AddAspNetCoreInstrumentation", serviceDefaultsExtensionsContent, StringComparison.Ordinal);
+                }
+                else
+                {
+                    Assert.DoesNotContain("WithHttpHealthCheck(\"/health\")", appHostContent, StringComparison.Ordinal);
+                    Assert.DoesNotContain("MapDefaultEndpoints()", workerProgramContent, StringComparison.Ordinal);
+                    Assert.DoesNotContain("FrameworkReference Include=\"Microsoft.AspNetCore.App\"", serviceDefaultsCsprojContent, StringComparison.Ordinal);
+                    Assert.DoesNotContain("OpenTelemetry.Instrumentation.AspNetCore", serviceDefaultsCsprojContent, StringComparison.Ordinal);
+                }
             }
             else
             {
@@ -162,13 +209,6 @@ public sealed class TemporalSolutionTemplateTests
                     Path.Combine(serviceDefaultsDirectory, $"{name}.ServiceDefaults.csproj"));
             }
 
-            if (framework == "net10.0" && !includeAspire && !includeOtel)
-            {
-                await TaskQueueResolverHarness.AssertContractAsync(
-                    workerProgramPath,
-                    expectedQueue,
-                    "ResolveSolutionWorkerTaskQueue");
-            }
         }
         finally
         {

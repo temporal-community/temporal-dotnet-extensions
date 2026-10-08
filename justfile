@@ -364,18 +364,20 @@ _pack-verify-output:
     mkdir -p "$templates_worker_scratch/dry-run"
     (cd "$templates_worker_scratch/dry-run" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-worker -n DryRunWorker -o . --dry-run)
     echo "  ✓ temporal-worker --dry-run reported without error"
-    # Full Framework x IncludeOtel 2x2 matrix — a project template, unlike the item templates
+    # Full Framework x IncludeOtel x MinimalApi matrix — a project template, unlike the item templates
     # above, needs no ScratchTemplateHost since it generates its own standalone .csproj.
     for fw in net8.0 net10.0; do
         for otel in false true; do
-            combo_dir="$templates_worker_scratch/${fw}-otel-${otel}"
-            mkdir -p "$combo_dir"
-            name="Worker_${fw//./}_${otel}"
-            (cd "$combo_dir" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-worker -n "$name" -o . --framework "$fw" --include-otel "$otel")
-            [ -f "$combo_dir/$name.csproj" ] || { echo "  ✗ ERROR: temporal-worker (framework=$fw, include-otel=$otel) did not generate $name.csproj" >&2; exit 1; }
-            [ -f "$combo_dir/obj/project.assets.json" ] || { echo "  ✗ ERROR: temporal-worker restore post-action did not produce assets" >&2; exit 1; }
-            (cd "$combo_dir" && dotnet build --no-restore --nologo)
-            echo "  ✓ temporal-worker (framework=$fw, include-otel=$otel) instantiated and built standalone"
+            for minimal_api in false true; do
+                combo_dir="$templates_worker_scratch/${fw}-otel-${otel}-api-${minimal_api}"
+                mkdir -p "$combo_dir"
+                name="Worker_${fw//./}_${otel}_${minimal_api}"
+                (cd "$combo_dir" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-worker -n "$name" -o . --framework "$fw" --include-otel "$otel" --api "$minimal_api")
+                [ -f "$combo_dir/$name.csproj" ] || { echo "  ✗ ERROR: temporal-worker (framework=$fw, include-otel=$otel, api=$minimal_api) did not generate $name.csproj" >&2; exit 1; }
+                [ -f "$combo_dir/obj/project.assets.json" ] || { echo "  ✗ ERROR: temporal-worker restore post-action did not produce assets" >&2; exit 1; }
+                (cd "$combo_dir" && dotnet build --no-restore --nologo)
+                echo "  ✓ temporal-worker (framework=$fw, include-otel=$otel, api=$minimal_api) instantiated and built standalone"
+            done
         done
     done
     echo "==> temporal-solution multi-project template checks"
@@ -392,31 +394,33 @@ _pack-verify-output:
     mkdir -p "$templates_solution_scratch/dry-run"
     (cd "$templates_solution_scratch/dry-run" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-solution -n DryRunSolution -o . --dry-run)
     echo "  ✓ temporal-solution --dry-run reported without error"
-    # Full Framework x IncludeAspire x IncludeOtel matrix, built via the generated .sln (not just
+    # Full Framework x IncludeAspire x IncludeOtel x MinimalApi matrix, built via the generated .sln (not just
     # individual projects) to catch broken ProjectReference paths from sourceName substitution.
     for fw in net8.0 net10.0; do
         for aspire in false true; do
             for otel in false true; do
-                combo_dir="$templates_solution_scratch/${fw}-aspire-${aspire}-otel-${otel}"
-                mkdir -p "$combo_dir"
-                name="Sol_${fw//./}_${aspire}_${otel}"
-                (cd "$combo_dir" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-solution -n "$name" -o . --framework "$fw" --aspire "$aspire" --otel "$otel")
-                [ -f "$combo_dir/$name.sln" ] || { echo "  ✗ ERROR: temporal-solution (framework=$fw, include-aspire=$aspire, include-otel=$otel) did not generate $name.sln" >&2; exit 1; }
-                if [ "$aspire" = "true" ]; then
-                    [ -d "$combo_dir/$name.AppHost" ] || { echo "  ✗ ERROR: expected $name.AppHost with include-aspire=true" >&2; exit 1; }
-                else
-                    [ -d "$combo_dir/$name.AppHost" ] && { echo "  ✗ ERROR: did not expect $name.AppHost with include-aspire=false" >&2; exit 1; }
-                fi
-                for project in Worker Client Shared; do
-                    [ -f "$combo_dir/$name.$project/obj/project.assets.json" ] || { echo "  ✗ ERROR: temporal-solution $project restore post-action did not produce assets" >&2; exit 1; }
-                done
-                if [ "$aspire" = "true" ]; then
-                    for project in AppHost ServiceDefaults; do
+                for minimal_api in false true; do
+                    combo_dir="$templates_solution_scratch/${fw}-aspire-${aspire}-otel-${otel}-api-${minimal_api}"
+                    mkdir -p "$combo_dir"
+                    name="Sol_${fw//./}_${aspire}_${otel}_${minimal_api}"
+                    (cd "$combo_dir" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-solution -n "$name" -o . --framework "$fw" --aspire "$aspire" --otel "$otel" --api "$minimal_api")
+                    [ -f "$combo_dir/$name.sln" ] || { echo "  ✗ ERROR: temporal-solution (framework=$fw, include-aspire=$aspire, include-otel=$otel, api=$minimal_api) did not generate $name.sln" >&2; exit 1; }
+                    if [ "$aspire" = "true" ]; then
+                        [ -d "$combo_dir/$name.AppHost" ] || { echo "  ✗ ERROR: expected $name.AppHost with include-aspire=true" >&2; exit 1; }
+                    else
+                        [ -d "$combo_dir/$name.AppHost" ] && { echo "  ✗ ERROR: did not expect $name.AppHost with include-aspire=false" >&2; exit 1; }
+                    fi
+                    for project in Worker Client Shared; do
                         [ -f "$combo_dir/$name.$project/obj/project.assets.json" ] || { echo "  ✗ ERROR: temporal-solution $project restore post-action did not produce assets" >&2; exit 1; }
                     done
-                fi
-                (cd "$combo_dir" && dotnet build "$name.sln" --no-restore --nologo)
-                echo "  ✓ temporal-solution (framework=$fw, include-aspire=$aspire, include-otel=$otel) instantiated and built"
+                    if [ "$aspire" = "true" ]; then
+                        for project in AppHost ServiceDefaults; do
+                            [ -f "$combo_dir/$name.$project/obj/project.assets.json" ] || { echo "  ✗ ERROR: temporal-solution $project restore post-action did not produce assets" >&2; exit 1; }
+                        done
+                    fi
+                    (cd "$combo_dir" && dotnet build "$name.sln" --no-restore --nologo)
+                    echo "  ✓ temporal-solution (framework=$fw, include-aspire=$aspire, include-otel=$otel, api=$minimal_api) instantiated and built"
+                done
             done
         done
     done

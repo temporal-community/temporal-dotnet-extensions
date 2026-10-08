@@ -19,7 +19,8 @@ internal static class TemporalSolutionTestHelper
         bool includeAspire,
         bool includeOtel,
         string outputDirectory,
-        string settingsDirectory)
+        string settingsDirectory,
+        bool useMinimalApi = false)
     {
         var options = new TemplateVerifierOptions(templateName: "temporal-solution")
         {
@@ -33,6 +34,7 @@ internal static class TemporalSolutionTestHelper
                 "--framework", framework,
                 "--aspire", includeAspire ? "true" : "false",
                 "--otel", includeOtel ? "true" : "false",
+                "--api", useMinimalApi ? "true" : "false",
             },
             VerificationIncludePatterns = new[] { "__no-snapshot-verification__" },
         };

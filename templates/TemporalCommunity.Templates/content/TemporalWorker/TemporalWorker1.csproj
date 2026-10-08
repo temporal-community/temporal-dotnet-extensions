@@ -1,4 +1,9 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project>
+  <!--#if (UseMinimalApi) -->
+  <Sdk Name="Microsoft.NET.Sdk.Web" />
+  <!--#else -->
+  <Sdk Name="Microsoft.NET.Sdk" />
+  <!--#endif -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>

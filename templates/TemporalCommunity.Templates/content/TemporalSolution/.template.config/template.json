@@ -79,6 +79,13 @@
       "displayName": "Include OpenTelemetry tracing",
       "description": "Adds the Temporal SDK tracing sources and the client-side TracingInterceptor to Worker and Client. When Aspire is disabled, also adds a standalone OTLP exporter gated on OTEL_EXPORTER_OTLP_ENDPOINT."
     },
+    "UseMinimalApi": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "displayName": "Use ASP.NET Core minimal API Worker",
+      "description": "Uses WebApplication.CreateBuilder and ASP.NET Core health endpoints for the generated Worker. The Client remains a Generic Host console app."
+    },
     "OtelWithoutAspire": {
       "type": "computed",
       "value": "(IncludeOtel == true && IncludeAspire == false)"

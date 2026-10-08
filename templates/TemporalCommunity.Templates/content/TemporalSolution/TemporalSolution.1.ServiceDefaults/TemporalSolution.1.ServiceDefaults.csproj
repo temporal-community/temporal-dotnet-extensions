@@ -11,12 +11,16 @@
     <PackageReference Include="Microsoft.Extensions.ServiceDiscovery" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.0.0" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.18.0" />
-    <!-- No OpenTelemetry.Instrumentation.AspNetCore / MapDefaultEndpoints health-check endpoints —
-         Worker and Client are plain Generic Host console apps, not ASP.NET Core WebApplications,
-         so there is no HTTP server to instrument or map endpoints on. -->
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.18.0" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.18.0" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.18.0" />
   </ItemGroup>
+
+  <!--#if (UseMinimalApi) -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.18.0" />
+  </ItemGroup>
+  <!--#endif -->
 
 </Project>

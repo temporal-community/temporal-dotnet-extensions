@@ -85,6 +85,7 @@ dotnet new temporal-worker -n OrderProcessing.Worker
 |---|---|
 | `--framework <net8.0|net10.0>` | Target framework; defaults to `net10.0`. |
 | `--include-otel` | Adds Temporal tracing and an OTLP exporter; defaults to off. |
+| `--api` | Uses `WebApplication.CreateBuilder` and the Web SDK, with a root health/status endpoint; defaults to the Generic Host console setup. |
 
 The project includes `Program.cs`, a `TemporalWorkerConnection` helper, and a registered
 sample workflow/activity pair. It references `Temporalio`, `Temporalio.Extensions.Hosting`,
@@ -125,6 +126,7 @@ When `-n` is omitted, the name is derived from the output/current directory.
 | `--framework <net8.0|net10.0>` | Framework for every generated project; defaults to `net10.0`. |
 | `--aspire` | Adds AppHost and ServiceDefaults and provisions a local Temporal dev server; defaults to off. |
 | `--otel` | Adds Temporal tracing to Worker and Client. With Aspire, ServiceDefaults supplies the exporter; otherwise a standalone exporter uses the same endpoint gate described above. Defaults to off. |
+| `--api` | Generates the Worker with `WebApplication.CreateBuilder`, a root status endpoint, and (with `--aspire`) `/health` and `/alive` endpoints. The Client remains a Generic Host console app. Defaults to off. |
 
 | Project | Purpose |
 |---|---|
@@ -133,6 +135,11 @@ When `-n` is omitted, the name is derived from the output/current directory.
 | `<Name>.Client` | One-shot console host that starts the sample workflow, prints its result, and exits. |
 | `<Name>.AppHost` *(Aspire only)* | Provisions the Temporal dev server and runs Worker and Client as resources. |
 | `<Name>.ServiceDefaults` *(Aspire only)* | Service discovery, HTTP resilience, and OpenTelemetry wiring for the console hosts. |
+
+With `--api --aspire`, the Worker uses the ASP.NET Core health endpoint pattern: `/health`
+reports readiness and `/alive` reports liveness during development. The AppHost polls the Worker's
+`/health` endpoint as its resource health check. The generated Worker does not add OpenAPI; add it
+to the Web project if your application needs an API description.
 
 ### Run a generated solution
 
@@ -193,20 +200,8 @@ The default task queue is `<Name>-tq`: `temporal-worker -n OrderProcessing.Worke
 Client. The standalone `temporal-worker` uses a hardcoded `taskQueue` constant in `Program.cs`;
 edit that string to choose a different queue.
 
-The solution Client uses a hardcoded `taskQueue` constant in `DemoService.cs`.
-The solution Worker supports overriding its default through configuration; keep its queue
-matched to the Client's constant:
-
-```text
-Temporal:TaskQueue
-```
-
-A non-empty value overrides the default; a missing or `null` value uses it.
-Blank or whitespace-only values throw `InvalidOperationException`:
-
-```text
-Configuration value 'Temporal:TaskQueue' must not be blank. Set it to a valid task queue name or remove it.
-```
+The solution Worker and Client both use hardcoded `taskQueue` constants. Keep the values matched
+when changing the generated application.
 
 Changing an existing application's queue is a routing migration: deploy compatible consumers,
 drain or complete work on the old queue, and only then remove the old routing.

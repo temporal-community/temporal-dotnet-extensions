@@ -11,11 +11,16 @@
     "IncludeOtel": {
       "longName": "otel",
       "shortName": ""
+    },
+    "UseMinimalApi": {
+      "longName": "api",
+      "shortName": ""
     }
   },
   "usageExamples": [
     "--aspire",
     "--otel",
+    "--api",
     "--framework net8.0"
   ]
 }

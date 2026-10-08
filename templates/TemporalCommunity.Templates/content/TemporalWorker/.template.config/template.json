@@ -45,6 +45,13 @@
       "defaultValue": "false",
       "displayName": "Include OpenTelemetry tracing",
       "description": "Adds the Temporal SDK tracing sources, the client-side TracingInterceptor, and an OTLP exporter gated on the OTEL_EXPORTER_OTLP_ENDPOINT environment variable."
+    },
+    "UseMinimalApi": {
+      "type": "parameter",
+      "datatype": "bool",
+      "defaultValue": "false",
+      "displayName": "Use ASP.NET Core minimal API host",
+      "description": "Uses WebApplication.CreateBuilder and the Web SDK instead of the default Generic Host console setup."
     }
   },
   "primaryOutputs": [
