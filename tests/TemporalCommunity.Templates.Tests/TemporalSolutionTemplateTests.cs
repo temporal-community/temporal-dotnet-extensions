@@ -47,6 +47,7 @@ public sealed class TemporalSolutionTemplateTests
             var sharedCsprojPath = Path.Combine(outputDirectory, $"{name}.Shared", $"{name}.Shared.csproj");
             var workerProgramPath = Path.Combine(outputDirectory, $"{name}.Worker", "Program.cs");
             var clientProgramPath = Path.Combine(outputDirectory, $"{name}.Client", "Program.cs");
+            var clientDemoServicePath = Path.Combine(outputDirectory, $"{name}.Client", "DemoService.cs");
             var appHostDirectory = Path.Combine(outputDirectory, $"{name}.AppHost");
             var serviceDefaultsDirectory = Path.Combine(outputDirectory, $"{name}.ServiceDefaults");
 
@@ -61,20 +62,22 @@ public sealed class TemporalSolutionTemplateTests
             var slnContent = await File.ReadAllTextAsync(slnPath);
             var workerProgramContent = await File.ReadAllTextAsync(workerProgramPath);
             var clientProgramContent = await File.ReadAllTextAsync(clientProgramPath);
+            var clientDemoServiceContent = await File.ReadAllTextAsync(clientDemoServicePath);
 
-            Assert.Contains("Environment.ExitCode = 1;", clientProgramContent, StringComparison.Ordinal);
+            Assert.Contains("Environment.ExitCode = 1;", clientDemoServiceContent, StringComparison.Ordinal);
             Assert.Contains("Temporal:TaskQueue", workerProgramContent, StringComparison.Ordinal);
-            Assert.Contains("Temporal:TaskQueue", clientProgramContent, StringComparison.Ordinal);
+            Assert.DoesNotContain("ResolveTaskQueue", clientProgramContent + clientDemoServiceContent, StringComparison.Ordinal);
+            Assert.DoesNotContain("Temporal:TaskQueue", clientProgramContent + clientDemoServiceContent, StringComparison.Ordinal);
+            Assert.DoesNotContain("class DemoService", clientProgramContent, StringComparison.Ordinal);
             Assert.Contains("IsNullOrWhiteSpace", workerProgramContent, StringComparison.Ordinal);
-            Assert.Contains("IsNullOrWhiteSpace", clientProgramContent, StringComparison.Ordinal);
             var workerQueue = ExtractQueueDefault(workerProgramContent);
-            var clientQueue = ExtractQueueDefault(clientProgramContent);
+            var clientQueue = ExtractQueueDefault(clientDemoServiceContent);
             var expectedQueue = $"{name}-tq";
             Assert.Equal(expectedQueue, workerQueue);
             Assert.Equal(workerQueue, clientQueue);
-            Assert.Contains("stoppingToken", clientProgramContent, StringComparison.Ordinal);
-            Assert.Contains("OperationCanceledException", clientProgramContent, StringComparison.Ordinal);
-            Assert.Contains("RpcOptions", clientProgramContent, StringComparison.Ordinal);
+            Assert.Contains("stoppingToken", clientDemoServiceContent, StringComparison.Ordinal);
+            Assert.Contains("OperationCanceledException", clientDemoServiceContent, StringComparison.Ordinal);
+            Assert.Contains("RpcOptions", clientDemoServiceContent, StringComparison.Ordinal);
 
             if (includeAspire)
             {
@@ -107,7 +110,11 @@ public sealed class TemporalSolutionTemplateTests
             {
                 if (includeOtel)
                 {
-                    Assert.Contains("AddSource(\"Temporalio\")", programContent, StringComparison.Ordinal);
+                    foreach (var source in new[] { "ClientSource", "WorkflowsSource", "ActivitiesSource", "NexusSource" })
+                    {
+                        Assert.Contains($"TracingInterceptor.{source}.Name", programContent, StringComparison.Ordinal);
+                    }
+                    Assert.DoesNotContain("AddSource(\"Temporalio\")", programContent, StringComparison.Ordinal);
                 }
                 else
                 {
@@ -161,10 +168,6 @@ public sealed class TemporalSolutionTemplateTests
                     workerProgramPath,
                     expectedQueue,
                     "ResolveSolutionWorkerTaskQueue");
-                await TaskQueueResolverHarness.AssertContractAsync(
-                    clientProgramPath,
-                    expectedQueue,
-                    "ResolveSolutionClientTaskQueue");
             }
         }
         finally
@@ -289,8 +292,8 @@ public sealed class TemporalSolutionTemplateTests
                 "new", "temporal-solution",
                 "-o", outputDirectory,
                 "--framework", "net10.0",
-                "--include-aspire", "false",
-                "--include-otel", "false",
+                "--aspire", "false",
+                "--otel", "false",
                 "--debug:custom-hive", hiveDirectory);
 
             Assert.True(Directory.Exists(Path.Combine(outputDirectory, "DirectoryDerivedSolution.Worker")));
@@ -299,7 +302,7 @@ public sealed class TemporalSolutionTemplateTests
             var workerProgram = await File.ReadAllTextAsync(
                 Path.Combine(outputDirectory, "DirectoryDerivedSolution.Worker", "Program.cs"));
             var clientProgram = await File.ReadAllTextAsync(
-                Path.Combine(outputDirectory, "DirectoryDerivedSolution.Client", "Program.cs"));
+                Path.Combine(outputDirectory, "DirectoryDerivedSolution.Client", "DemoService.cs"));
             Assert.Equal("DirectoryDerivedSolution-tq", ExtractQueueDefault(workerProgram));
             Assert.Equal(ExtractQueueDefault(workerProgram), ExtractQueueDefault(clientProgram));
         }
@@ -324,9 +327,9 @@ public sealed class TemporalSolutionTemplateTests
                 "Beta", "net10.0", includeAspire: false, includeOtel: false, betaDirectory, betaSettings);
 
             var alphaWorker = await File.ReadAllTextAsync(Path.Combine(alphaDirectory, "Alpha.Worker", "Program.cs"));
-            var alphaClient = await File.ReadAllTextAsync(Path.Combine(alphaDirectory, "Alpha.Client", "Program.cs"));
+            var alphaClient = await File.ReadAllTextAsync(Path.Combine(alphaDirectory, "Alpha.Client", "DemoService.cs"));
             var betaWorker = await File.ReadAllTextAsync(Path.Combine(betaDirectory, "Beta.Worker", "Program.cs"));
-            var betaClient = await File.ReadAllTextAsync(Path.Combine(betaDirectory, "Beta.Client", "Program.cs"));
+            var betaClient = await File.ReadAllTextAsync(Path.Combine(betaDirectory, "Beta.Client", "DemoService.cs"));
 
             Assert.Equal("Alpha-tq", ExtractQueueDefault(alphaWorker));
             Assert.Equal(ExtractQueueDefault(alphaWorker), ExtractQueueDefault(alphaClient));

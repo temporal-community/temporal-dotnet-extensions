@@ -9,7 +9,7 @@
   <PropertyGroup>
     <!-- Pinned here, in exactly one place, so bumping the analyzer package is a one-line change,
          independent of this template package's own MinVer-derived version. -->
-    <TemporalCommunityAnalyzersVersion>0.3.4</TemporalCommunityAnalyzersVersion>
+    <TemporalCommunityAnalyzersVersion>0.5.0</TemporalCommunityAnalyzersVersion>
   </PropertyGroup>
 
   <ItemGroup>

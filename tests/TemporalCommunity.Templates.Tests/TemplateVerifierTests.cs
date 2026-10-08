@@ -283,14 +283,14 @@ public sealed class TemplateVerifierTests
 
             var generatedContent = await File.ReadAllTextAsync(
                 Path.Combine(fixtureCopy, "CustomConverterName.cs"));
-            Assert.Contains("class CustomConverterName : global::Temporalio.Converters.DefaultPayloadConverter", generatedContent, StringComparison.Ordinal);
-            Assert.Contains("class CustomConverterNameEncoding : global::Temporalio.Converters.IEncodingConverter", generatedContent, StringComparison.Ordinal);
+            Assert.Contains("class CustomConverterName : Temporalio.Converters.DefaultPayloadConverter", generatedContent, StringComparison.Ordinal);
+            Assert.Contains("class CustomConverterNameEncoding : Temporalio.Converters.IEncodingConverter", generatedContent, StringComparison.Ordinal);
             Assert.Contains("namespace Fixtures.HostProject;", generatedContent, StringComparison.Ordinal);
             Assert.Contains("custom/Fixtures.HostProject.CustomConverterName/v1", generatedContent, StringComparison.Ordinal);
             // The custom encoding must be tried before JsonPlainConverter, which accepts any value.
             Assert.True(
                 generatedContent.IndexOf("new CustomConverterNameEncoding()", StringComparison.Ordinal)
-                    < generatedContent.IndexOf("new global::Temporalio.Converters.JsonPlainConverter(", StringComparison.Ordinal),
+                    < generatedContent.IndexOf("new Temporalio.Converters.JsonPlainConverter(", StringComparison.Ordinal),
                 "Custom encoding converter must precede JsonPlainConverter.");
 
             var secondOptions = new TemplateVerifierOptions(templateName: "temporal-converter")

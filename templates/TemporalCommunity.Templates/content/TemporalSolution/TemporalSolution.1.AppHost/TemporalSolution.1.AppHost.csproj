@@ -1,4 +1,4 @@
-<Project Sdk="Aspire.AppHost.Sdk/13.6.0">
+﻿<Project Sdk="Aspire.AppHost.Sdk/13.6.0">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -9,12 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- No explicit Aspire.Hosting.AppHost PackageReference — the Aspire.AppHost.Sdk MSBuild SDK
-         reference above already supplies it (confirmed against the real Aspire.ProjectTemplates
-         AppHost.csproj, which only adds explicit PackageReferences for specific integrations
-         actually used, e.g. Aspire.Hosting.Redis). TemporalCommunity.Aspire.Hosting is that kind
-         of specific integration. -->
-    <PackageReference Include="TemporalCommunity.Aspire.Hosting" Version="0.4.0" />
+    <PackageReference Include="TemporalCommunity.Aspire.Hosting" Version="0.5.0" />
     <!-- Aspire integration accepts Temporalio >= 1.17.0; pin the AppHost graph to the same
          SDK as Worker/Client/Shared instead of resolving its transitive minimum. -->
     <PackageReference Include="Temporalio" Version="1.20.0" />

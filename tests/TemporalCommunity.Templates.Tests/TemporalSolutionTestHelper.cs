@@ -31,8 +31,8 @@ internal static class TemporalSolutionTestHelper
                 "-n", name,
                 "-o", ".",
                 "--framework", framework,
-                "--include-aspire", includeAspire ? "true" : "false",
-                "--include-otel", includeOtel ? "true" : "false",
+                "--aspire", includeAspire ? "true" : "false",
+                "--otel", includeOtel ? "true" : "false",
             },
             VerificationIncludePatterns = new[] { "__no-snapshot-verification__" },
         };

@@ -129,21 +129,21 @@ public sealed class TemporalConverterIdentityTests
                         "                return false;",
                         "            }",
                         string.Empty,
-                        "            payload = new global::Temporalio.Api.Common.V1.Payload();",
+                        "            payload = new Temporalio.Api.Common.V1.Payload();",
                         "            payload.Metadata[\"encoding\"] = Google.Protobuf.ByteString.CopyFromUtf8(Encoding);",
                         "            payload.Data = Google.Protobuf.ByteString.CopyFromUtf8(text);",
                         "            return true;"));
 
             var toValuePlaceholder = Regex.Match(
                 generatedSource,
-                """(?m)^        public object\? ToValue\(global::Temporalio\.Api\.Common\.V1\.Payload payload, global::System\.Type type\) =>\r?\n            throw new global::System\.NotImplementedException\(\$"Replace with real deserialization logic for \{type\}\."\);$""");
+                """(?m)^        public object\? ToValue\(Temporalio\.Api\.Common\.V1\.Payload payload, System\.Type type\) =>\r?\n            throw new System\.NotImplementedException\(\$"Replace with real deserialization logic for \{type\}\."\);$""");
             Assert.True(toValuePlaceholder.Success, "The generated ToValue placeholder was not found.");
             generatedSource = generatedSource.Remove(
                 toValuePlaceholder.Index,
                 toValuePlaceholder.Length).Insert(
                     toValuePlaceholder.Index,
                     string.Join(Environment.NewLine,
-                        "        public object? ToValue(global::Temporalio.Api.Common.V1.Payload payload, global::System.Type type)",
+                        "        public object? ToValue(Temporalio.Api.Common.V1.Payload payload, System.Type type)",
                         "        {",
                         "            if (type != typeof(string))",
                         "            {",

@@ -5,17 +5,17 @@
       "longName": "framework"
     },
     "IncludeAspire": {
-      "longName": "include-aspire",
+      "longName": "aspire",
       "shortName": ""
     },
     "IncludeOtel": {
-      "longName": "include-otel",
+      "longName": "otel",
       "shortName": ""
     }
   },
   "usageExamples": [
-    "--include-aspire",
-    "--include-otel",
+    "--aspire",
+    "--otel",
     "--framework net8.0"
   ]
 }

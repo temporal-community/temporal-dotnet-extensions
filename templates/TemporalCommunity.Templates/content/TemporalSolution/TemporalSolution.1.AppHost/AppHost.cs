@@ -1,11 +1,10 @@
-using TemporalCommunity.Aspire.Hosting;
+﻿using TemporalCommunity.Aspire.Hosting;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-// Provisions a local Temporal dev server automatically (via Temporalio.Testing.WorkflowEnvironment
-// under the hood — no separately installed Temporal CLI required) as part of `aspire run`. See
-// docs/templates.md's "Multi-project templates" section for the IncludeAspire=false alternative
-// (run your own `temporal server start-dev`).
+// Start a local Temporal dev server.
+// Alternatives: AddTemporalCliServer (CLI), AddTemporalDevContainer (Docker),
+// or AddTemporalCloud (Temporal Cloud).
 var temporal = builder.AddTemporalLocalDevServer("temporal");
 
 var worker = builder.AddProject<Projects.GeneratedAspirePrefix_Worker>("worker")

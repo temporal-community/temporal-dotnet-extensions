@@ -23,10 +23,10 @@ public sealed class TemporalWorkerTemplateTests
 
             var programContent = await File.ReadAllTextAsync(Path.Combine(outputDirectory, "Program.cs"));
             Assert.Contains(
-                $"global::{name}.TemporalWorkerConnection.Resolve(builder.Configuration);",
+                $"{name}.TemporalWorkerConnection.Resolve(builder.Configuration);",
                 programContent, StringComparison.Ordinal);
             Assert.Contains(
-                $"global::{name}.TemporalWorkerConnection.ApplyTo(connectOptions, options);",
+                $"{name}.TemporalWorkerConnection.ApplyTo(connectOptions, options);",
                 programContent, StringComparison.Ordinal);
             await DotnetCli.RunAsync(outputDirectory, "build", "--nologo");
         }
@@ -131,18 +131,23 @@ public sealed class TemporalWorkerTemplateTests
             var programContent = await File.ReadAllTextAsync(programPath);
 
             Assert.Contains($"<TargetFramework>{framework}</TargetFramework>", csprojContent, StringComparison.Ordinal);
-            Assert.Contains("Temporal:TaskQueue", programContent, StringComparison.Ordinal);
-            Assert.Contains("IsNullOrWhiteSpace", programContent, StringComparison.Ordinal);
+            Assert.DoesNotContain("Temporal:TaskQueue", programContent, StringComparison.Ordinal);
+            Assert.DoesNotContain("ResolveTaskQueue", programContent, StringComparison.Ordinal);
+            Assert.Contains("builder.Services.AddHostedTemporalWorker(taskQueue)", programContent, StringComparison.Ordinal);
             Assert.Equal($"{name}-tq", ExtractQueueDefault(programContent));
             Assert.Contains(
-                $"global::{name}.TemporalWorkerConnection.Resolve(builder.Configuration);",
+                $"{name}.TemporalWorkerConnection.Resolve(builder.Configuration);",
                 programContent, StringComparison.Ordinal);
             Assert.True(File.Exists(Path.Combine(outputDirectory, "TemporalWorkerConnection.cs")));
             Assert.False(File.Exists(Path.Combine(outputDirectory, "TemporalConnection.cs")));
 
             if (includeOtel)
             {
-                Assert.Contains("AddSource(\"Temporalio\")", programContent, StringComparison.Ordinal);
+                foreach (var source in new[] { "ClientSource", "WorkflowsSource", "ActivitiesSource", "NexusSource" })
+                {
+                    Assert.Contains($"TracingInterceptor.{source}.Name", programContent, StringComparison.Ordinal);
+                }
+                Assert.DoesNotContain("AddSource(\"Temporalio\")", programContent, StringComparison.Ordinal);
                 Assert.Contains("UseOtlpExporter()", programContent, StringComparison.Ordinal);
                 Assert.Contains("new TracingInterceptor()", programContent, StringComparison.Ordinal);
                 Assert.Contains("Temporalio.Extensions.OpenTelemetry", csprojContent, StringComparison.Ordinal);
@@ -164,28 +169,18 @@ public sealed class TemporalWorkerTemplateTests
             // TemporalConnectionResolverTests), rather than a hand-rolled lazy-client singleton.
             Assert.Contains("builder.Services.AddTemporalClient(options =>", programContent, StringComparison.Ordinal);
             Assert.Contains(
-                $"global::{name}.TemporalWorkerConnection.ApplyTo(connectOptions, options);",
+                $"{name}.TemporalWorkerConnection.ApplyTo(connectOptions, options);",
                 programContent, StringComparison.Ordinal);
             Assert.DoesNotContain("AddSingleton<ITemporalClient>", programContent, StringComparison.Ordinal);
             Assert.DoesNotContain("CreateLazy", programContent, StringComparison.Ordinal);
             Assert.DoesNotContain("options.LoggerFactory", programContent, StringComparison.Ordinal);
 
-            // TracingInterceptor is only ever composed once (appended to the client options'
-            // existing interceptors inside the AddTemporalClient callback) — never a second time on
-            // TemporalWorkerOptions, which would double every span since the client interceptor
-            // already carries over into the worker automatically.
+            // Register tracing once on the client; the interceptor also runs on the worker.
             AssertSingleTracingInterceptorComposition(programContent, includeOtel);
 
             // Standalone build: the generated project must compile on its own, not just as part of
             // the repo's own solution.
             await DotnetCli.RunAsync(outputDirectory, "build", "--nologo");
-            if (framework == "net10.0" && !includeOtel)
-            {
-                await TaskQueueResolverHarness.AssertContractAsync(
-                    programPath,
-                    $"{name}-tq",
-                    "ResolveWorkerTaskQueue");
-            }
         }
         finally
         {

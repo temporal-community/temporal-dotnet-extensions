@@ -44,7 +44,7 @@
       "datatype": "bool",
       "defaultValue": "false",
       "displayName": "Include OpenTelemetry tracing",
-      "description": "Adds a 'Temporalio' ActivitySource, the client-side TracingInterceptor, and an OTLP exporter gated on the OTEL_EXPORTER_OTLP_ENDPOINT environment variable."
+      "description": "Adds the Temporal SDK tracing sources, the client-side TracingInterceptor, and an OTLP exporter gated on the OTEL_EXPORTER_OTLP_ENDPOINT environment variable."
     }
   },
   "primaryOutputs": [

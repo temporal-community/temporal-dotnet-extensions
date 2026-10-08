@@ -50,9 +50,8 @@ public sealed class TemporalConnectionResolverTests
         Assert.Equal(1, profileSurvives.RpcMetadataCount);
         Assert.Equal("x-custom-header=profile-header-value", profileSurvives.RpcMetadataFirst);
 
-        // (6) ApplyTo, run through the SDK's real AddTemporalClient options pipeline exactly as the
-        // generated Program.cs files use it, transfers every resolved setting while keeping the
-        // host ILoggerFactory and appending the tracing interceptor after existing ones.
-        TemporalConnectionResolverHarnessProgram.AssertApplyToContract(run.ApplyTo);
+        // (6) ApplyTo transfers the environment/profile settings through AddTemporalClient,
+        // preserving host logging and the SDK defaults for other settings.
+        TemporalConnectionResolverHarnessProgram.AssertProfileApplyToContract(run.ApplyTo);
     }
 }

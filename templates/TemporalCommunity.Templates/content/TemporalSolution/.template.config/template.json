@@ -55,7 +55,7 @@
     },
     "Framework": {
       "type": "parameter",
-      "description": "The target framework for every generated project: Worker, Client, Shared, and — when --include-aspire is used — the AppHost and ServiceDefaults projects.",
+      "description": "The target framework for every generated project: Worker, Client, Shared, and — when --aspire is used — the AppHost and ServiceDefaults projects.",
       "datatype": "choice",
       "choices": [
         { "choice": "net8.0", "description": "Target net8.0" },
@@ -77,7 +77,7 @@
       "datatype": "bool",
       "defaultValue": "false",
       "displayName": "Include OpenTelemetry tracing",
-      "description": "Adds a 'Temporalio' ActivitySource and the client-side TracingInterceptor to Worker and Client. When IncludeAspire is false, also adds a standalone OTLP exporter gated on OTEL_EXPORTER_OTLP_ENDPOINT."
+      "description": "Adds the Temporal SDK tracing sources and the client-side TracingInterceptor to Worker and Client. When Aspire is disabled, also adds a standalone OTLP exporter gated on OTEL_EXPORTER_OTLP_ENDPOINT."
     },
     "OtelWithoutAspire": {
       "type": "computed",

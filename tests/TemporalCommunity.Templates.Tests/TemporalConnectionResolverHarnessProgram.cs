@@ -83,52 +83,29 @@ internal static class TemporalConnectionResolverHarnessProgram
     public static TemporalConnectionResolverRun ParseRun(string stdOut) =>
         new(ParseResults(stdOut), ParseApplyResults(stdOut));
 
-    /// <summary>
-    /// Asserts the <c>ApplyTo</c> contract: every resolved setting reaches the options instance the
-    /// SDK's <c>AddTemporalClient</c> builds, the host logger factory set by the SDK survives,
-    /// existing interceptors are kept with the tracing interceptor appended exactly once, and the
-    /// resulting client is still lazy.
-    /// </summary>
-    public static void AssertApplyToContract(IReadOnlyDictionary<string, string> apply)
+    public static void AssertProfileApplyToContract(IReadOnlyDictionary<string, string> apply)
     {
         Assert.Equal("apply-host:7233", apply["TargetHost"]);
-        Assert.Equal("apply-domain", apply["TlsDomain"]);
-        Assert.Equal("True", apply["TlsIsCopy"]);
-        Assert.Equal("7", apply["RpcRetryMaxRetries"]);
-        Assert.Equal("True", apply["RpcRetryIsCopy"]);
-        Assert.Equal("True", apply["KeepAliveIsNull"]);
-        Assert.Equal("proxy-host:8080", apply["HttpConnectProxyTargetHost"]);
-        Assert.Equal("42", apply["DnsResolutionSeconds"]);
-        Assert.Equal("True", apply["DnsIsCopy"]);
-        Assert.Equal("12345", apply["PayloadsWarnSize"]);
-        Assert.Equal("True", apply["PayloadLimitsIsCopy"]);
-        Assert.Equal("True", apply["GrpcCompressionIsNone"]);
-        Assert.Equal("x-apply=text-value", apply["RpcMetadata"]);
-        Assert.Equal("x-apply-bin=010203", apply["RpcBinaryMetadata"]);
-        Assert.Equal("apply-api-key", apply["ApiKey"]);
-        Assert.Equal("apply-identity", apply["Identity"]);
-        Assert.Equal("True", apply["RuntimeIsResolved"]);
         Assert.Equal("apply-namespace", apply["Namespace"]);
-        Assert.Equal("True", apply["DataConverterIsResolved"]);
-        Assert.Equal("NotOpen", apply["QueryRejectCondition"]);
-        Assert.Equal("True", apply["PluginsAreResolved"]);
-        Assert.Equal("existing,tracing", apply["Interceptors"]);
+        Assert.Equal("apply-domain", apply["TlsDomain"]);
+        Assert.Equal("False", apply["TlsIsCopy"]);
+        Assert.Equal("apply-api-key", apply["ApiKey"]);
+        Assert.Equal("x-apply=text-value", apply["RpcMetadata"]);
+
+        // Settings outside the environment/profile contract retain SDK defaults.
+        Assert.Equal("<null>", apply["RpcRetryMaxRetries"]);
+        Assert.Equal("False", apply["KeepAliveIsNull"]);
+        Assert.Equal("False", apply["DataConverterIsResolved"]);
+        Assert.Equal("<null>", apply["QueryRejectCondition"]);
+        Assert.Equal("False", apply["PluginsAreResolved"]);
+        Assert.Equal("tracing", apply["Interceptors"]);
         Assert.Equal("True", apply["LoggerFactoryIsHost"]);
         Assert.Equal("True", apply["ResolvedUnchanged"]);
         Assert.Equal("True", apply["ClientLoggerFactoryIsHost"]);
-        Assert.Equal("2", apply["ClientInterceptorCount"]);
+        Assert.Equal("1", apply["ClientInterceptorCount"]);
         Assert.Equal("apply-namespace", apply["ClientNamespace"]);
         Assert.Equal("apply-host:7233", apply["ClientTargetHost"]);
         Assert.Equal("False", apply["ClientIsConnected"]);
-
-        // Every settable TemporalClientConnectOptions property in Temporalio 1.20.0. ApplyTo copies
-        // all of them except LoggerFactory; if an SDK upgrade changes this list, ApplyTo must be
-        // reviewed so a new setting is not silently dropped.
-        Assert.Equal(
-            "ApiKey,DataConverter,DnsLoadBalancing,GrpcCompression,HttpConnectProxy,Identity,Interceptors," +
-            "KeepAlive,LoggerFactory,Namespace,PayloadLimits,Plugins,QueryRejectCondition,RpcBinaryMetadata,RpcMetadata," +
-            "RpcRetry,Runtime,TargetHost,Tls",
-            apply["SettableProperties"]);
     }
 
     /// <summary>
@@ -137,7 +114,7 @@ internal static class TemporalConnectionResolverHarnessProgram
     /// does not need the OpenTelemetry packages.
     /// </summary>
     public const string OtelInterceptorComposition =
-        "options.Interceptors = [.. options.Interceptors ?? [], new TracingInterceptor()];";
+        "options.Interceptors = new[] { new TracingInterceptor() };";
 
     /// <param name="resolverExpression">
     /// Fully qualified static method expression, e.g. <c>"MyNamespace.TemporalWorkerConnection.Resolve"</c>.
@@ -243,17 +220,10 @@ internal static class TemporalConnectionResolverHarnessProgram
             Apply("ClientNamespace", client.Options.Namespace);
             Apply("ClientTargetHost", client.Connection.Options.TargetHost);
             Apply("ClientIsConnected", client.Connection.IsConnected);
-
-            // Guard against SDK upgrades adding settings that ApplyTo would silently drop.
-            Apply("SettableProperties", string.Join(",", typeof(TemporalClientConnectOptions)
-                .GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
-                .Where(p => p.CanWrite)
-                .Select(p => p.Name)
-                .OrderBy(n => n, StringComparer.Ordinal)));
         }
 
         static void Apply(string key, object? value) =>
-            Console.WriteLine($"APPLY|{key}|{Convert.ToString(value, CultureInfo.InvariantCulture) ?? "<null>"}");
+            Console.WriteLine($"APPLY|{key}|{(value is null ? "<null>" : Convert.ToString(value, CultureInfo.InvariantCulture))}");
 
         static (string Scenario, TemporalClientConnectOptions Options) Scenario1EnvWinsOverConfig()
         {

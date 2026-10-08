@@ -1,4 +1,3 @@
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Temporalio.Extensions.Hosting;
@@ -16,7 +15,11 @@ var builder = Host.CreateApplicationBuilder(args);
 //#if (IncludeOtel)
 // Trace Temporal spans; export them when an OTLP endpoint is configured.
 builder.Services.AddOpenTelemetry()
-    .WithTracing(tracing => tracing.AddSource("Temporalio"));
+    .WithTracing(tracing => tracing.AddSource(
+        TracingInterceptor.ClientSource.Name,
+        TracingInterceptor.WorkflowsSource.Name,
+        TracingInterceptor.ActivitiesSource.Name,
+        TracingInterceptor.NexusSource.Name));
 
 if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]))
 {
@@ -26,12 +29,12 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOIN
 
 // Resolve the connection once and apply it to the SDK-managed client.
 // See docs/templates.md for connection precedence.
-var connectOptions = global::TemporalWorker1.TemporalWorkerConnection.Resolve(builder.Configuration);
+var connectOptions = TemporalWorker1.TemporalWorkerConnection.Resolve(builder.Configuration);
 builder.Services.AddTemporalClient(options =>
 {
-    global::TemporalWorker1.TemporalWorkerConnection.ApplyTo(connectOptions, options);
+    TemporalWorker1.TemporalWorkerConnection.ApplyTo(connectOptions, options);
 //#if (IncludeOtel)
-    options.Interceptors = [.. options.Interceptors ?? [], new TracingInterceptor()];
+    options.Interceptors = new[] { new TracingInterceptor() };
 //#endif
 });
 
@@ -39,26 +42,8 @@ builder.Services.AddTemporalClient(options =>
 // The client's tracing interceptor also runs on the worker; do not register it twice.
 //#endif
 const string taskQueue = "TemporalWorker1-tq";
-var resolvedTaskQueue = ResolveTaskQueue(builder.Configuration, taskQueue);
-builder.Services.AddHostedTemporalWorker(resolvedTaskQueue)
+builder.Services.AddHostedTemporalWorker(taskQueue)
     .AddWorkflow<SampleWorkflow>()
     .AddScopedActivities<SampleActivities>();
 
 await builder.Build().RunAsync();
-
-static string ResolveTaskQueue(IConfiguration configuration, string defaultTaskQueue)
-{
-    var configured = configuration["Temporal:TaskQueue"];
-    if (configured is null)
-    {
-        return defaultTaskQueue;
-    }
-
-    if (string.IsNullOrWhiteSpace(configured))
-    {
-        throw new InvalidOperationException(
-            "Configuration value 'Temporal:TaskQueue' must not be blank. Set it to a valid task queue name or remove it.");
-    }
-
-    return configured;
-}
