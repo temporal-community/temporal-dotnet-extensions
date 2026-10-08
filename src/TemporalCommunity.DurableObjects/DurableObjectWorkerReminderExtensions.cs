@@ -40,10 +40,13 @@ public static class DurableObjectWorkerReminderExtensions
     /// Use this overload when <typeparamref name="TActivities"/> is registered in the DI container.
     /// The container resolves the instance at worker startup via <c>PostConfigure</c> —
     /// <typeparamref name="TActivities"/> must be registered as a singleton or scoped service in DI.
+    /// To test reminder delivery with a controlled client, construct the sealed
+    /// <see cref="ReminderDeliveryActivities"/> type with a fake or mock
+    /// <see cref="Temporalio.Client.ITemporalClient"/> and use the instance overload.
     /// </remarks>
     /// <typeparam name="TActivities">
-    /// A type registered in DI that carries activity methods. Typically
-    /// <see cref="ReminderDeliveryActivities"/> itself or a subclass created for testing.
+    /// A type registered in DI that carries activity methods. For the built-in reminder delivery
+    /// path, use <see cref="ReminderDeliveryActivities"/>.
     /// </typeparam>
     /// <param name="builder">The worker service options builder to configure.</param>
     /// <returns>The same builder instance for chaining.</returns>

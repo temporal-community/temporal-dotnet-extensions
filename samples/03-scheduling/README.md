@@ -43,8 +43,9 @@ for completed keys to bound snapshot size.
 ## Worker registration
 
 Register `ReminderDeliveryActivities` in DI, then use `AddDurableObjectReminderDelivery` to register
-both its activity and the dispatcher workflow. `AddSingletonActivities` alone does not register the
-dispatcher. The actual sample wiring is:
+its activity methods on the worker. `AddDurableObjectWorkflows` separately registers the
+`ReminderDispatcher` workflow infrastructure; it does not register reminder delivery activities.
+`AddSingletonActivities` alone does not register the dispatcher. The actual sample wiring is:
 
 ```csharp
 builder.Services.AddSingleton<ReminderDeliveryActivities>();

@@ -58,10 +58,11 @@ device—and you want serialized updates and managed lifecycle behavior.
   `localhost:7233` (or configure the sample for another endpoint).
 - **First action:** Start a local server with `temporal server start-dev`, then run
   `just run-sample` from the repository root. This runs [sample 01](../samples/01-getting-started/).
-- **Expected result:** The worker and demo caller update the `home` page counter three times through
-  a generated client and query the count asynchronously. Each run adds three to the count retained
-  by the same server, provided no other caller updates that object concurrently. The activity logs
-  a simulated write; it does not persist to a real database.
+- **Expected result:** The worker and demo caller use one generated client to update the `home`
+  page counter three times and query the count asynchronously. The first update materializes the
+  object through Update-with-Start; no separate start is needed. Each run adds three to the count
+  retained by the same server, provided no other caller updates that object concurrently. The
+  activity logs a simulated write; it does not persist to a real database.
 - **Next step:** Read [Durable Objects concepts](durable-objects.md) and its
   [implementation requirements](durable-objects.md#implementation-requirements) before creating
   your own object. Then run [sample 02](../samples/02-input-validation/) to observe validator

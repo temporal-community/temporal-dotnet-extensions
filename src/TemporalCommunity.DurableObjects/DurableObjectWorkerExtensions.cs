@@ -43,6 +43,10 @@ namespace TemporalCommunity.DurableObjects;
 ///   <item><description>
 ///     Registers each valid type as a workflow, plus <see cref="ReminderDispatcher"/> (always —
 ///     it is internal infrastructure required for canonical-object reminders).
+///     Reminder delivery activities are not registered by this method; workers that deliver
+///     reminders must also call
+///     <see cref="DurableObjectWorkerReminderExtensions.AddDurableObjectReminderDelivery(ITemporalWorkerServiceOptionsBuilder, ReminderDeliveryActivities)"/>
+///     or its DI overload.
 ///   </description></item>
 ///   <item><description>
 ///     Auto-installs <see cref="DurableObjectWorkerInterceptor"/> with the provided options

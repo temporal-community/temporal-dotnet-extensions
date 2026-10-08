@@ -39,9 +39,9 @@ await builder.Build().RunAsync();
 /// <summary>
 /// Drives the getting-started demo scenario:
 ///   1. Obtain a generated client (no RPC).
-///   2. Ensure the object exists (GetOrCreateAsync issues the RPC).
-///   3. Increment three times.
-///   4. Query the count via the generated async method.
+///   2. Increment directly, materializing the object through Update-with-Start if needed.
+///   3. Query the count via the generated async method.
+///   4. Increment twice more and verify the change.
 ///   5. List all active counters.
 /// </summary>
 internal sealed class DemoService : BackgroundService
@@ -77,17 +77,17 @@ internal sealed class DemoService : BackgroundService
                 new DurableObjectCallOptions(cancellationToken: stoppingToken));
             Console.WriteLine($"Got generated client for object id 'home' (no RPC yet).");
 
-            // Step 2: Ensure the object exists. GetOrCreateAsync atomically starts the
-            // execution if it is not already running, then returns a client.
-            await _factory.GetOrCreateAsync<IPageCounter>("home", stoppingToken)
-                .ConfigureAwait(false);
-            Console.WriteLine($"Ensured 'home' counter exists.");
-            Console.WriteLine();
+            // Step 2: Send the first update directly. Generated update methods use
+            // Update-with-Start, so this materializes a missing object without a separate start.
+            await client.IncrementAsync().ConfigureAwait(false);
+            Console.WriteLine("  Increment 1 complete.");
 
-            var initialCount = await client.GetCountAsync().ConfigureAwait(false);
+            // Step 3: The update guarantees an execution now exists, so query through the
+            // generated asynchronous method without blocking a service thread.
+            var countAfterFirstIncrement = await client.GetCountAsync().ConfigureAwait(false);
 
-            // Step 3: Send three increments. Each is a WorkflowUpdate RPC.
-            for (var i = 1; i <= 3; i++)
+            // Step 4: Send two more updates.
+            for (var i = 2; i <= 3; i++)
             {
                 await client.IncrementAsync().ConfigureAwait(false);
                 Console.WriteLine($"  Increment {i} complete.");
@@ -95,10 +95,9 @@ internal sealed class DemoService : BackgroundService
 
             Console.WriteLine();
 
-            // Step 4: Query through the generated asynchronous method.
             var count = await client.GetCountAsync().ConfigureAwait(false);
-            if (count != initialCount + 3) throw new InvalidOperationException("The counter did not retain all three updates.");
-            Console.WriteLine($"Current view count for 'home': {count} (started at {initialCount})");
+            if (count != countAfterFirstIncrement + 2) throw new InvalidOperationException("The counter did not retain all three updates.");
+            Console.WriteLine($"Current view count for 'home': {count}");
             Console.WriteLine();
 
             // Step 5: List all active PageCounter executions.

@@ -40,14 +40,44 @@ dotnet run
 
 ## Key patterns
 
-### Generated client vs. GetOrCreateAsync
+### Use one generated client
 
 ```csharp
 // No RPC — creates a concrete generated client with async queries.
 var client = factory.GetPageCounterClient("home");
 
-// Atomically starts the execution if it is not already running, then returns a client.
-var counter = await factory.GetOrCreateAsync<IPageCounter>("home");
+// Updates use Update-with-Start, so update directly when the operation should
+// materialize a missing object.
+await client.IncrementAsync();
+
+// The update guarantees the object now exists. Use the generated async query
+// method in service code instead of the synchronous contract query.
+var count = await client.GetCountAsync();
+```
+
+Only issue an explicit start when the first operation must be a query against an object that might
+not exist. Keep using the same generated client:
+
+```csharp
+var client = factory.GetPageCounterClient("home");
+await factory.GetOrCreateAsync<IPageCounter>("home");
+var count = await client.GetCountAsync();
+```
+
+`GetOrCreateAsync` confirms that an execution exists, but a direct generated update avoids that
+extra start RPC when the update itself is intended to materialize the object.
+
+### Worker and task queue
+
+Use a dedicated Temporal worker and task queue for Durable Objects. Register the factory and worker
+with the same queue name; `AddDurableObjectWorkflows` discovers object workflows and installs the
+Durable Objects worker policies:
+
+```csharp
+const string taskQueue = "getting-started-tq";
+builder.Services.AddDurableObjects(taskQueue);
+builder.Services.AddHostedTemporalWorker(taskQueue)
+    .AddDurableObjectWorkflows(typeof(PageCounter).Assembly);
 ```
 
 ### Calling activities from workflow code
