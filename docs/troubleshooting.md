@@ -86,6 +86,10 @@ var counter = await factory.GetOrCreateAsync<ICounter>("my-counter");
 var count = counter.GetCount();
 ```
 
+A query issued before `OnActivateAsync` finishes fails with `errorType: "ObjectNotReady"` instead
+of returning partial state. Retry the query, or issue an update first — updates wait for
+activation to complete.
+
 If requests stay pending instead, check that the client and worker task queues match:
 
 ```csharp
@@ -137,7 +141,8 @@ try
 catch (WorkflowUpdateFailedException ex)
     when (ex.InnerException is ApplicationFailureException appEx)
 {
-    // UnhandledUpdateException, Unauthorized, ObjectDeactivating, or a domain error.
+    // UnhandledUpdateException, Unauthorized, AuthorizationFailure, ObjectDeactivating,
+    // ObjectContinuingAsNew, or a domain error.
     Console.WriteLine($"Update failed: {appEx.ErrorType} — {appEx.Message}");
 }
 ```

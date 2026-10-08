@@ -18,6 +18,11 @@ waits. History compaction (ContinueAsNew) is triggered only by the `MaxHistoryLe
 in `DurableObjectOptions` (default 10,000 events) or when `Workflow.ContinueAsNewSuggested`
 is true.
 
+While an object is rolling over, the interceptor rejects new updates with
+`errorType: "ObjectContinuingAsNew"` before any handler code runs, and the run loop drains
+handlers already in flight. That rejection is a known pre-handler outcome and is safe to retry
+against the next run.
+
 To tune history compaction, pass `DurableObjectOptions` to the base constructor.
 `MaxHistoryLength` defaults to 10,000 events in this library. Lower values reduce history
 replayed per execution but increase rollover frequency; measure replay and rollover latency

@@ -54,7 +54,11 @@ been activated, the proxy will work for updates (which use update-with-start) bu
 
 `GetOrCreateAsync<T>(objectId)` issues a `StartWorkflow` RPC with `UseExisting` conflict
 policy — a race-free "start if not running" guarantee. After this call returns, the workflow
-is guaranteed to exist and queries can be issued safely.
+is guaranteed to exist, so queries no longer fail with `DurableObjectNotFoundException`.
+
+Existence is not the same as readiness. A query issued before `OnActivateAsync` completes fails
+with `errorType: "ObjectNotReady"`. If your object does real work during activation, await an
+update first — updates wait for activation to finish — or retry the query.
 
 In tests, prefer `GetOrCreateAsync` so your test setup is unambiguous.
 
