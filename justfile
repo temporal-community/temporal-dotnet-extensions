@@ -400,7 +400,7 @@ _pack-verify-output:
                 combo_dir="$templates_solution_scratch/${fw}-aspire-${aspire}-otel-${otel}"
                 mkdir -p "$combo_dir"
                 name="Sol_${fw//./}_${aspire}_${otel}"
-                (cd "$combo_dir" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-solution -n "$name" -o . --framework "$fw" --include-aspire "$aspire" --include-otel "$otel")
+                (cd "$combo_dir" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-solution -n "$name" -o . --framework "$fw" --aspire "$aspire" --otel "$otel")
                 [ -f "$combo_dir/$name.sln" ] || { echo "  ✗ ERROR: temporal-solution (framework=$fw, include-aspire=$aspire, include-otel=$otel) did not generate $name.sln" >&2; exit 1; }
                 if [ "$aspire" = "true" ]; then
                     [ -d "$combo_dir/$name.AppHost" ] || { echo "  ✗ ERROR: expected $name.AppHost with include-aspire=true" >&2; exit 1; }
@@ -423,7 +423,7 @@ _pack-verify-output:
     echo "==> temporal-solution XML-sensitive name check"
     xml_name_dir="$templates_solution_scratch/xml-name"
     mkdir -p "$xml_name_dir"
-    (cd "$xml_name_dir" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-solution -n "Contoso-Fulfillment&Orders" -o . --include-aspire)
+    (cd "$xml_name_dir" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-solution -n "Contoso-Fulfillment&Orders" -o . --aspire)
     grep -q 'Projects.Contoso_Fulfillment_Orders_Worker' "$xml_name_dir/Contoso-Fulfillment&Orders.AppHost/AppHost.cs"
     grep -q 'Contoso-Fulfillment&amp;Orders.Shared' "$xml_name_dir/Contoso-Fulfillment&Orders.Worker/Contoso-Fulfillment&Orders.Worker.csproj"
     (cd "$xml_name_dir" && dotnet build "Contoso-Fulfillment&Orders.sln" --no-restore --nologo)
@@ -554,7 +554,7 @@ _template-smoke-test-aspire: pack
     HIVE_DIR=$(realpath "$(mktemp -d /tmp/template-smoke-aspire-hive.XXXXXX)")
     export DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1
     DOTNET_CLI_HOME="$HIVE_DIR" dotnet new install "{{artifacts_dir}}/TemporalCommunity.Templates.{{version}}.nupkg"
-    (cd "$SCRATCH_DIR" && DOTNET_CLI_HOME="$HIVE_DIR" dotnet new temporal-solution -n SmokeAspire -o . --include-aspire)
+    (cd "$SCRATCH_DIR" && DOTNET_CLI_HOME="$HIVE_DIR" dotnet new temporal-solution -n SmokeAspire -o . --aspire)
 
     apphost_candidates=$(find "$SCRATCH_DIR" -maxdepth 2 -name '*.AppHost.csproj')
     if [ "$(printf '%s\n' "$apphost_candidates" | wc -l)" -ne 1 ] || [ -z "$apphost_candidates" ]; then

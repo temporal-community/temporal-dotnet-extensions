@@ -148,15 +148,26 @@ just run-sample
 
 ## Documentation
 
-| Guide | Contents |
-|---|---|
-| [Temporal .NET analyzers](docs/analyzers.md) | General and Durable Objects rules, code fixes, generated clients, and installation. |
-| [Durable Objects concepts](docs/durable-objects.md) | When to use the runtime, identity, lifecycle, state, scheduling, and API overview. |
-| [Getting started](docs/getting-started.md) | Three independent first paths: templates, general analyzers, and Durable Objects. |
-| [Failure handling](docs/failure-handling.md) | Exception taxonomy, authorization, lifecycle failures, and reminder idempotency. |
-| [Tier model](docs/tier-model.md) | Resident execution, explicit deactivation, and Continue-as-New behavior. |
-| [Troubleshooting](docs/troubleshooting.md) | Common runtime and configuration problems. |
-| [Templates](docs/templates.md) | `dotnet new` workflows, activities, converters, workers, and solutions; optional Aspire and OpenTelemetry. |
+Start with [Getting started](docs/getting-started.md) to choose a path for templates, analyzers,
+or Durable Objects.
+
+### Templates and analyzers
+
+- [Temporal .NET templates](docs/templates.md): Generate workflows, activities, converters,
+  workers, or solutions with `dotnet new`.
+- [Temporal .NET analyzers](docs/analyzers.md): Install replay-safety and Durable Objects checks,
+  explore code fixes, and use generated Durable Objects clients.
+
+### Durable Objects
+
+- [Concepts and API](docs/durable-objects.md): Decide when to use Durable Objects and learn their
+  identity, state, updates, scheduling, and API.
+- [Lifecycle and deactivation](docs/tier-model.md): Understand when an object stays resident, when
+  it closes, and how history is compacted. This guide calls those choices "tiers."
+- [Failure handling](docs/failure-handling.md): Handle client and lifecycle failures,
+  authorization, and reminder retries.
+- [Troubleshooting](docs/troubleshooting.md): Diagnose common worker, query, scheduling, and
+  configuration problems.
 
 ## Building from source
 

@@ -96,7 +96,9 @@ Update those references when upgrading an application; the analyzer version is h
 
 ### Configuring the OTLP exporter
 
-`--include-otel` adds the `"Temporalio"` activity source and client-side `TracingInterceptor`.
+`--include-otel` registers the SDK tracing sources using `TracingInterceptor.ClientSource.Name`,
+`WorkflowsSource.Name`, `ActivitiesSource.Name`, and `NexusSource.Name`, and adds the client-side
+`TracingInterceptor`.
 Spans are **exported only when `OTEL_EXPORTER_OTLP_ENDPOINT` is non-blank** at startup:
 
 ```bash
@@ -121,8 +123,8 @@ When `-n` is omitted, the name is derived from the output/current directory.
 | Option | Behavior |
 |---|---|
 | `--framework <net8.0|net10.0>` | Framework for every generated project; defaults to `net10.0`. |
-| `--include-aspire` | Adds AppHost and ServiceDefaults and provisions a local Temporal dev server; defaults to off. |
-| `--include-otel` | Adds Temporal tracing to Worker and Client. With Aspire, ServiceDefaults supplies the exporter; otherwise a standalone exporter uses the same endpoint gate described above. Defaults to off. |
+| `--aspire` | Adds AppHost and ServiceDefaults and provisions a local Temporal dev server; defaults to off. |
+| `--otel` | Adds Temporal tracing to Worker and Client. With Aspire, ServiceDefaults supplies the exporter; otherwise a standalone exporter uses the same endpoint gate described above. Defaults to off. |
 
 | Project | Purpose |
 |---|---|
@@ -151,7 +153,7 @@ The local-server path requires the [Temporal CLI](https://docs.temporal.io/cli).
 For an Aspire-enabled solution:
 
 ```bash
-dotnet new temporal-solution -n Contoso.Fulfillment -o Contoso.Fulfillment --include-aspire
+dotnet new temporal-solution -n Contoso.Fulfillment -o Contoso.Fulfillment --aspire
 cd Contoso.Fulfillment
 dotnet run --project Contoso.Fulfillment.AppHost
 ```
@@ -181,14 +183,19 @@ The solution's Worker and Client share `SharedTemporalConnection`; configure bot
 consistently to connect to the same server. Aspire's resource reference supplies
 `TEMPORAL_ADDRESS` and `TEMPORAL_NAMESPACE` to both hosts for local development.
 The generated registration preserves resolved connection settings and host logging. With
-`--include-otel`, it adds the tracing interceptor without replacing existing interceptors.
+tracing enabled, it registers a single tracing interceptor.
 The client connects on first use.
 
 ### Task queues and application routing
 
 The default task queue is `<Name>-tq`: `temporal-worker -n OrderProcessing.Worker` uses
 `OrderProcessing.Worker-tq`, and `temporal-solution -n Alpha` uses `Alpha-tq` for both Worker and
-Client. Override it in each host with:
+Client. The standalone `temporal-worker` uses a hardcoded `taskQueue` constant in `Program.cs`;
+edit that string to choose a different queue.
+
+The solution Client uses a hardcoded `taskQueue` constant in `DemoService.cs`.
+The solution Worker supports overriding its default through configuration; keep its queue
+matched to the Client's constant:
 
 ```text
 Temporal:TaskQueue
