@@ -43,6 +43,16 @@ rethrows it as `ApplicationFailureException(errorType: "UnhandledUpdateException
 This converts the "permanently wedged" outcome into a clean caller-visible update failure. The
 caller sees `WorkflowUpdateFailedException`; the object stays alive.
 
+If the configured authorization predicate throws, the interceptor fails only that update with:
+
+```
+ApplicationFailureException(errorType: "AuthorizationFailure", nonRetryable: true)
+```
+
+The caller-visible message identifies the update and the failed authorization callback but does
+not include the callback exception or its potentially sensitive details. A later update can still
+run on the same object. A normal `false` result continues to use `errorType: "Unauthorized"`.
+
 **No state rollback.** Partial mutations made before the throw persist. Write handlers that
 validate all inputs before mutating state, so a throw leaves the object in a consistent state.
 
@@ -51,11 +61,17 @@ validate all inputs before mutating state, so a throw leaves the object in a con
 ## Lifecycle Hook Exceptions
 
 Lifecycle hooks (`OnActivateAsync`, `OnTimerAsync`, `OnBeforeContinueAsNewAsync`) run in the
-**workflow run path** — not inside an update handler. When they throw:
+**workflow run path** — not inside an update handler. For activation and pre-Continue-as-New:
 
-- A non-`ApplicationFailureException` is wrapped as `ApplicationFailureException(errorType:
-  "ActivationFailure" | "TimerFailure" | "ContinueAsNewFailure", nonRetryable: true)`.
-- The **workflow execution fails**, rather than retrying a broken workflow task indefinitely.
+- A non-`FailureException`, non-`OperationCanceledException` is wrapped as
+  `ApplicationFailureException(errorType:
+  "ActivationFailure" | "ContinueAsNewFailure", nonRetryable: true)`.
+- `FailureException` and `OperationCanceledException` propagate so the Temporal SDK retains its
+  native failure or cancellation semantics. In particular, cancellation requested while
+  activation or pre-Continue-as-New is blocked produces a **Canceled** workflow execution, not
+  `ActivationFailure` or `ContinueAsNewFailure`.
+- Wrapped failures terminate the **workflow execution**, rather than retrying a broken workflow
+  task indefinitely.
 - Any updates pending at the time of activation failure (including the triggering update from
   `update-with-start`) fail with the workflow termination rather than receiving a clean
   `UpdateResponse.Rejected`. Callers see the workflow terminated, not a friendly exception.
@@ -63,6 +79,9 @@ Lifecycle hooks (`OnActivateAsync`, `OnTimerAsync`, `OnBeforeContinueAsNewAsync`
 If `OnBeforeContinueAsNewAsync` throws, Continue-as-New does **not** proceed. Validate state
 preparation before the hook returns; a failure ends the execution instead of carrying state
 into a new run.
+
+`OnTimerAsync` retains its existing policy: non-`ApplicationFailureException` values are wrapped
+as `TimerFailure`. Slice 3 does not broaden timer lifecycle policy.
 
 **`OnDeactivateAsync` is different:** exceptions are swallowed and logged. Deactivation must
 complete regardless of cleanup failures.
@@ -209,6 +228,33 @@ ApplicationFailureException(errorType: "ObjectDeactivating", nonRetryable: true)
 The caller sees `WorkflowUpdateFailedException`. Handlers already executing can finish before
 cleanup and completion. Do not wait for `Workflow.AllHandlersFinished` inside a handler: that
 wait includes the handler itself and cannot complete.
+
+---
+
+## Activation and Continue-as-New Admission
+
+Updates received during activation wait deterministically until `OnActivateAsync` completes.
+This preserves cold-write behavior without allowing update handlers to observe partial activation
+state. Queries do not wait: while activation is incomplete they fail with the stable message
+`Object is not ready: activation is incomplete.` (`errorType: "ObjectNotReady"` inside the
+worker). The query failure does not fail or wedge the workflow task.
+
+Lifecycle admission state is process-static. A supported dedicated Durable Object process connects
+to one Temporal namespace; hosting multiple namespaces in one process is unsupported.
+
+Before Continue-as-New drains handlers or prepares a snapshot, the run loop closes update
+admission. An update that has not entered user handler code is rejected with:
+
+```
+ApplicationFailureException(errorType: "ObjectContinuingAsNew", nonRetryable: true)
+```
+
+The stable message is `Update '<name>' rejected: object is continuing as new.` This is a known
+pre-handler rejection, so retrying the operation against the next run is safe. This guarantee is
+specific to `ObjectContinuingAsNew`: unknown outcomes can still have executed and require normal
+application idempotency. Already-running handlers drain before snapshot preparation proceeds.
+Queries remain available during Continue-as-New preparation; they are rejected only during
+activation.
 
 ---
 

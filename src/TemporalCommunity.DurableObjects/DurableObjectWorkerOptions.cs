@@ -21,7 +21,9 @@ public sealed record DurableObjectWorkerOptions
     /// <summary>
     /// Optional authorization predicate. When set, called for every inbound update before the
     /// handler runs. Return <see langword="false"/> to reject with
-    /// <c>errorType: "Unauthorized"</c>. When <see langword="null"/>, all updates are allowed.
+    /// <c>errorType: "Unauthorized"</c>. If the predicate throws, the update is rejected with
+    /// <c>errorType: "AuthorizationFailure"</c> without exposing the callback exception to the
+    /// caller. When <see langword="null"/>, all updates are allowed.
     /// </summary>
     /// <remarks>
     /// <para>

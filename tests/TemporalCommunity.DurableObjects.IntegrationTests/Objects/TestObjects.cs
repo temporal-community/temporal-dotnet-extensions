@@ -446,10 +446,22 @@ public class ActivationFailureCounter : DurableObjectBase, IActivationFailureCou
         // First activation: fail. Subsequent activations (new run IDs after termination): succeed.
         if (FailedOnce.TryAdd(id, true))
         {
-            throw new InvalidOperationException($"Simulated activation failure for '{id}'");
+            return FailActivationAsync(id);
         }
 
         return Task.CompletedTask;
+    }
+
+    private static async Task FailActivationAsync(string id)
+    {
+        await Workflow.ExecuteActivityAsync(
+            (Slice3BarrierActivities activities) => activities.WaitAsync(),
+            new ActivityOptions
+            {
+                StartToCloseTimeout = TimeSpan.FromSeconds(30),
+                RetryPolicy = new Temporalio.Common.RetryPolicy { MaximumAttempts = 1 },
+            });
+        throw new InvalidOperationException($"Simulated activation failure for '{id}'");
     }
 
     [WorkflowQuery]

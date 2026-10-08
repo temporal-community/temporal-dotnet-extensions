@@ -15,6 +15,11 @@ namespace TemporalCommunity.DurableObjects;
 /// </summary>
 /// <remarks>
 /// <para>
+/// Lifecycle admission uses process-static state keyed by workflow ID. A supported dedicated
+/// Durable Object process connects to one Temporal namespace; multiple namespaces in one process
+/// are unsupported.
+/// </para>
+/// <para>
 /// Derived classes must declare the workflow run entry point, which the Temporal SDK requires
 /// on the concrete type (the <c>[WorkflowRun]</c> attribute is not inheritable). The canonical
 /// boilerplate is:
@@ -32,12 +37,12 @@ namespace TemporalCommunity.DurableObjects;
 /// See the plan section "Temporal .NET workflow threading model" for a full explanation.
 /// </para>
 /// <para>
-/// <b>Failure taxonomy (lifecycle hooks):</b> Exceptions from <c>OnActivateAsync</c>,
-/// <c>OnTimerAsync</c>, and <c>OnBeforeContinueAsNewAsync</c> that are not already
-/// <c>ApplicationFailureException</c> are wrapped and re-thrown as non-retryable
-/// <c>ApplicationFailureException</c>. This terminates the workflow cleanly rather than
-/// wedging it in an infinite task-retry loop. <c>OnDeactivateAsync</c> exceptions are swallowed
-/// and logged — deactivation must complete regardless.
+/// <b>Failure taxonomy (lifecycle hooks):</b> Exceptions from <c>OnActivateAsync</c> and
+/// <c>OnBeforeContinueAsNewAsync</c> that are not already <c>FailureException</c> or
+/// <c>OperationCanceledException</c> are wrapped and re-thrown as non-retryable
+/// <c>ApplicationFailureException</c>. <c>OnTimerAsync</c> retains its narrower
+/// <c>ApplicationFailureException</c> pass-through policy. <c>OnDeactivateAsync</c> exceptions
+/// are swallowed and logged — deactivation must complete regardless.
 /// </para>
 /// <para>
 /// <b>Deactivation protocol:</b> <see cref="DeactivateAsync"/> sets <c>_deactivating = true</c>
@@ -69,6 +74,14 @@ public abstract class DurableObjectBase : IDurableObject
     // The run loop drains all in-flight handlers before calling OnDeactivateAsync and completing.
     // Also read by DurableObjectWorkerInterceptor to reject new updates during the drain window.
     private bool _deactivating;
+
+    // Set only after OnActivateAsync completes successfully. Updates wait for this transition;
+    // queries are rejected while it is false so neither can observe partially activated state.
+    private bool _activated;
+
+    // Set before the run loop drains handlers for Continue-as-New. The interceptor rejects updates
+    // that have not entered user code once this flag is visible.
+    private bool _continuingAsNew;
 
     // Registered in-object durable timers, keyed by name. A timer keeps the object activated and
     // fires OnTimerAsync when due. Timers are durable: they survive worker crashes because
@@ -124,6 +137,16 @@ public abstract class DurableObjectBase : IDurableObject
     /// drain window. Read by <c>DurableObjectWorkerInterceptor</c> to reject new updates.
     /// </summary>
     internal bool IsDeactivating => _deactivating;
+
+    /// <summary>
+    /// Whether <see cref="OnActivateAsync"/> completed successfully for this execution.
+    /// </summary>
+    internal bool IsActivated => _activated;
+
+    /// <summary>
+    /// Whether this execution has closed update admission and is draining for Continue-as-New.
+    /// </summary>
+    internal bool IsContinuingAsNew => _continuingAsNew;
 
     /// <summary>
     /// Attempts to get the currently running <see cref="DurableObjectBase"/> for the given
@@ -328,11 +351,11 @@ public abstract class DurableObjectBase : IDurableObject
     /// to self-complete after doing the tick's work.
     /// </summary>
     /// <remarks>
-    /// If this method throws an exception that is not already
-    /// <c>ApplicationFailureException</c>, the framework wraps it as a non-retryable
+    /// If this method throws an exception that is not already a <c>FailureException</c> or
+    /// <c>OperationCanceledException</c>, the framework wraps it as a non-retryable
     /// <c>ApplicationFailureException(errorType: "ActivationFailure")</c> and terminates the
-    /// workflow cleanly. This is intentional: a permanently broken <c>OnActivateAsync</c>
-    /// should fail fast rather than wedge the object in an infinite task-retry loop.
+    /// workflow cleanly. Failure and cancellation exceptions retain the Temporal SDK's native
+    /// terminal semantics.
     /// </remarks>
     protected virtual Task OnActivateAsync() => Task.CompletedTask;
 
@@ -362,9 +385,10 @@ public abstract class DurableObjectBase : IDurableObject
     /// no state needs to carry forward.
     /// </returns>
     /// <remarks>
-    /// If this method throws an exception that is not already <c>ApplicationFailureException</c>,
-    /// the framework wraps it as a non-retryable
+    /// If this method throws an exception that is not already a <c>FailureException</c> or
+    /// <c>OperationCanceledException</c>, the framework wraps it as a non-retryable
     /// <c>ApplicationFailureException(errorType: "ContinueAsNewFailure")</c>.
+    /// Failure and cancellation exceptions retain the Temporal SDK's native terminal semantics.
     /// </remarks>
     protected virtual Task<IReadOnlyCollection<object?>> OnBeforeContinueAsNewAsync() =>
         Task.FromResult<IReadOnlyCollection<object?>>(Array.Empty<object?>());
@@ -406,7 +430,7 @@ public abstract class DurableObjectBase : IDurableObject
             {
                 await OnActivateAsync().ConfigureAwait(true);
             }
-            catch (Exception ex) when (ex is not ApplicationFailureException)
+            catch (Exception ex) when (ex is not FailureException && ex is not OperationCanceledException)
             {
 #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
                 Workflow.Logger.LogError(ex, "OnActivateAsync failed for '{WorkflowId}'", workflowId);
@@ -418,10 +442,16 @@ public abstract class DurableObjectBase : IDurableObject
                     nonRetryable: true);
             }
 
+            _activated = true;
+
             while (!_deactivated && !_deactivating)
             {
                 if (ShouldContinueAsNew())
                 {
+                    // Close admission before waiting for handlers. Updates already in user code
+                    // are allowed to finish; all others are rejected by the interceptor.
+                    _continuingAsNew = true;
+
                     // Drain handlers before CAN so no update is left dangling.
                     await Workflow.WaitConditionAsync(
                         () => Workflow.AllHandlersFinished).ConfigureAwait(true);
@@ -431,7 +461,7 @@ public abstract class DurableObjectBase : IDurableObject
                     {
                         carryArgs = await OnBeforeContinueAsNewAsync().ConfigureAwait(true);
                     }
-                    catch (Exception ex) when (ex is not ApplicationFailureException)
+                    catch (Exception ex) when (ex is not FailureException && ex is not OperationCanceledException)
                     {
 #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
                         Workflow.Logger.LogError(

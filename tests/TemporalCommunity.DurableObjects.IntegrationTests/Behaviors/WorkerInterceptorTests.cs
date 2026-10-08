@@ -23,7 +23,7 @@ public sealed class WorkerInterceptorTests : DurableObjectTestBase
     public WorkerInterceptorTests(WorkflowEnvironmentFixture fixture) : base(fixture) { }
 
     [Fact]
-    public async Task InterceptorAuthorizationAlsoAppliesToUnrelatedWorkflowTypesOnTheWorker()
+    public async Task MixedWorkerIsUnsupported_InterceptorAuthorizationAppliesToUnrelatedWorkflowTypes()
     {
         var tq = UniqueTaskQueue();
         using var worker = TestWorkerBuilder.Build(

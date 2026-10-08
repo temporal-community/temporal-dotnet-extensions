@@ -1,3 +1,4 @@
+using Temporalio.Exceptions;
 using TemporalCommunity.DurableObjects;
 using TemporalCommunity.DurableObjects.IntegrationTests.Infrastructure;
 using TemporalCommunity.DurableObjects.IntegrationTests.Objects;
@@ -20,10 +21,12 @@ public sealed class ActivationFailureTests : DurableObjectTestBase
         // Use a unique object ID so the static FailedOnce dict is fresh per test run.
         var id = $"scenario-o-{Guid.NewGuid():N}";
         var tq = UniqueTaskQueue();
+        var barrier = new Slice3Barrier();
 
         using var worker = TestWorkerBuilder.Build(
             Client, tq,
-            workflowTypes: [typeof(ActivationFailureCounter)]);
+            workflowTypes: [typeof(ActivationFailureCounter)],
+            activityInstances: [new Slice3BarrierActivities(barrier)]);
 
         var cts = new CancellationTokenSource();
         var run = worker.ExecuteAsync(cts.Token);
@@ -37,8 +40,14 @@ public sealed class ActivationFailureTests : DurableObjectTestBase
             // We call GetOrCreateAsync first to ensure the workflow starts, then check its state.
             var firstProxy = await factory.GetOrCreateAsync<IActivationFailureCounter>(id);
 
-            // Wait briefly for the workflow to start and the activation failure to propagate.
-            await Task.Delay(TimeSpan.FromMilliseconds(1000));
+            await barrier.Reached.Task.WaitAsync(TimeSpan.FromSeconds(20));
+            var pendingUpdate = Client.GetWorkflowHandle(id).ExecuteUpdateAsync<object?>(
+                "Deactivate", Array.Empty<object?>());
+            Assert.False(pendingUpdate.IsCompleted);
+
+            barrier.Release.TrySetResult();
+            await Assert.ThrowsAsync<WorkflowUpdateFailedException>(
+                () => pendingUpdate.WaitAsync(TimeSpan.FromSeconds(20)));
 
             // The first workflow execution should be terminated. Get its run ID before it closes.
             var firstDesc = await Client.GetWorkflowHandle(id).DescribeAsync();
@@ -77,6 +86,7 @@ public sealed class ActivationFailureTests : DurableObjectTestBase
         }
         finally
         {
+            barrier.Release.TrySetResult();
             await cts.CancelAsync();
             try { await run; } catch (OperationCanceledException) { }
         }

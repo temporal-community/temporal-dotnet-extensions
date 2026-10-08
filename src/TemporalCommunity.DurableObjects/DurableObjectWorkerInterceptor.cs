@@ -7,20 +7,32 @@ using Temporalio.Workflows;
 namespace TemporalCommunity.DurableObjects;
 
 /// <summary>
-/// Worker interceptor that installs cross-cutting concerns on every DurableObject update handler:
-/// authorization, serialization (non-reentrant by default), drain-window gating, and an
-/// exception safety net. Installed automatically by
+/// Worker interceptor that installs activation admission, authorization, serialization
+/// (non-reentrant by default), lifecycle admission, and an exception safety net. Installed
+/// automatically by
 /// <see cref="DurableObjectWorkerExtensions.AddDurableObjectWorkflows(Temporalio.Extensions.Hosting.ITemporalWorkerServiceOptionsBuilder, System.Reflection.Assembly, DurableObjectWorkerOptions?)"/>.
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Five responsibilities (order matters inside <c>HandleUpdateAsync</c>):</b>
+/// Lifecycle admission uses process-static state keyed by workflow ID. A supported dedicated
+/// Durable Object process connects to one Temporal namespace; multiple namespaces in one process
+/// are unsupported.
+/// </para>
+/// <para>
+/// <b>Responsibilities (order matters inside <c>HandleUpdateAsync</c>):</b>
 /// <list type="number">
 ///   <item><description>
-///     <b>Authorization</b> — runs first so unauthorized updates never consume the serialization gate.
+///     <b>Activation admission</b> — updates wait until activation completes.
 ///   </description></item>
 ///   <item><description>
-///     <b>Serialization gate</b> — while one handler is between awaits, subsequent updates wait.
+///     <b>Continue-as-New admission</b> — updates arriving after rollover starts fail before
+///     authorization or user code.
+///   </description></item>
+///   <item><description>
+///     <b>Authorization</b> — runs before serialization so rejected updates do not consume the gate.
+///   </description></item>
+///   <item><description>
+///     <b>Serialization</b> — while one handler is between awaits, subsequent updates wait.
 ///     Uses a <c>while</c> loop (not <c>if</c>) for correct behavior when multiple waiters are
 ///     released simultaneously (see SDK <c>WorkflowInstance.cs:897-908</c>).
 ///   </description></item>
@@ -35,6 +47,16 @@ namespace TemporalCommunity.DurableObjects;
 ///     preventing the workflow task from failing and the object from wedging permanently.
 ///   </description></item>
 /// </list>
+/// </para>
+/// <para>
+/// <b>Admission errors:</b> Queries received before activation completes fail with
+/// <c>errorType: "ObjectNotReady"</c> and message
+/// <c>Object is not ready: activation is incomplete.</c>. Updates received after
+/// Continue-as-New admission closes fail before user code with
+/// <c>errorType: "ObjectContinuingAsNew"</c> and message
+/// <c>Update '&lt;name&gt;' rejected: object is continuing as new.</c>. This known pre-handler
+/// rejection can be retried against the next run; unknown outcomes still require application
+/// idempotency.
 /// </para>
 /// <para>
 /// <b>Authorization and reminders:</b> If an <c>authorize</c> predicate is registered and the
@@ -58,7 +80,9 @@ public sealed class DurableObjectWorkerInterceptor : IWorkerInterceptor
     /// </param>
     /// <param name="authorize">
     /// Optional authorization predicate. Return <see langword="false"/> to reject an update with
-    /// <c>errorType: "Unauthorized"</c>. <see langword="null"/> allows all updates.
+    /// <c>errorType: "Unauthorized"</c>. A thrown exception is converted to
+    /// <c>errorType: "AuthorizationFailure"</c> without exposing its details to the caller.
+    /// <see langword="null"/> allows all updates.
     /// Must be synchronous — async I/O in workflow context is non-deterministic.
     /// </param>
     public DurableObjectWorkerInterceptor(
@@ -126,14 +150,50 @@ public sealed class DurableObjectWorkerInterceptor : IWorkerInterceptor
 
         public override async Task<object?> HandleUpdateAsync(HandleUpdateInput input)
         {
-            // Responsibility 1: Authorization.
-            // Runs before the serialization gate so unauthorized updates don't consume it.
+            DurableObjectBase.TryGetCurrent(Workflow.Info.WorkflowId, out var instance);
+
+            // Updates preserve cold-write behavior, but cannot enter authorization, serialization,
+            // or user code until activation has completed.
+            if (instance is not null && !instance.IsActivated)
+            {
+                await Workflow.WaitConditionAsync(() => instance.IsActivated).ConfigureAwait(true);
+            }
+
+            // Once rollover admission closes, return the stable retryable-by-caller rejection
+            // before invoking application authorization code.
+            if (instance is not null && instance.IsContinuingAsNew)
+            {
+                ThrowObjectContinuingAsNew(input.Update);
+            }
+
+            // Authorization runs before the serialization gate so rejected updates don't consume it.
             // NOTE: auth runs here (in HandleUpdateAsync), NOT in ValidateUpdate. The SDK only
             // invokes the interceptor's ValidateUpdate when [WorkflowUpdateValidator] is declared
             // (WorkflowInstance.cs:1206 gates on ValidatorMethod != null), so a validation-phase
             // check would silently skip plain updates. Throwing here — before Next — rejects the
             // update cleanly: the caller sees WorkflowUpdateFailedException, the object stays alive.
-            if (_authorize != null && !_authorize(input))
+            bool authorized;
+            try
+            {
+                authorized = _authorize?.Invoke(input) ?? true;
+            }
+#pragma warning disable CA1031 // Authorization callback exceptions must not fail the workflow task
+            catch (Exception ex)
+            {
+#pragma warning disable CA1848 // Use LoggerMessage delegates — acceptable in interceptor; not a hot path
+                Workflow.Logger.LogError(
+                    ex,
+                    "Authorization callback failed for update '{Update}'",
+                    input.Update);
+#pragma warning restore CA1848
+                throw new ApplicationFailureException(
+                    $"Update '{input.Update}' rejected: authorization callback failed.",
+                    errorType: "AuthorizationFailure",
+                    nonRetryable: true);
+            }
+#pragma warning restore CA1031
+
+            if (!authorized)
             {
                 throw new ApplicationFailureException(
                     $"Update '{input.Update}' rejected: unauthorized.",
@@ -141,7 +201,7 @@ public sealed class DurableObjectWorkerInterceptor : IWorkerInterceptor
                     nonRetryable: true);
             }
 
-            // Responsibility 2: Serialization gate.
+            // Serialization gate.
             // while-loop (not if) — correct when WaitConditionAsync releases multiple waiters at
             // once (the scheduler is single-threaded so check-then-set is atomic, but multiple
             // waiters can wake on the same condition pass). See WorkflowInstance.cs:897-908.
@@ -157,20 +217,28 @@ public sealed class DurableObjectWorkerInterceptor : IWorkerInterceptor
 
             try
             {
-                // Responsibility 3: Drain-window gate.
+                // Lifecycle gates. Re-read the registry after waiting at the serialization gate:
+                // activation may have completed and rollover/deactivation may have started.
                 // MUST come after the serialization wait (see class-level remarks for the
                 // ordering rationale — checking before the gate allows a window where an update
                 // passes the drain check, waits, then executes after _deactivating is set).
-                if (DurableObjectBase.TryGetCurrent(Workflow.Info.WorkflowId, out var instance)
-                    && instance.IsDeactivating)
+                if (DurableObjectBase.TryGetCurrent(Workflow.Info.WorkflowId, out instance))
                 {
-                    throw new ApplicationFailureException(
-                        $"Update '{input.Update}' rejected: object is deactivating.",
-                        errorType: "ObjectDeactivating",
-                        nonRetryable: true);
+                    if (instance.IsContinuingAsNew)
+                    {
+                        ThrowObjectContinuingAsNew(input.Update);
+                    }
+
+                    if (instance.IsDeactivating)
+                    {
+                        throw new ApplicationFailureException(
+                            $"Update '{input.Update}' rejected: object is deactivating.",
+                            errorType: "ObjectDeactivating",
+                            nonRetryable: true);
+                    }
                 }
 
-                // Responsibility 4: Exception safety net.
+                // Exception safety net.
                 // Arbitrary exceptions from update handlers set currentActivationException in the
                 // SDK (WorkflowInstance.cs:1307, 1319), retrying the workflow task indefinitely
                 // and permanently wedging the object. Convert any such exception into a clean
@@ -206,5 +274,25 @@ public sealed class DurableObjectWorkerInterceptor : IWorkerInterceptor
                 }
             }
         }
+
+        public override object? HandleQuery(HandleQueryInput input)
+        {
+            if (DurableObjectBase.TryGetCurrent(Workflow.Info.WorkflowId, out var instance)
+                && !instance.IsActivated)
+            {
+                throw new ApplicationFailureException(
+                    "Object is not ready: activation is incomplete.",
+                    errorType: "ObjectNotReady",
+                    nonRetryable: true);
+            }
+
+            return Next.HandleQuery(input);
+        }
+
+        private static void ThrowObjectContinuingAsNew(string update) =>
+            throw new ApplicationFailureException(
+                $"Update '{update}' rejected: object is continuing as new.",
+                errorType: "ObjectContinuingAsNew",
+                nonRetryable: true);
     }
 }
