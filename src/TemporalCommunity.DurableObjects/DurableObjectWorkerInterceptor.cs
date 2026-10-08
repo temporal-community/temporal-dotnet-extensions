@@ -40,7 +40,7 @@ namespace TemporalCommunity.DurableObjects;
 /// <b>Authorization and reminders:</b> If an <c>authorize</c> predicate is registered and the
 /// worker uses canonical-object reminders, the predicate must explicitly allow reminder delivery.
 /// Use <see cref="FrameworkUpdateNames"/> to permit framework-internal updates without
-/// guessing their names. See <c>docs/FAILURE_HANDLING.md</c> under "Authorization and framework
+/// guessing their names. See <c>docs/failure-handling.md</c> under "Authorization and framework
 /// updates" for the recommended predicate pattern.
 /// </para>
 /// </remarks>
@@ -85,7 +85,7 @@ public sealed class DurableObjectWorkerInterceptor : IWorkerInterceptor
     /// <c>FrameworkUpdateNames.Contains()</c> in the <c>authorize</c> predicate in
     /// single-tenant or mTLS-secured deployments where namespace access is the security
     /// boundary. In multi-tenant deployments, use a shared-secret header approach instead.
-    /// See <c>docs/FAILURE_HANDLING.md</c> under "Multi-tenant authorization."
+    /// See <c>docs/failure-handling.md</c> under "Multi-tenant authorization."
     /// </para>
     /// </remarks>
     public static readonly FrozenSet<string> FrameworkUpdateNames =

@@ -1,16 +1,14 @@
 # Failure Handling
 
-This document covers every failure scenario in `TemporalCommunity.DurableObjects`: how SDK
-exceptions surface through the client layer, what happens when update handlers or lifecycle hooks
-throw, how the authorization predicate interacts with framework-internal updates, and how reminder
-delivery achieves at-least-once semantics with idempotent deduplication.
+Use this guide to handle client exceptions, lifecycle failures, authorization, and reminder
+retries without losing state consistency.
 
 ---
 
 ## Client-Side Exception Mapping
 
-`DurableObjectProxy<T>` wraps every call to `ExecuteUpdateWithStartWorkflowAsync` and `QueryAsync`
-and maps SDK-level errors to the custom exception hierarchy before propagating to callers.
+Generated clients and the compatibility proxy map SDK-level errors to the library's exception
+hierarchy before propagating them to callers.
 
 | SDK exception / condition | Mapped to | When |
 |--------------------------|-----------|------|
@@ -22,7 +20,8 @@ and maps SDK-level errors to the custom exception hierarchy before propagating t
 
 `WorkflowUpdateFailedException` is intentionally NOT mapped. It carries the application's own
 `ApplicationFailureException` from inside an update handler and is meaningful to callers. Inspect
-`innerException.ApplicationFailureException.ErrorType` for domain-specific error codes.
+`InnerException` for an `ApplicationFailureException` and read its `ErrorType` for domain-specific
+error codes.
 
 ---
 
@@ -56,29 +55,24 @@ Lifecycle hooks (`OnActivateAsync`, `OnTimerAsync`, `OnBeforeContinueAsNewAsync`
 
 - A non-`ApplicationFailureException` is wrapped as `ApplicationFailureException(errorType:
   "ActivationFailure" | "TimerFailure" | "ContinueAsNewFailure", nonRetryable: true)`.
-- This hits the SDK's `RunTopLevelAsync` → `FailWorkflowExecution` path — the **workflow
-  execution terminates cleanly**.
+- The **workflow execution fails**, rather than retrying a broken workflow task indefinitely.
 - Any updates pending at the time of activation failure (including the triggering update from
   `update-with-start`) fail with the workflow termination rather than receiving a clean
   `UpdateResponse.Rejected`. Callers see the workflow terminated, not a friendly exception.
 
-**`OnBeforeContinueAsNewAsync` behavior:** if this hook throws, the framework wraps the exception
-as `ApplicationFailureException(errorType: "ContinueAsNewFailure", nonRetryable: true)`. This
-terminates the workflow execution — ContinueAsNew does **not** proceed. Any updates that were
-pending at the time (waiting in the run loop) fail with the workflow termination and do not
-receive a clean rejection. This is identical to the `OnActivateAsync` and `OnTimerAsync` failure
-path. The implication: any state preparation in `OnBeforeContinueAsNewAsync` must be complete
-before the hook returns; partial work should be validated up-front.
+If `OnBeforeContinueAsNewAsync` throws, Continue-as-New does **not** proceed. Validate state
+preparation before the hook returns; a failure ends the execution instead of carrying state
+into a new run.
 
 **`OnDeactivateAsync` is different:** exceptions are swallowed and logged. Deactivation must
 complete regardless of cleanup failures.
 
 ### Activation failure and recovery
 
-After a workflow terminates due to an `OnActivateAsync` failure, the same object ID is usable
-again. A new `update-with-start` (or `GetOrCreateAsync`) on the same ID starts a fresh execution
-because `WorkflowIdReusePolicy.AllowDuplicate` is set explicitly on all start operations. The
-terminated execution's history is not contaminated into the new one.
+After an `OnActivateAsync` failure, `GetOrCreateAsync` can start a fresh execution under the
+same object ID: it explicitly sets `WorkflowIdReusePolicy.AllowDuplicate` and uses an existing
+execution if one is running. The new execution does not restore the failed execution's state.
+Correct the activation failure before retrying.
 
 ---
 
@@ -103,16 +97,16 @@ services.AddHostedTemporalWorker("my-task-queue")
             });
 ```
 
-Wire names are post-`Async`-strip (the SDK strips the trailing `"Async"` suffix per
-`WorkflowUpdateDefinition.cs`). `"OnReminder"` is the wire name for `OnReminderAsync`.
+The SDK strips the trailing `"Async"` suffix from default update names.
+`"OnReminder"` is the wire name for `OnReminderAsync`.
 `"Deactivate"` is **not** in `FrameworkUpdateNames` — it is user-initiated and should go through
 your `authorize` predicate like any other update.
 
 ### Single-tenant vs multi-tenant threat model
 
-`FrameworkUpdateNames.Contains()` in the `authorize` predicate is safe only in **single-tenant
-or mTLS-secured** Temporal deployments where namespace access is already the security boundary
-(every client in the namespace is trusted). Wire names are predictable from the library source —
+`FrameworkUpdateNames.Contains()` in the `authorize` predicate is safe only when **every client
+in the namespace is trusted**. Transport authentication alone does not establish that trust.
+Wire names are predictable from the library source —
 any client with valid namespace credentials can invoke `"OnReminder"` and skip your auth check.
 
 ### Multi-tenant authorization
@@ -143,8 +137,8 @@ For multi-tenant deployments, use a shared-secret header approach instead:
    }
    ```
 
-The secret must be provisioned to both the delivery worker and the target worker. A built-in
-helper is planned for v1.1. The manual approach above is the supported path in v1.
+The secret must be provisioned to both the delivery worker and the target worker. No built-in
+authentication helper is provided.
 
 ---
 
@@ -166,12 +160,12 @@ with the target object ID and reminder name:
 UpdateId = "{dispatcherWorkflowId}:{targetObjectId}:{reminderName}"
 ```
 
-The Temporal server deduplicates on `WorkflowUpdateOptions.Id` — a retry of the same activity
-in the same dispatcher execution re-issues the same ID and has no effect.
+The Temporal server deduplicates on `WorkflowUpdateOptions.Id`. A retry of the same activity
+re-issues the same ID; within the same target run, it does not execute the handler again.
 
 The second argument to `OnReminderAsync` is `ReminderDeliveryContext`, which carries the
-`DeliveryId` (the dispatcher workflow's ID). Handlers should store the last-seen `DeliveryId`
-per reminder name to detect and skip duplicate deliveries:
+`DeliveryId` (the dispatcher workflow's ID). Handlers should retain processed delivery IDs
+to detect and skip duplicates:
 
 ```csharp
 private readonly HashSet<string> _seenDeliveries = [];
@@ -182,8 +176,8 @@ public Task OnReminderAsync(string reminderName, ReminderDeliveryContext context
     if (_seenDeliveries.Contains(context.DeliveryId))
         return Task.CompletedTask; // duplicate — skip
 
+    // ... process reminder successfully ...
     _seenDeliveries.Add(context.DeliveryId);
-    // ... process reminder ...
     return Task.CompletedTask;
 }
 ```
@@ -196,46 +190,39 @@ the new execution has no record of the prior `UpdateId` — the reminder re-deli
 update. This is the expected at-least-once behavior. The `DeliveryId` pattern above is the
 correct way to achieve at-most-once processing in the presence of CAN boundaries.
 
+Carry processed IDs in typed state (or explicit Continue-as-New arguments); the instance field
+in the example alone does not survive rollover. Bound retention according to your retry window.
+External side effects still require idempotency at the activity or destination. Record an ID
+only after successful processing; an update failure does not roll back a prematurely recorded ID.
+
 ---
 
 ## Deactivation Drain Protocol
 
-When `DeactivateAsync()` is called from the outside, the handler sets `_deactivating = true` and
-returns immediately. The interceptor then rejects any new update that arrives with:
+`DeactivateAsync()` confirms the request, not completed cleanup. During draining, the
+interceptor rejects updates that have not begun handling with:
 
 ```
 ApplicationFailureException(errorType: "ObjectDeactivating", nonRetryable: true)
 ```
 
-The caller of a rejected update sees `WorkflowUpdateFailedException`. Updates that were already
-in-flight when `_deactivating` was set complete normally before the object closes.
-
-The run loop (not a handler) drains all in-flight handlers using
-`Workflow.WaitConditionAsync(() => Workflow.AllHandlersFinished)` — this is safe because the
-run path is not itself an in-progress handler. Calling `AllHandlersFinished` from inside a
-handler deadlocks permanently (the handler is in `inProgressHandlers`; the wait can never
-resolve). This is why `DeactivateAsync` sets the flag and returns rather than draining inline.
+The caller sees `WorkflowUpdateFailedException`. Handlers already executing can finish before
+cleanup and completion. Do not wait for `Workflow.AllHandlersFinished` inside a handler: that
+wait includes the handler itself and cannot complete.
 
 ---
 
 ## Versioning Quick Reference
 
-See [implementation requirements](DURABLE_OBJECTS.md#implementation-requirements) and
-[replay verification](MAINTAINER_VERIFICATION.md#replay-compatibility) before changing live workflows.
-
-| Change | Safe without patching? |
-|--------|----------------------|
-| Adding a new `[WorkflowQuery]` handler | Yes |
-| Adding a parameter with a default value | Yes (backward compatible) |
-| Internal logic changes (no handler rename) | Yes |
-| Changing the Temporal command sequence emitted by a workflow handler | **No — use `Workflow.Patched`** |
-| Deploying a worker that lacks an update handler which may receive live updates | **No — use staged rollout or Worker Versioning** |
-| Changing `OnBeforeContinueAsNewAsync` return shape | **No — keep the new initializer compatible with old CAN arguments or migrate explicitly** |
-| Removing a handler that may be targeted by in-flight updates | **Forbidden without migration** |
+Before changing live workflows, replay representative histories and keep snapshot and
+Continue-as-New argument deserialization compatible. Changes to emitted workflow commands
+need a versioning strategy such as `Workflow.Patched`. Handler removal or renaming also needs
+a migration plan for clients and pending updates; an unchanged method name alone does not make
+a change replay-safe. See [implementation requirements](durable-objects.md#implementation-requirements).
 
 ---
 
 ## See Also
 
 For common startup mistakes, exception chain patterns, and environment setup issues, see
-[TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+[Troubleshooting](troubleshooting.md).

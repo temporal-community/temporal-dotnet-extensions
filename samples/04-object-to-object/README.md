@@ -73,6 +73,8 @@ does not reserve stock twice. `OrderProcessor` records `Pending`, `Fulfilled`, o
 production systems should define how failed orders are retried or compensated. Both objects use
 typed snapshots so order status, reservations, and deduplication keys survive Continue-as-New.
 A production system also needs a retention policy for operation keys.
+The demo repeats a confirmed client request with the same order ID; it does not simulate an
+activity whose completion is lost after the target update was accepted.
 
 `IDurableObjectFactory` is injected via DI, registered by `AddDurableObjects(TaskQueue)` in
 `Program.cs`. This sample intentionally exercises the compatibility fallback: the `Get<T>` call is

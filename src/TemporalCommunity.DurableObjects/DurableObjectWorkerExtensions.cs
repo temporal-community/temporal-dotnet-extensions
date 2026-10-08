@@ -167,7 +167,7 @@ public static class DurableObjectWorkerExtensions
                 throw new InvalidOperationException(
                     $"DurableObject type '{type.FullName}' declares '{method.Name}' with " +
                     $"[WorkflowSignal]. Signals are banned in v1 — all handlers must use " +
-                    $"[WorkflowUpdate] or [WorkflowQuery]. See docs/DURABLE_OBJECTS.md for supported contract methods.");
+                    $"[WorkflowUpdate] or [WorkflowQuery]. See docs/durable-objects.md for supported contract methods.");
             }
         }
     }

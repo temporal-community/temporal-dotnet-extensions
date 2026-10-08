@@ -41,7 +41,7 @@
     <!-- Same remapping pattern as TemporalCommunity.Extensions.Analyzers.csproj: a docs file
          doubles as the package README, and the existing DurableObjects icon is reused rather than
          duplicated. -->
-    <None Include="..\..\docs\TEMPLATES.md" Pack="true" PackagePath="README.md" />
+    <None Include="..\..\docs\templates.md" Pack="true" PackagePath="README.md" />
     <None Include="..\..\src\TemporalCommunity.DurableObjects\icon.png" Pack="true" PackagePath="/" />
   </ItemGroup>
 </Project>

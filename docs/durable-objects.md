@@ -40,9 +40,9 @@ V1 supports two lifecycle modes:
 
 - **Resident:** the workflow execution remains open while idle. Temporal may evict its sticky-cache
   instance and replay it later without changing the programming model.
-- **Explicit deactivation:** a caller invokes `DeactivateAsync()`, or workflow code calls
-  `Deactivate()`. In-flight handlers drain, new updates are rejected, and the execution completes.
-  A later update can start a fresh execution under the same ID.
+- **Explicit deactivation:** `DeactivateAsync()` rejects new updates and drains executing handlers
+  before completion. Workflow code can instead call `Deactivate()` after finishing its work.
+  A later activation starts fresh; completed state is not automatically restored.
 
 Continue-as-New compacts history when the server suggests it or history reaches
 `DurableObjectOptions.MaxHistoryLength`. `DurableObjectBase<TState>` carries a
@@ -50,7 +50,7 @@ Continue-as-New compacts history when the server suggests it or history reaches
 `TState` serialization-compatible. Users of non-generic `DurableObjectBase` must explicitly return
 constructor arguments from `OnBeforeContinueAsNewAsync()`.
 
-See [Tier Model](TIER_MODEL.md) for the complete lifecycle and deactivation semantics.
+See [Tier Model](tier-model.md) for lifecycle and deactivation details.
 
 ## Updates, queries, and failures
 
@@ -72,7 +72,7 @@ invocation may have a new ID. Use idempotent handlers or persist an application 
 caller retries must not repeat a mutation. Carry deduplication state through Continue-as-New when
 it must survive run boundaries.
 
-See [Failure Handling](FAILURE_HANDLING.md) for client exceptions, authorization, lifecycle-hook
+See [Failure Handling](failure-handling.md) for client exceptions, authorization, lifecycle-hook
 failures, deactivation draining, and reminder idempotency.
 
 ## Activities and object-to-object calls
@@ -138,7 +138,7 @@ asynchronous methods, and every generated method has a `DurableObjectCallOptions
 The runtime prefers a registered generated client even when code calls `Get<T>()`. Unsupported or
 ungenerated contracts retain the `DispatchProxy` compatibility path. NativeAOT deployments are not
 a supported compatibility target for this library. See
-[analyzer and generator requirements](ANALYZERS.md).
+[analyzer and generator requirements](analyzers.md).
 
 ## Implementation requirements
 
@@ -176,7 +176,6 @@ within a run, but are not automatically carried into a new run by the non-generi
 Changing the state schema or emitted workflow commands for existing executions requires a
 compatibility plan. Replay representative histories before deployment, keep deserialization
 compatible with existing snapshots, and use Temporal's workflow versioning APIs where needed.
-See [replay verification](MAINTAINER_VERIFICATION.md#replay-compatibility).
 
 ## API overview
 
@@ -187,7 +186,7 @@ See [replay verification](MAINTAINER_VERIFICATION.md#replay-compatibility).
 | `Get<T>` | Create a local generated client or compatibility proxy without an RPC. |
 | `GetOrCreateAsync<T>` | Ensure the object execution exists, then return its client. |
 | `QueryDurableObjectAsync<TResult>` | Perform a non-blocking query by wire name. |
-| `QueryOrDefaultAsync<TResult>` | Query and return `default` when the object is absent. |
+| `QueryOrDefaultAsync<TResult>` | Query and return `default` when the object is absent or inactive. |
 | `ListDurableObjectExecutionsAsync<T>` | Enumerate rich visibility metadata on .NET 8+. |
 | `CreateDurableObjectReminderAsync<T>` | Deliver recurring reminders to a canonical object. |
 | `CreateDurableObjectScheduleAsync<T>` | Start a fresh scheduled execution for each tick. |
@@ -208,7 +207,7 @@ already accepted.
 
 ## Continue reading
 
-- [Getting Started](GETTING_STARTED.md)
-- [Failure Handling](FAILURE_HANDLING.md)
-- [Troubleshooting](TROUBLESHOOTING.md)
+- [Getting Started](getting-started.md)
+- [Failure Handling](failure-handling.md)
+- [Troubleshooting](troubleshooting.md)
 - [Samples](../samples/README.md)

@@ -19,7 +19,7 @@ namespace TemporalCommunity.DurableObjects;
 /// <c>OnBeforeContinueAsNewAsync</c>) are NOT represented here. The framework throws
 /// <c>ApplicationFailureException</c> directly (non-retryable) to terminate the workflow
 /// cleanly rather than wedging it in an infinite task-retry loop. See
-/// <c>docs/FAILURE_HANDLING.md</c> for the full failure taxonomy.
+/// <c>docs/failure-handling.md</c> for the full failure taxonomy.
 /// </para>
 /// <para>
 /// <c>WorkflowUpdateFailedException</c> is intentionally NOT mapped — it carries the

@@ -25,7 +25,7 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOIN
 //#endif
 
 // Resolve the connection once and apply it to the SDK-managed client.
-// See docs/TEMPLATES.md for connection precedence.
+// See docs/templates.md for connection precedence.
 var connectOptions = global::TemporalWorker1.TemporalWorkerConnection.Resolve(builder.Configuration);
 builder.Services.AddTemporalClient(options =>
 {

@@ -32,7 +32,7 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOIN
 // ---------------------------------------------------------------------------
 // Resolve connection options via SharedTemporalConnection.Resolve — the exact
 // same three-step precedence Worker uses, so Client and Worker never end up
-// pointed at different servers. See docs/TEMPLATES.md's "Connecting to
+// pointed at different servers. See docs/templates.md's "Connecting to
 // Temporal" section for the full order. Registration goes through the SDK's
 // AddTemporalClient, exactly as in Worker; ApplyTo copies every resolved
 // setting while keeping the host ILoggerFactory the SDK already assigned.

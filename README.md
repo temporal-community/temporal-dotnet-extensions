@@ -1,23 +1,26 @@
-# TemporalCommunity.Extensions
+﻿# TemporalCommunity.Extensions
 
 Community-built extensions and compile-time guardrails for the
 [Temporal .NET SDK](https://github.com/temporalio/sdk-dotnet).
 
-This repository contains a durable-actor programming model, general Temporal workflow analyzers,
-Durable Objects analyzers and source generators, and their IDE code fixes. Each package is opt-in;
-using the analyzers does not require adopting Durable Objects.
+
+## Which offering fits?
+
+| If you want to... | Start here |
+|---|---|
+| Create a plain Temporal .NET worker or a Worker + Client + Shared solution | [Generate and run a template solution](docs/getting-started.md#start-with-templates) |
+| Add replay-safety checks to ordinary Temporal workflows | [Inspect the general analyzer examples](docs/getting-started.md#start-with-general-analyzers) |
+| Model a long-lived entity with a stable ID and serialized updates | [Run the Durable Objects page-counter demo](docs/getting-started.md#start-with-durable-objects) |
 
 ## Packages
 
 | Package | Purpose |
 |---|---|
+| [`TemporalCommunity.Templates`](https://www.nuget.org/packages/TemporalCommunity.Templates) | `dotnet new` templates for Temporal workflows, activities, workers, and Worker + Client + Shared solutions, with optional Aspire and OpenTelemetry. |
 | [`TemporalCommunity.Extensions.Analyzers`](https://www.nuget.org/packages/TemporalCommunity.Extensions.Analyzers) | Replay-safety analyzers and code fixes for ordinary Temporal .NET workflows. |
 | [`TemporalCommunity.DurableObjects`](https://www.nuget.org/packages/TemporalCommunity.DurableObjects) | An opinionated durable-actor model for long-lived entities addressed by stable ID. |
 | [`TemporalCommunity.DurableObjects.Analyzers`](https://www.nuget.org/packages/TemporalCommunity.DurableObjects.Analyzers) | Durable Objects contract analyzers, code fixes, and generated asynchronous clients. |
-| [`TemporalCommunity.Templates`](https://www.nuget.org/packages/TemporalCommunity.Templates) | `dotnet new` templates for Temporal workflows, activities, workers, and Worker + Client + Shared solutions, with optional Aspire and OpenTelemetry. |
 
-The analyzer packages contain both the compiler-safe analyzer and the IDE code-fix assembly. There
-are no separate code-fix packages to install.
 
 ## Temporal workflow analyzers
 
@@ -31,19 +34,18 @@ The package detects replay-safety and workflow-shape misuse in ordinary Temporal
 IDE code fixes where a deterministic replacement is safe. These diagnostics also work in projects
 that do not reference the Durable Objects runtime.
 
-See [Temporal .NET Analyzers](docs/ANALYZERS.md) for installation details, the full rule catalog,
+See [Temporal .NET Analyzers](docs/analyzers.md) for installation details, the full rule catalog,
 code-fix behavior, limitations, and Durable Objects generator requirements.
 
 ## Durable Objects
 
-`TemporalCommunity.DurableObjects` is for entity-style workflows such as accounts, carts, devices,
-sessions, and counters. It adds atomic activation, serialized updates, contained update failures,
-typed state across Continue-as-New, managed lifecycle behavior, visibility metadata, reminders,
-and generated clients.
+`TemporalCommunity.DurableObjects` is for entity-style workflows such as accounts, devices,
+sessions, etc. It adds atomic activation, serialized updates, contained update failures, and
+typed state across Continue-as-New.
 
 Use a plain Temporal workflow when the execution represents a process with a defined end or needs
 signals, child workflows, orchestration-heavy control flow, or unrestricted SDK behavior. See
-[Durable Objects concepts](docs/DURABLE_OBJECTS.md) for the detailed comparison and lifecycle model.
+[Durable Objects concepts](docs/durable-objects.md) for the detailed comparison and lifecycle model.
 
 ### Install
 
@@ -57,6 +59,9 @@ dotnet add package TemporalCommunity.DurableObjects.Analyzers
 > .NET 8, and .NET Standard 2.1. .NET Standard does not support visibility-listing APIs.
 
 ### Minimal example
+
+This is a conceptual sketch of the Durable Objects programming model, not a complete runnable
+application. For the full worker and caller setup, run [sample 01](samples/01-getting-started/).
 
 Define a contract and implementation:
 
@@ -92,11 +97,22 @@ public sealed class Counter : DurableObjectBase<int>, ICounter
 }
 ```
 
-Register the client factory and worker types:
+This example calls Durable Objects and runs the worker in the same process, so it registers both
+sides.
+- `AddDurableObjects` provides the client-side `IDurableObjectFactory` and its default task
+queue.
+- `AddDurableObjectWorkflows` registers the object workflows and Durable Objects runtime on the
+worker.
+
+If callers and workers run in separate services, each service registers only the side it
+uses; their task-queue names must match.
 
 ```csharp
 services.AddTemporalClient(options => options.TargetHost = "localhost:7233");
+// Caller side: register the factory used to get Durable Object clients.
 services.AddDurableObjects("my-task-queue");
+
+// Worker side: register object workflows and their runtime behavior.
 services.AddHostedTemporalWorker("my-task-queue")
     .AddDurableObjectWorkflows(typeof(Counter).Assembly);
 ```
@@ -109,18 +125,21 @@ await counter.IncrementAsync(5);
 var current = await counter.GetCountAsync();
 ```
 
-The first update starts the object atomically. Its state is rebuilt from Temporal history after
-worker restarts and carried through Continue-as-New by `DurableObjectBase<TState>`.
+`IncrementAsync(5)` is a workflow update. If `counter-42` is not running, Update-with-Start starts
+the object and submits the increment in one operation. Its state is rebuilt from Temporal history
+after worker restarts and carried through Continue-as-New by `DurableObjectBase<TState>`.
 
 Start with the runnable [getting-started sample](samples/01-getting-started/) and the
-[Durable Objects guide](docs/GETTING_STARTED.md) for validators, activities, lifecycle behavior,
+[Durable Objects starting path](docs/getting-started.md#start-with-durable-objects) for validators, activities, lifecycle behavior,
 failure handling, and production guidance.
 
 ## Samples
 
 Six runnable Durable Objects samples cover generated clients, validation, scheduling and reminders,
 object-to-object calls through activities, observability, and testing. See the
-[samples index](samples/README.md).
+[samples index](samples/README.md) or the [repository-wide getting-started paths](docs/getting-started.md).
+
+For the Durable Objects demos, start a local Temporal server and run sample 01:
 
 ```bash
 temporal server start-dev
@@ -131,14 +150,13 @@ just run-sample
 
 | Guide | Contents |
 |---|---|
-| [Temporal .NET analyzers](docs/ANALYZERS.md) | General and Durable Objects rules, code fixes, generated clients, and installation. |
-| [Durable Objects concepts](docs/DURABLE_OBJECTS.md) | When to use the runtime, identity, lifecycle, state, scheduling, and API overview. |
-| [Durable Objects getting started](docs/GETTING_STARTED.md) | Reading path from first object through production readiness. |
-| [Failure handling](docs/FAILURE_HANDLING.md) | Exception taxonomy, authorization, lifecycle failures, and reminder idempotency. |
-| [Tier model](docs/TIER_MODEL.md) | Resident execution, explicit deactivation, and Continue-as-New behavior. |
-| [Troubleshooting](docs/TROUBLESHOOTING.md) | Common runtime and configuration problems. |
-| [Maintainer verification](docs/MAINTAINER_VERIFICATION.md) | Replay, packaging, benchmark, scale, and release checks. |
-| [Templates](docs/TEMPLATES.md) | `dotnet new` item templates for workflows, activities, and payload converters; project templates for workers and Worker+Client+Shared solutions (with optional .NET Aspire orchestration). |
+| [Temporal .NET analyzers](docs/analyzers.md) | General and Durable Objects rules, code fixes, generated clients, and installation. |
+| [Durable Objects concepts](docs/durable-objects.md) | When to use the runtime, identity, lifecycle, state, scheduling, and API overview. |
+| [Getting started](docs/getting-started.md) | Three independent first paths: templates, general analyzers, and Durable Objects. |
+| [Failure handling](docs/failure-handling.md) | Exception taxonomy, authorization, lifecycle failures, and reminder idempotency. |
+| [Tier model](docs/tier-model.md) | Resident execution, explicit deactivation, and Continue-as-New behavior. |
+| [Troubleshooting](docs/troubleshooting.md) | Common runtime and configuration problems. |
+| [Templates](docs/templates.md) | `dotnet new` workflows, activities, converters, workers, and solutions; optional Aspire and OpenTelemetry. |
 
 ## Building from source
 
@@ -151,8 +169,9 @@ just build
 just test
 ```
 
-Run `just` to list all recipes. Integration tests use an embedded Temporal test server; samples
-require a server at `localhost:7233`. Full package verification (`just pack-verify`) and the local
+Run `just` to list all recipes. Samples 01–05 use an external Temporal server (by default at
+`localhost:7233`); sample 06 starts an SDK-managed local server; analyzer samples 07–08 need no
+server. Full package verification (`just pack-verify`) and the local
 CI-equivalent (`just ci`) use Unix/Bash tooling and are supported on Linux and macOS. On Windows,
 after `dotnet tool restore`, run `just test-unit` from PowerShell 7 (`pwsh`); that recipe uses
 PowerShell-safe single-line `dotnet test` commands. GitHub Actions repeats the build and tests on

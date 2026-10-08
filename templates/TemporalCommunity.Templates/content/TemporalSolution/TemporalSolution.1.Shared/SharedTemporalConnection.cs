@@ -7,7 +7,7 @@ namespace GeneratedNamespacePrefix.Shared;
 /// <summary>
 /// Resolves the <see cref="TemporalClientConnectOptions"/> used to connect to a Temporal server,
 /// following a fixed three-step precedence. See the "Connecting to Temporal" section of
-/// docs/TEMPLATES.md for the full rationale. Both Worker and Client call this same helper so they
+/// docs/templates.md for the full rationale. Both Worker and Client call this same helper so they
 /// never end up pointed at different servers.
 /// </summary>
 public static class SharedTemporalConnection

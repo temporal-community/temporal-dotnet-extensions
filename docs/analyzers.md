@@ -2,19 +2,12 @@
 
 Two opt-in analyzer packages provide compile-time guidance and IDE code fixes:
 
-- `TemporalCommunity.Extensions.Analyzers` applies to vanilla Temporal .NET workflows.
-- `TemporalCommunity.DurableObjects.Analyzers` adds DurableObjects contract checks.
+- Use `TemporalCommunity.Extensions.Analyzers` for replay-safety and handler-shape checks in any
+  Temporal .NET workflow project.
+- Add `TemporalCommunity.DurableObjects.Analyzers` for DurableObjects contract checks and generated
+  clients. DurableObjects projects can use both packages.
 
 Both packages include their IDE code fixes. There are no separate code-fix packages to install.
-
-For a minimal consumer experiment without a project file, see the [.NET 10 file-based app
-sample](../samples/07-analyzer-file-app/). It can be run with `dotnet run --file Program.cs` and
-reports analyzer diagnostics during the file-app build.
-
-The file-based sample is pinned to the `0.3.2` analyzer package release and deliberately
-demonstrates the Phase 1 rules. Change its package directive to evaluate another release; the
-catalog below describes the rules in this source tree.
-
 Install the package appropriate for the project that declares workflows:
 
 ```bash
@@ -28,12 +21,15 @@ dotnet add package TemporalCommunity.Extensions.Analyzers
 </PackageReference>
 ```
 
-DurableObjects projects may reference both packages. The general package does not depend on the
-DurableObjects runtime.
+The general package does not depend on the DurableObjects runtime.
 
 ```bash
 dotnet add package TemporalCommunity.DurableObjects.Analyzers
 ```
+
+See the [project sample](../samples/08-analyzer-project/) for common diagnostics and fixes, or
+the [.NET 10 file-based app](../samples/07-analyzer-file-app/) for a no-project-file example.
+The file-based sample is pinned to `0.3.2`; the catalog below describes this source tree.
 
 ## General Temporal rules
 
@@ -97,9 +93,6 @@ calls avoid `DispatchProxy` too.
 
 Generation currently requires a public, top-level, non-generic contract. Existing applications
 that do not install the analyzer package continue to use the runtime proxy fallback.
-
-Each NuGet package contains a compiler-safe analyzer assembly and a separate Workspace-dependent
-code-fix assembly. Consumers still install only the one package shown above.
 
 Suppress a rule only after establishing that the reported code cannot execute in workflow context.
 Project-wide suppression of determinism rules is not recommended.

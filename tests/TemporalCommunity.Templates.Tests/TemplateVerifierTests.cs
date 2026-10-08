@@ -9,7 +9,7 @@ namespace TemporalCommunity.Templates.Tests;
 /// Covers both naming paths for the <c>temporal-workflow</c> item template, using two different
 /// mechanisms — TemplateVerifier auto-appends <c>-n &lt;shortName&gt;</c> when no name is
 /// supplied, and a shortName containing hyphens is not a valid C# identifier, so the "no name"
-/// path can't be exercised through TemplateVerifier itself. See docs/TEMPLATES.md and the plan
+/// path can't be exercised through TemplateVerifier itself. See docs/templates.md and the plan
 /// this implements for the full rationale.
 /// Also covers the custom-name path for the <c>temporal-activity</c>
 /// and <c>temporal-converter</c> item templates, following the same

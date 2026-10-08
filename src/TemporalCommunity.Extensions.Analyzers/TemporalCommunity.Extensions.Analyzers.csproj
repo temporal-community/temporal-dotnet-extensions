@@ -21,7 +21,7 @@
     <PackageReference Include="MinVer" Version="6.*" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\..\docs\ANALYZERS.md" Pack="true" PackagePath="README.md" />
+    <None Include="..\..\docs\analyzers.md" Pack="true" PackagePath="README.md" />
     <None Include="..\TemporalCommunity.DurableObjects\icon.png" Pack="true" PackagePath="/" />
     <None Include="$(OutputPath)$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     <None Include="..\TemporalCommunity.Extensions.Analyzers.CodeFixes\bin\$(Configuration)\netstandard2.0\TemporalCommunity.Extensions.Analyzers.CodeFixes.dll"

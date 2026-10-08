@@ -164,7 +164,7 @@ public interface IDurableObjectFactory
     /// Visibility is eventually consistent: a just-created object may take a moment to appear.
     /// Results may include time-suffixed executions created by schedule-based activation;
     /// callers who need to distinguish canonical objects from scheduled one-shots should use
-    /// a custom Search Attribute. See <c>docs/TIER_MODEL.md</c> for details.
+    /// a custom Search Attribute. See <c>docs/tier-model.md</c> for details.
     /// </remarks>
     /// <typeparam name="T">The DurableObject interface type to enumerate.</typeparam>
     /// <param name="runningOnly">

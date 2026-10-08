@@ -44,7 +44,7 @@ if (!string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOIN
 // localhost:7233), then register ITemporalClient via the SDK's AddTemporalClient.
 // ApplyTo copies every resolved setting onto the SDK-managed options, leaving
 // the host ILoggerFactory the SDK already assigned in place; the SDK creates a
-// lazily-connecting client. See docs/TEMPLATES.md's "Connecting to Temporal"
+// lazily-connecting client. See docs/templates.md's "Connecting to Temporal"
 // section for the full order.
 // ---------------------------------------------------------------------------
 var connectOptions = SharedTemporalConnection.Resolve(builder.Configuration);
