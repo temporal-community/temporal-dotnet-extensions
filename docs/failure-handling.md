@@ -80,11 +80,47 @@ If `OnBeforeContinueAsNewAsync` throws, Continue-as-New does **not** proceed. Va
 preparation before the hook returns; a failure ends the execution instead of carrying state
 into a new run.
 
-`OnTimerAsync` retains its existing policy: non-`ApplicationFailureException` values are wrapped
-as `TimerFailure`. Slice 3 does not broaden timer lifecycle policy.
+`OnTimerAsync` failures also end the execution; see
+[Timer callback failure](#timer-callback-failure).
 
 **`OnDeactivateAsync` is different:** exceptions are swallowed and logged. Deactivation must
 complete regardless of cleanup failures.
+
+### Timer callback failure
+
+An exception that escapes `OnTimerAsync` fails the workflow execution. Exceptions other than
+`ApplicationFailureException` are wrapped as
+`ApplicationFailureException(errorType: "TimerFailure", nonRetryable: true)`, with the original
+exception as the cause. The consequences are:
+
+- Waiting for the run's result throws `WorkflowFailedException`. For exceptions other than
+  `ApplicationFailureException`, the inner failure has error type `TimerFailure`; an
+  `ApplicationFailureException` retains its original error type.
+- Updates that were accepted but not complete, whether running or waiting their turn, fail with
+  `WorkflowUpdateFailedException`. The inner `ApplicationFailureException` has error type
+  `AcceptedUpdateCompletedWorkflow`.
+- The next generated-client update starts a **new run from initial state**. State from the failed
+  run is lost, including changes from updates that did not complete.
+
+Catch expected failures inside `OnTimerAsync`, record them in state, and re-arm the timer. A
+one-shot timer is removed before its callback runs, so call `ScheduleTimer` again to retry.
+A recurring timer is re-armed before its callback runs.
+
+```csharp
+protected override async Task OnTimerAsync(string name)
+{
+    try
+    {
+        await ExecuteActivityAsync((SyncActivities a) => a.SyncAsync(), Options);
+        State = State with { LastSyncError = null };
+    }
+    catch (ActivityFailureException ex)
+    {
+        State = State with { LastSyncError = ex.Message };
+        ScheduleTimer(name, TimeSpan.FromMinutes(5)); // retry the one-shot timer
+    }
+}
+```
 
 ### Activation failure and recovery
 
@@ -181,6 +217,15 @@ UpdateId = "{dispatcherWorkflowId}:{targetObjectId}:{reminderName}"
 
 The Temporal server deduplicates on `WorkflowUpdateOptions.Id`. A retry of the same activity
 re-issues the same ID; within the same target run, it does not execute the handler again.
+
+The dispatcher runs the delivery activity with up to 10 attempts. If all attempts fail, that tick's
+dispatcher workflow fails without confirming delivery; the receiver may already have processed the
+update before an attempt failed. Treat the outcome as uncertain and make reminder handling
+idempotent. The reminder schedule does not pause on failure. With the default
+`ScheduleOverlapPolicy.Skip`, ticks that occur while the dispatcher is still retrying may be
+skipped; a later tick after it closes can start a new dispatcher. If a reminder must not be missed,
+have the receiver record in its state when it last processed the reminder (for example,
+`Workflow.UtcNow`) and catch up on missed work at the next delivery.
 
 The second argument to `OnReminderAsync` is `ReminderDeliveryContext`, which carries the
 `DeliveryId` (the dispatcher workflow's ID). Handlers should retain processed delivery IDs

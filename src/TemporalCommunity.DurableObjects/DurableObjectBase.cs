@@ -548,8 +548,8 @@ public abstract class DurableObjectBase : IDurableObject
     /// <remarks>
     /// <para>
     /// The workflow scheduler is single-threaded (<c>MaximumConcurrencyLevel == 1</c>) but
-    /// update handlers still interleave at every <c>await</c> — they are reentrant by default,
-    /// unlike an Orleans grain. Wrap a handler body in this method to make it strictly turn-based.
+    /// handlers still interleave at every <c>await</c> unless something serializes them, unlike
+    /// an Orleans grain. Wrap a handler body in this method to make it strictly turn-based.
     /// </para>
     /// <para>
     /// The loop-form re-check (not a single <c>if</c>) is intentional: on the legacy event-loop
@@ -558,8 +558,10 @@ public abstract class DurableObjectBase : IDurableObject
     /// </para>
     /// <para>
     /// When <c>DurableObjectWorkerInterceptor</c> is configured with <c>serialize: true</c>,
-    /// all updates are serialized automatically and this method is redundant. Retain for cases
-    /// where per-handler serialization is needed without global interceptor serialization.
+    /// updates are serialized against each other, but <see cref="OnTimerAsync"/> callbacks
+    /// still run while an update is suspended at an <c>await</c>. The interceptor gate and this
+    /// method's gate are separate: to make a timer callback take turns with an update, wrap
+    /// both the update body and the <see cref="OnTimerAsync"/> body in this method.
     /// </para>
     /// </remarks>
     protected async Task RunSerializedAsync(Func<Task> handler)

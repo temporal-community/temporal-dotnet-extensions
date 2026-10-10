@@ -34,6 +34,24 @@ task queue, timestamps, history length, and schedule origin. It returns running 
 by default; `DurableObjectListOptions` can include scheduled executions and closed runs. The legacy
 `ListDurableObjectsAsync<T>()` ID stream remains for compatibility.
 
+### Choosing object granularity
+
+Each object ID identifies one logical Durable Object across its workflow runs, including runs
+created by Continue-as-New. That ID determines what is serialized together. With the default
+`DurableObjectWorkerOptions.Serialize = true`, updates for one ID run one at a time, including
+across `await` boundaries. An update that waits on a slow activity therefore delays every later
+update for that ID.
+
+Choose an ID around the data whose rules must be checked together, such as one account, order, or
+cart. Avoid one object for a whole category, such as `inventory` or `global`; it becomes a single
+queue for all callers. History growth and Continue-as-New are also tracked per object, so a busy
+object rolls over more often and briefly rejects updates during each rollover (see
+[Activation and Continue-as-New Admission](failure-handling.md#activation-and-continue-as-new-admission)).
+
+Operations that span objects, such as moving funds between two accounts, are not atomic. They go
+through activities and are at-least-once; see
+[Activities and object-to-object calls](#activities-and-object-to-object-calls).
+
 ## Lifecycle and state
 
 V1 supports two lifecycle modes:
@@ -65,6 +83,31 @@ while an update is suspended at an `await` and observe state that the update has
 but not yet committed as a completed operation. Validate before mutating, or expose a separately
 maintained committed-state snapshot when readers require that guarantee. Queries are synchronous
 and read-only in the contract; generated clients add asynchronous query methods for callers.
+
+`OnTimerAsync` callbacks also bypass update serialization. If an update reads `State`, awaits an
+activity, and then writes, a timer that fires during the await can change `State`. The update's
+write then overwrites the timer's change. To make timer callbacks take turns with updates, wrap
+**both** the update body and the `OnTimerAsync` body in `RunSerializedAsync`. Wrapping only
+`OnTimerAsync` does not help: `RunSerializedAsync` uses its own gate, separate from the
+interceptor's update gate, so an unwrapped update never holds it.
+
+```csharp
+[WorkflowUpdate]
+public Task<int> IncrementAsync() => RunSerializedAsync(async () =>
+{
+    var current = State;
+    await ExecuteActivityAsync((AuditActivities a) => a.RecordAsync(current), Options);
+    State = current + 1;
+    return State;
+});
+
+// Waits until IncrementAsync finishes instead of running during its await.
+protected override Task OnTimerAsync(string name) => RunSerializedAsync(() =>
+{
+    State += 100;
+    return Task.CompletedTask;
+});
+```
 
 An accepted update can still be repeated if its response is lost and the application makes a new
 call. `DurableObjectCallOptions` does not expose a caller-supplied Temporal update ID, so a new
@@ -113,11 +156,19 @@ same queue that the dedicated worker polls. A supported dedicated Durable Object
 to one Temporal namespace. Hosting workers for multiple namespaces in one process is unsupported
 because lifecycle admission state is process-static.
 
-Update serialization gives each object actor-like turn behavior, but an update waiting on a slow
-activity can hold up later updates for the same ID. Set `Serialize = false` only when handlers are
-safe to overlap across awaits and state access is designed for that. The generated and compatibility
-proxy synchronous query methods block a caller thread for a network round trip; use async query
-methods from concurrent server code.
+Update serialization gives each object actor-like turn behavior (see
+[Choosing object granularity](#choosing-object-granularity)). Set `Serialize = false` only when
+handlers are safe to overlap across awaits and state access is designed for that. The generated and
+compatibility proxy synchronous query methods block a caller thread for a network round trip; use
+async query methods from concurrent server code.
+
+Temporal limits how many updates can be in flight at once for one workflow execution; the default
+is 10. With `Serialize = true`, updates waiting their turn behind a running update count toward that
+limit. When the limit is reached, additional calls fail with
+`Temporalio.Exceptions.RpcException` whose `Code` is `ResourceExhausted`. The exception is not
+wrapped in `WorkflowUpdateFailedException`. The rejected update did not run, and the object remains
+usable. Treat it as a signal to back off and retry, and keep slow work out of update handlers on
+hot objects. Cluster operators can configure this limit differently.
 
 Reminders are delivered through a dispatcher workflow, an activity, and Update-with-Start, so
 delivery latency and worker backlog matter for frequent reminders. History event count is only one
@@ -125,9 +176,10 @@ budget: large payloads and typed snapshots can increase replay and rollover cost
 threshold. Measure representative payload size, replay time, snapshot size, and rollover latency.
 `GetOrCreateAsync` performs a start RPC; when the next operation is already an update and separate
 existence confirmation is unnecessary, compare it with a direct update-with-start path before
-adding the extra call. Under sustained update load near the Continue-as-New threshold, handlers
-continue to be admitted while the run loop drains. Monitor history growth and define an admission
-policy for the application's load profile.
+adding the extra call. Once Continue-as-New starts, updates that have not entered handler code,
+including updates queued behind the serialization gate, are rejected with `ObjectContinuingAsNew`
+while running handlers drain; callers can retry them against the next run. Monitor history growth
+and rollover frequency for the application's load profile.
 
 See [performance testing](../benchmarks/README.md) for the automated Temporal load runner,
 rollover checks under sustained traffic, and BenchmarkDotNet client-overhead benchmarks.
