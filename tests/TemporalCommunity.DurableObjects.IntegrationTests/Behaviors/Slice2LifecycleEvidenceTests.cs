@@ -347,7 +347,7 @@ public sealed class Slice3AcceptanceTests : DurableObjectTestBase
             lastFailure);
     }
 
-    private static async Task<string> WaitForRunIdChangeAsync(
+    internal static async Task<string> WaitForRunIdChangeAsync(
         WorkflowHandle handle,
         string initialRunId,
         string failureId)
@@ -431,7 +431,7 @@ public sealed class Slice3AcceptanceTests : DurableObjectTestBase
             lastFailure);
     }
 
-    private static async Task<WorkflowExecutionStatus> WaitForStatusAsync(
+    internal static async Task<WorkflowExecutionStatus> WaitForStatusAsync(
         WorkflowHandle handle,
         WorkflowExecutionStatus expected,
         string failureId)
@@ -453,7 +453,7 @@ public sealed class Slice3AcceptanceTests : DurableObjectTestBase
             $"[{failureId}] Expected status {expected}, last observed {lastStatus}.");
     }
 
-    private static async Task TerminateIfRunningAsync(WorkflowHandle handle, string failureId)
+    internal static async Task TerminateIfRunningAsync(WorkflowHandle handle, string failureId)
     {
         try
         {
@@ -468,7 +468,7 @@ public sealed class Slice3AcceptanceTests : DurableObjectTestBase
         }
     }
 
-    private static async Task StopWorkerAsync(
+    internal static async Task StopWorkerAsync(
         CancellationTokenSource workerCts,
         Task workerTask)
     {

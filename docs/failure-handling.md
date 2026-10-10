@@ -84,6 +84,12 @@ Lifecycle hooks (`OnActivateAsync`, `OnTimerAsync`, `OnBeforeContinueAsNewAsync`
 - Any updates pending at the time of activation failure (including the triggering update from
   `update-with-start`) fail with the workflow termination rather than receiving a clean
   `UpdateResponse.Rejected`. Callers see the workflow terminated, not a friendly exception.
+- Signals waiting for activation are not applied if activation fails. Their receipt acknowledgement
+  is not an activation or processing acknowledgement.
+
+For signal drop categories, authorization, partial effects, cancellation, decode boundaries and
+host alert routing, see [signal failure boundaries](durable-objects.md#signal-authorization-failure-boundaries-and-observability).
+Signal containment does not change the lifecycle-hook policies below.
 
 If `OnBeforeContinueAsNewAsync` throws, Continue-as-New does **not** proceed. Validate state
 preparation before the hook returns; a failure ends the execution instead of carrying state
@@ -293,7 +299,8 @@ state. Queries do not wait: while activation is incomplete they fail with the st
 `Object is not ready: activation is incomplete.` (`errorType: "ObjectNotReady"` inside the
 worker). The query failure does not fail or wedge the workflow task.
 
-Lifecycle admission state is process-static. A supported dedicated Durable Object process connects
+Update admission uses the SDK's execution-local workflow instance. The legacy process-static
+registry remains for internal compatibility. A supported dedicated Durable Object process connects
 to one Temporal namespace; hosting multiple namespaces in one process is unsupported.
 
 Before Continue-as-New drains handlers or prepares a snapshot, the run loop closes update

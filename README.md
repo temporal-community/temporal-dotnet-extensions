@@ -40,11 +40,13 @@ code-fix behavior, limitations, and Durable Objects generator requirements.
 ## Durable Objects
 
 `TemporalCommunity.DurableObjects` is for entity-style workflows such as accounts, devices,
-sessions, etc. It adds start-on-first-update through Update-with-Start, serialized updates,
-contained update failures, and typed state across Continue-as-New.
+sessions, etc. It adds start-on-first-update through Update-with-Start, fire-and-forget signals
+through Signal-with-Start, shared update/signal serialization, contained handler failures, and
+typed state across Continue-as-New. Signal completion acknowledges server recording, **not**
+handler completion; use updates when the caller needs acceptance, a result, or an error.
 
 Use a plain Temporal workflow when the execution represents a process with a defined end or needs
-signals, child workflows, orchestration-heavy control flow, or unrestricted SDK behavior. See
+child workflows, orchestration-heavy control flow, or unrestricted SDK behavior. See
 [Durable Objects concepts](docs/durable-objects.md) for the detailed comparison and lifecycle model.
 
 ### Install

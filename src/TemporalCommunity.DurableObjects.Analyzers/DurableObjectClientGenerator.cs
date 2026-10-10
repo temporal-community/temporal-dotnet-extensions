@@ -122,6 +122,10 @@ public sealed class DurableObjectClientGenerator : IIncrementalGenerator
             {
                 AppendQueryMethods(source, contractType, method);
             }
+            else if (HasAttribute(method, "Temporalio.Workflows.WorkflowSignalAttribute"))
+            {
+                AppendSignalMethods(source, method);
+            }
             else
             {
                 AppendUpdateMethods(source, method);
@@ -173,6 +177,16 @@ public sealed class DurableObjectClientGenerator : IIncrementalGenerator
         var methods = GetContractMethods(contract);
         foreach (var method in methods)
         {
+            if (DurableObjectContractAnalyzer.IsDynamicSignal(method))
+            {
+                return $"dynamic handler '{method.Name}' is not supported";
+            }
+
+            if (!DurableObjectContractAnalyzer.HasValidHandlerShape(method))
+            {
+                return $"method '{method.Name}' has an unsupported handler shape";
+            }
+
             if (method.MethodKind != MethodKind.Ordinary || method.IsStatic || method.IsGenericMethod ||
                 method.Parameters.Any(parameter =>
                     parameter.RefKind != RefKind.None ||
@@ -194,7 +208,8 @@ public sealed class DurableObjectClientGenerator : IIncrementalGenerator
                 return $"method '{method.Name}' reserves the generated parameter name 'callOptions'";
             }
 
-            if (HasAttribute(method, "Temporalio.Workflows.WorkflowUpdateAttribute") &&
+            if ((HasAttribute(method, "Temporalio.Workflows.WorkflowUpdateAttribute") ||
+                 HasAttribute(method, "Temporalio.Workflows.WorkflowSignalAttribute")) &&
                 methods.Any(candidate =>
                     candidate.Name == method.Name &&
                     candidate.Parameters.Length == method.Parameters.Length + 1 &&
@@ -205,7 +220,7 @@ public sealed class DurableObjectClientGenerator : IIncrementalGenerator
                     candidate.Parameters[candidate.Parameters.Length - 1].Type.ToDisplayString() ==
                         "TemporalCommunity.DurableObjects.DurableObjectCallOptions"))
             {
-                return $"update '{method.Name}' conflicts with its generated call-options overload";
+                return $"handler '{method.Name}' conflicts with its generated call-options overload";
             }
 
             if (HasAttribute(method, "Temporalio.Workflows.WorkflowQueryAttribute"))
@@ -271,6 +286,24 @@ public sealed class DurableObjectClientGenerator : IIncrementalGenerator
 
         source.Append('(').Append(Quote(GetWireName(method, isUpdate: true))).Append(", ")
             .Append(BuildArgs(method.Parameters)).AppendLine(", callOptions);");
+    }
+
+    private static void AppendSignalMethods(StringBuilder source, IMethodSymbol method)
+    {
+        foreach (var includeCallOptions in new[] { false, true })
+        {
+            if (includeCallOptions)
+            {
+                source.AppendLine();
+            }
+
+            AppendMethodHeader(
+                source, "    public ", method.ReturnType, Escape(method.Name), method.Parameters, includeCallOptions);
+            source.Append(" => _invoker.SignalAsync(")
+                .Append(Quote(GetWireName(method, "Temporalio.Workflows.WorkflowSignalAttribute", stripAsync: true)))
+                .Append(", ").Append(BuildArgs(method.Parameters))
+                .AppendLine(includeCallOptions ? ", callOptions);" : ");");
+        }
     }
 
     private static void AppendQueryMethods(
@@ -411,6 +444,11 @@ public sealed class DurableObjectClientGenerator : IIncrementalGenerator
         var attributeName = isUpdate
             ? "Temporalio.Workflows.WorkflowUpdateAttribute"
             : "Temporalio.Workflows.WorkflowQueryAttribute";
+        return GetWireName(method, attributeName, stripAsync: isUpdate);
+    }
+
+    private static string GetWireName(IMethodSymbol method, string attributeName, bool stripAsync)
+    {
         var attribute = method.GetAttributes().First(item =>
             item.AttributeClass?.ToDisplayString() == attributeName);
         if (attribute.ConstructorArguments.Length != 0 &&
@@ -419,7 +457,7 @@ public sealed class DurableObjectClientGenerator : IIncrementalGenerator
             return explicitName;
         }
 
-        return isUpdate && method.Name.EndsWith("Async", StringComparison.Ordinal)
+        return stripAsync && method.Name.EndsWith("Async", StringComparison.Ordinal)
             ? method.Name.Substring(0, method.Name.Length - "Async".Length)
             : method.Name;
     }

@@ -33,9 +33,6 @@ public sealed class DurableObjectContractCodeFixProviderTests
 
     [Theory]
     [InlineData(
-        "[Temporalio.Workflows.WorkflowSignal] System.Threading.Tasks.Task WakeAsync();",
-        "WorkflowUpdate")]
-    [InlineData(
         "System.Threading.Tasks.Task IncrementAsync();",
         "WorkflowUpdate")]
     [InlineData("int GetCount();", "WorkflowQuery")]
@@ -188,81 +185,48 @@ public sealed class DurableObjectContractCodeFixProviderTests
         }
     }
 
-    [Fact]
-    public async Task SignalFixKeepsExistingUpdateAttributeWithoutDuplicating()
+    [Theory]
+    [InlineData("[Signal] System.Threading.Tasks.Task<int> WakeAsync();")]
+    [InlineData("[Signal, Temporalio.Workflows.WorkflowUpdate] System.Threading.Tasks.Task WakeAsync();")]
+    [InlineData("[Signal, Temporalio.Workflows.WorkflowQuery] int Wake();")]
+    public async Task DoesNotOfferSignalToUpdateFix(string member)
     {
-        var source = """
+        var source = $$"""
+            using Signal = Temporalio.Workflows.WorkflowSignalAttribute;
+
             public interface ICounter : TemporalCommunity.DurableObjects.IDurableObject
             {
-                [Temporalio.Workflows.WorkflowSignal]
-                [Temporalio.Workflows.WorkflowUpdate]
-                System.Threading.Tasks.Task WakeAsync();
+                {{member}}
             }
             """;
         var (workspace, document) = CreateDocument(source);
         using (workspace)
         {
-            var fixedDocument = await ApplyFirstFixAsync(document).ConfigureAwait(true);
-            var text = (await fixedDocument.GetTextAsync().ConfigureAwait(true)).ToString();
+            var diagnostic = Assert.Single(await GetAnalyzerDiagnosticsAsync(document).ConfigureAwait(true));
+            var provider = new DurableObjectContractCodeFixProvider();
+            var actions = new List<CodeAction>();
+            await provider.RegisterCodeFixesAsync(new CodeFixContext(
+                document, diagnostic, (action, _) => actions.Add(action), CancellationToken.None))
+                .ConfigureAwait(true);
 
-            Assert.Equal(1, text.Split("WorkflowUpdate", StringSplitOptions.None).Length - 1);
-            Assert.DoesNotContain("WorkflowSignal", text, StringComparison.Ordinal);
-            Assert.Empty((await fixedDocument.Project.GetCompilationAsync().ConfigureAwait(true))!
-                .GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
-            Assert.Empty(await GetAnalyzerDiagnosticsAsync(fixedDocument).ConfigureAwait(true));
+            Assert.Equal(DurableObjectContractAnalyzer.InvalidContractMethodId, diagnostic.Id);
+            Assert.Empty(actions);
+            Assert.DoesNotContain(DurableObjectContractAnalyzer.SignalNotSupportedId, provider.FixableDiagnosticIds);
         }
     }
 
     [Fact]
-    public async Task SignalFixKeepsExistingQueryAttributeOnSynchronousMethod()
+    public async Task ValidSignalNeedsNoFix()
     {
-        var source = """
+        var (workspace, document) = CreateDocument("""
             public interface ICounter : TemporalCommunity.DurableObjects.IDurableObject
             {
-                [Temporalio.Workflows.WorkflowSignal]
-                [Temporalio.Workflows.WorkflowQuery]
-                int GetCount();
+                [Temporalio.Workflows.WorkflowSignal] System.Threading.Tasks.Task WakeAsync();
             }
-            """;
-        var (workspace, document) = CreateDocument(source);
+            """);
         using (workspace)
         {
-            var fixedDocument = await ApplyFirstFixAsync(document).ConfigureAwait(true);
-            var text = (await fixedDocument.GetTextAsync().ConfigureAwait(true)).ToString();
-
-            Assert.Equal(1, text.Split("WorkflowQuery", StringSplitOptions.None).Length - 1);
-            Assert.DoesNotContain("WorkflowSignal", text, StringComparison.Ordinal);
-            Assert.Empty((await fixedDocument.Project.GetCompilationAsync().ConfigureAwait(true))!
-                .GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
-            Assert.Empty(await GetAnalyzerDiagnosticsAsync(fixedDocument).ConfigureAwait(true));
-        }
-    }
-
-    [Fact]
-    public async Task SignalFixDetectsExistingRequiredAttributeAccessedThroughAlias()
-    {
-        var source = """
-            using Update = Temporalio.Workflows.WorkflowUpdateAttribute;
-
-            public interface ICounter : TemporalCommunity.DurableObjects.IDurableObject
-            {
-                [Temporalio.Workflows.WorkflowSignal]
-                [Update]
-                System.Threading.Tasks.Task WakeAsync();
-            }
-            """;
-        var (workspace, document) = CreateDocument(source);
-        using (workspace)
-        {
-            var fixedDocument = await ApplyFirstFixAsync(document).ConfigureAwait(true);
-            var text = (await fixedDocument.GetTextAsync().ConfigureAwait(true)).ToString();
-
-            Assert.Contains("[Update]", text, StringComparison.Ordinal);
-            Assert.DoesNotContain("WorkflowSignal", text, StringComparison.Ordinal);
-            Assert.DoesNotContain("global::Temporalio.Workflows.WorkflowUpdate", text, StringComparison.Ordinal);
-            Assert.Empty((await fixedDocument.Project.GetCompilationAsync().ConfigureAwait(true))!
-                .GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error));
-            Assert.Empty(await GetAnalyzerDiagnosticsAsync(fixedDocument).ConfigureAwait(true));
+            Assert.Empty(await GetAnalyzerDiagnosticsAsync(document).ConfigureAwait(true));
         }
     }
 

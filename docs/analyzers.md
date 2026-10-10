@@ -75,8 +75,8 @@ public void ValidateAdd(int value)
 
 | ID | Meaning | Code fix |
 |---|---|---|
-| `DO0001` | A contract method is not a Task-returning update or synchronous query. | Add the appropriate update or query attribute. |
-| `DO0002` | A DurableObject declares a signal, which the programming model does not support. | Replace the signal attribute with an update attribute. |
+| `DO0001` | A contract method does not have exactly one supported handler attribute: Task/Task&lt;T&gt; update, synchronous query, or Task (not Task&lt;T&gt;) named signal. Also validates declared signal signatures on concrete objects and rejects dynamic signals on object classes, including abstract ancestors. | Add the appropriate update or query attribute when no signal is present. Signal signature/conflict repairs require an author decision. |
+| `DO0002` | Retired; ID reserved. Named signals are supported. | None. |
 | `DO0003` | A concrete DurableObject is missing its declared `[WorkflowRun]` method. | None; the correct run signature depends on state shape. |
 | `DO0004` | A typed-state object does not declare matching optional snapshot initializer and run signatures. | None; initializer construction requires an application state decision. |
 | `DO0005` | A contract uses a shape that cannot produce a generated client. | None; make the contract public and non-generic, and avoid generic/ref/dynamic handlers or generated-name collisions. |
@@ -88,7 +88,13 @@ public void ValidateAdd(int value)
 contract. A contract such as `ICounter` produces `CounterDurableObjectClient` and a
 `GetCounterClient` factory extension. Synchronous contract queries remain available for source
 compatibility, while the concrete client adds asynchronous query methods and call-options
-overloads. A module initializer registers the concrete implementation so ordinary `Get<ICounter>`
+overloads. Signals add Task-returning methods and call-options overloads, both using
+Signal-with-Start. Explicit wire names are preserved; default signal names strip trailing `Async`
+(queries do not). Dynamic signals are unsupported for all DurableObjects: `DO0001` rejects
+dynamic signal declarations on contracts and object classes (including abstract ancestors),
+`DO0005` rejects generated dynamic contracts, and worker registration/runtime enforce the same
+boundary. Named signals remain supported.
+A module initializer registers the concrete implementation so ordinary `Get<ICounter>`
 calls avoid `DispatchProxy` too.
 
 Generation currently requires a public, top-level, non-generic contract. Existing applications

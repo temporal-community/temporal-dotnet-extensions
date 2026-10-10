@@ -1,4 +1,5 @@
 using System.Reflection;
+using Microsoft.Extensions.Logging;
 using Temporalio.Client;
 using Temporalio.Worker;
 using TemporalCommunity.DurableObjects;
@@ -20,20 +21,22 @@ public static class TestWorkerBuilder
     /// <param name="client">Temporal client from the shared fixture.</param>
     /// <param name="taskQueue">Unique task queue for this test run.</param>
     /// <param name="workflowTypes">
-    /// Concrete DurableObjectBase subclasses to register. Must NOT include abstract types or
-    /// types with [WorkflowSignal].
+    /// Concrete DurableObjectBase subclasses to register. Must NOT include abstract types.
     /// </param>
     /// <param name="activityInstances">Activity instances to register.</param>
     /// <param name="options">Optional DurableObjectWorkerOptions for the interceptor.</param>
+    /// <param name="loggerFactory">Optional worker logging sink for observability assertions.</param>
     /// <returns>A configured TemporalWorker (caller must dispose).</returns>
     public static TemporalWorker Build(
         ITemporalClient client,
         string taskQueue,
         IEnumerable<Type>? workflowTypes = null,
         IEnumerable<object>? activityInstances = null,
-        DurableObjectWorkerOptions? options = null)
+        DurableObjectWorkerOptions? options = null,
+        ILoggerFactory? loggerFactory = null)
     {
         var workerOptions = new TemporalWorkerOptions(taskQueue);
+        workerOptions.LoggerFactory = loggerFactory;
 
         // Register each concrete workflow type individually (precise control, no assembly scan).
         if (workflowTypes is not null)

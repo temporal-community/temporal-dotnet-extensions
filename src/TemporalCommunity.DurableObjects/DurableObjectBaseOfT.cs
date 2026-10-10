@@ -41,6 +41,8 @@ public abstract class DurableObjectBase<TState> : DurableObjectBase
 
     /// <summary>
     /// Allows the object to normalize or migrate its state immediately before Continue-as-New.
+    /// May run more than once when signals enter user code during asynchronous preparation.
+    /// Implementations and any external effects must be idempotent.
     /// </summary>
     /// <param name="state">The current state.</param>
     /// <returns>The state to carry into the next execution.</returns>

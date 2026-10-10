@@ -2,7 +2,7 @@
 
 `TemporalCommunity.DurableObjects` is an opinionated durable-actor programming model built on the
 Temporal .NET SDK. Temporal remains the durable execution engine; this library adds conventions
-for addressing long-lived entities, starting them without a read-then-start race, serializing updates, carrying typed
+for addressing long-lived entities, starting them without a read-then-start race, serializing updates and signals, carrying typed
 state, containing handler failures, and managing lifecycle behavior.
 
 ## When to use it
@@ -12,7 +12,7 @@ state, containing handler failures, and managing lifecycle behavior.
 | A stable ID represents a long-lived entity. | The execution represents a process with a defined end. |
 | Updates should execute turn-by-turn by default. | Handler interleaving or custom concurrency is part of the design. |
 | A call should start a missing entity and submit its first update without a read-then-start race. | Starting, signaling, and child workflows should remain explicit. |
-| You want framework policies for failures and deactivation. | You need signals, child workflows, or unrestricted SDK behavior. |
+| You want framework policies for failures and deactivation. | You need child workflows or unrestricted SDK behavior. |
 
 Durable Objects do not add storage outside Temporal or provide cross-object transactions.
 “Resident” means the workflow execution remains open; it does not mean a CLR instance is always
@@ -26,8 +26,11 @@ convention such as `account/<id>` or use separate namespaces when types could ot
 
 Generated update methods use Update-with-Start. The operation starts the execution when needed and
 submits the update without a read-then-start race. The start and successful update are not one
-atomic outcome: the workflow may start even if update validation or handling fails. Queries do not
-start a missing object.
+atomic outcome: the workflow may start even if update validation or handling fails.
+Generated clients and the reflection proxy also use Signal-with-Start for every signal call,
+starting cold or closed objects. Signal receipt does not imply successful activation or handling.
+Queries do not start a missing object. Requires Temporal Server 1.30 or later; the SDK remains
+pinned to 1.16.0.
 
 On .NET 8 and later, `ListDurableObjectExecutionsAsync<T>()` returns workflow ID, run ID, status,
 task queue, timestamps, history length, and schedule origin. It returns running canonical objects
@@ -38,9 +41,9 @@ by default; `DurableObjectListOptions` can include scheduled executions and clos
 
 Each object ID identifies one logical Durable Object across its workflow runs, including runs
 created by Continue-as-New. That ID determines what is serialized together. With the default
-`DurableObjectWorkerOptions.Serialize = true`, updates for one ID run one at a time, including
-across `await` boundaries. An update that waits on a slow activity therefore delays every later
-update for that ID.
+`DurableObjectWorkerOptions.Serialize = true`, updates and signals for one ID share one gate,
+including across `await` boundaries. A handler waiting on a slow activity delays later handlers
+for that ID. Concurrent client RPCs need not reach the server in the order they were invoked.
 
 Choose an ID around the data whose rules must be checked together, such as one account, order, or
 cart. Avoid one object for a whole category, such as `inventory` or `global`; it becomes a single
@@ -70,26 +73,51 @@ constructor arguments from `OnBeforeContinueAsNewAsync()`.
 
 See [Tier Model](tier-model.md) for lifecycle and deactivation details.
 
-## Updates, queries, and failures
+## Updates, signals, queries, and failures
 
-Contract methods must be `[WorkflowUpdate]` or `[WorkflowQuery]`. Signals are intentionally not
-supported because they bypass authorization, do not confirm completion, and cannot report update
-validation failures.
+Use SDK attributes on contract **and implementation** methods:
+`[WorkflowUpdate]` for Task/Task&lt;T&gt;, `[WorkflowSignal]` for Task (not Task&lt;T&gt;), and
+`[WorkflowQuery]` for synchronous read-only methods. No new signal attribute is required.
 
-Updates are serialized by default, including across `await` boundaries. Validators run before the
+```csharp
+[WorkflowSignal]
+Task RecordReadingAsync(string eventId, double celsius);
+```
+
+Choose signals for notifications where the sender needs receipt, not processing confirmation.
+Choose updates for validated commands, results, and caller-visible errors.
+
+| Behavior | Update | Signal | Query |
+|---|---|---|---|
+| Call completes when | Handler completes or fails | **Server records the signal**; no worker is needed for receipt | Query returns or fails |
+| Cold or closed object | Update-with-Start starts it | Signal-with-Start starts it | Does not start it |
+| During activation | Waits | Waits | Fails `ObjectNotReady` |
+| Serialization (`Serialize=true`) | Shared update/signal gate, held across awaits | Same gate | Not gated; may see partial mutations |
+| Continue-as-New admission | New/queued updates rejected with `ObjectContinuingAsNew` | Drained and included in a fresh snapshot before rollover | Served |
+| During deactivation | Rejected with `ObjectDeactivating` | **Dropped + Warning** | Existing query policy unchanged |
+| Authorization | `Authorize`; rejection returned to caller | `AuthorizeSignal`; denial/error dropped and logged, not returned to sender | None |
+| Handler failure | Caller gets update error | Remaining processing abandoned + Error; partial effects persist | Caller gets query error |
+| Caller retries after an ambiguous outcome | May duplicate; use application operation IDs | May duplicate; use stable event IDs | Read-only |
+
+Signals have no update validator or processing-result channel. Per-call transport options
+(timeout, retry, gRPC metadata, cancellation) apply to the signal RPC, not to handler lifetime.
+Cancelling that RPC cannot retract a signal already recorded. gRPC metadata is not automatically
+the workflow headers inspected by an authorization callback.
+
+Updates and signals are serialized together by default, including across `await` boundaries. Update validators run before the
 handler body. Unexpected handler exceptions are converted into application failures so a rejected
-update does not wedge the workflow task. Serialization applies to updates only: a query can run
-while an update is suspended at an `await` and observe state that the update has already mutated
+update does not wedge the workflow task. Queries are not serialized: a query can run
+while an update or signal is suspended at an `await` and observe state already mutated
 but not yet committed as a completed operation. Validate before mutating, or expose a separately
 maintained committed-state snapshot when readers require that guarantee. Queries are synchronous
 and read-only in the contract; generated clients add asynchronous query methods for callers.
 
-`OnTimerAsync` callbacks also bypass update serialization. If an update reads `State`, awaits an
+`OnTimerAsync` callbacks also bypass update/signal serialization. If a handler reads `State`, awaits an
 activity, and then writes, a timer that fires during the await can change `State`. The update's
 write then overwrites the timer's change. To make timer callbacks take turns with updates, wrap
-**both** the update body and the `OnTimerAsync` body in `RunSerializedAsync`. Wrapping only
+**all** relevant update/signal bodies and the `OnTimerAsync` body in `RunSerializedAsync`. Wrapping only
 `OnTimerAsync` does not help: `RunSerializedAsync` uses its own gate, separate from the
-interceptor's update gate, so an unwrapped update never holds it.
+interceptor's shared update/signal gate, so an unwrapped handler never holds it.
 
 ```csharp
 [WorkflowUpdate]
@@ -114,6 +142,105 @@ call. `DurableObjectCallOptions` does not expose a caller-supplied Temporal upda
 invocation may have a new ID. Use idempotent handlers or persist an application operation key when
 caller retries must not repeat a mutation. Carry deduplication state through Continue-as-New when
 it must survive run boundaries.
+
+### Signal authorization, failure boundaries, and observability
+
+Set `DurableObjectWorkerOptions.AuthorizeSignal` to a synchronous deterministic predicate on
+`HandleSignalInput`. It may inspect already available arguments/headers, but must not do arbitrary
+I/O or asynchronous auth calls. `false` means Warning drop; a callback exception means Error drop.
+Registration fails if `Authorize` is configured, a registered DurableObject declares signals,
+and `AuthorizeSignal` is missing (including objects registered individually before scanning).
+The interceptor also drops named signals with `SignalAuthorizationNotConfigured` if manual
+configuration or registration after scanning bypasses that check.
+
+**Dynamic signals are unsupported on DurableObjects**, not just generated contracts.
+Registration rejects definitions with `DynamicSignal`, whether dynamic-only or mixed with named
+signals, regardless of authorization configuration. At execution the interceptor checks the SDK's
+actual selected handler and drops dynamic signals with `DynamicSignalNotSupported` before invoking
+authorization or user code. This also covers late workflow registration and handlers installed
+through `Workflow.DynamicSignal`. Named handlers in a mixed definition still follow the normal
+named-signal rules when startup validation has been bypassed. Do not use dynamic handlers as an
+unknown-signal fallback.
+Existing update authorization and the old two-argument interceptor constructor remain supported;
+the new three-argument constructor carries both callbacks.
+
+Denied signals still occupy history before authorization. Namespace credentials/access control
+are the server boundary; application signal auth cannot prevent history growth.
+
+Ordinary and `ApplicationFailureException` handler failures are contained: remaining processing
+is abandoned, and the object can keep handling calls. **There is no rollback** of prior State
+changes or Activity/external effects. An unrelated `OperationCanceledException` is also logged
+and dropped. When `Workflow.CancellationToken` is canceled, that exception propagates with SDK
+cancellation semantics. SDK Continue-as-New control exceptions are not swallowed.
+This safety net does not contain activation/lifecycle failures, worker crashes, or decoder errors.
+
+An undecodable signal is logged and discarded by SDK 1.16.0 **before** the DurableObject
+interceptor, authorization callback, and handler. It has no DurableObject drop event. Unknown
+signal names may be buffered by the SDK instead; version wire names and payload types carefully.
+
+Framework drops use replay-aware `Workflow.Logger`, EventId **4101** /
+`DurableObjectSignalDropped`, with structured `Category`, `Signal`, and `ErrorType` fields:
+
+| Category | Level |
+|---|---|
+| `ObjectDeactivating` | Warning |
+| `Unauthorized` | Warning |
+| `AuthorizationFailure` | Error |
+| `SignalHandlerFailure` | Error |
+| `SignalAuthorizationNotConfigured` | Error |
+| `DynamicSignalNotSupported` | Error |
+
+Only wire identifiers and exception type names are reported; framework signal-drop events do not
+include payloads, auth headers, raw exceptions, messages, or stack traces. Preserve the SDK's
+workflow/run correlation scopes in your host logger, and avoid secrets in identifiers.
+Route these categories and the SDK's decode-error logs through your existing host logging/alert
+infrastructure. Prefer nonblocking, bounded, nonthrowing providers. A failing provider is contained
+without recursive reporting and cannot defeat signal handler exception containment.
+Logs are best effort, **not durable alerts**: ordinary history replay suppresses framework events,
+but workflow-task retries/resets/export retries may duplicate them, and crashes/buffering/filtering
+may lose them. A history signal event proves receipt, not successful handling or alert delivery.
+
+### Signals and Continue-as-New
+
+At rollover, updates retain their existing admission rejection. Signals cannot reject after
+receipt: the run loop drains handlers, snapshots, and repeats if a signal entered user code during
+an asynchronous snapshot or handlers remain unfinished. The final check and rollover have no
+intervening await. A concurrent server-side signal/close race causes Temporal to retry the workflow
+task with the new signal rather than silently close over it.
+
+`PrepareStateForContinueAsNewAsync` / `OnBeforeContinueAsNewAsync` **may run more than once**.
+Make snapshot hooks idempotent, including any Activity effects; do not assume one invocation per
+rollover. Continuous traffic during asynchronous hooks can delay rollover indefinitely; bound
+handler work and apply producer backpressure before reaching server history/signal limits.
+Update-only runs take the existing drain/snapshot path once, without new commands or patch markers.
+If a signal initiates deactivation during snapshot preparation, deactivation wins: the object
+drains and closes rather than rolling over. Closing is not state preservation.
+
+### Append in a signal; process later
+
+The small, compiled [SignalInbox example](snippets/SignalInbox.cs) keeps a bounded Pending list and
+recently completed IDs in `State`, validates before mutation, and deduplicates stable event IDs.
+Its one recurring timer processes at most 16 items per tick with finite Activity timeouts and
+retry attempts. Activity/processing failures are caught **inside** the timer; the item stays queued
+and a later tick retries. Escaped timer exceptions are terminal, not caught by signal containment.
+
+The example intentionally avoids a long-held user gate: Enqueue only appends synchronously, the
+single timer is the only remover, and it re-reads current State after every Activity await. This
+lets new appends proceed during processing without overwriting them. Do not generalize it to
+multiple consumers or arbitrary list-mutating updates/reminders. For those, gate all mutators
+with `RunSerializedAsync` and keep gate holds bounded so draining/snapshot/deactivation can finish.
+
+The example's overflow/invalid-input policy is handler failure + framework Error log; a sender
+cannot learn acceptance from its signal acknowledgement. Deduplication lasts only while an ID is
+pending or among the 1,024 retained completion IDs. A poison item blocks the ordered queue; a
+production policy can record retry/backoff/quarantine in State. The Activity implementation must
+atomically deduplicate its stable event ID with the external effect, or use an idempotent operation:
+successful external work with a lost response can be retried. Removing from State is **not** an
+external transaction. The tests use a failing Activity stand-in, not a real external dedup store.
+
+Pending work and dedup IDs survive Continue-as-New, **not deactivation, failure, or termination
+followed by a fresh start**. Drain/persist before closing if needed. Reminders can restart a closed
+object but do not restore its discarded backlog.
 
 See [Failure Handling](failure-handling.md) for client exceptions, authorization, lifecycle-hook
 failures, deactivation draining, and reminder idempotency.
@@ -148,15 +275,20 @@ See the [scheduling sample](../samples/03-scheduling/).
 
 ## Worker scope and operating limits
 
+Signals do not consume update admission slots, but they still add history and have separate
+server quotas. Do not treat signal acknowledgement as backpressure on a bounded application
+backlog. Monitor history growth and your deployment's limits; asynchronous snapshot drains may
+delay rollover even after the configured history threshold is reached.
+
 Use a dedicated Temporal worker and task queue for Durable Objects in the v1 topology.
 `AddDurableObjectWorkflows` installs `DurableObjectWorkerInterceptor` on the whole worker, so its
 authorization predicate, update serialization, exception wrapping, and deactivation gate also
 apply to unrelated workflow types hosted there. Configure `AddDurableObjects(taskQueue)` with the
 same queue that the dedicated worker polls. A supported dedicated Durable Object process connects
 to one Temporal namespace. Hosting workers for multiple namespaces in one process is unsupported
-because lifecycle admission state is process-static.
+as part of the supported worker topology.
 
-Update serialization gives each object actor-like turn behavior (see
+Update/signal serialization gives each object actor-like turn behavior (see
 [Choosing object granularity](#choosing-object-granularity)). Set `Serialize = false` only when
 handlers are safe to overlap across awaits and state access is designed for that. The generated and
 compatibility proxy synchronous query methods block a caller thread for a network round trip; use

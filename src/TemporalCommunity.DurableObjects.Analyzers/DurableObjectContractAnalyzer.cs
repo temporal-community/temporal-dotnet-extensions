@@ -8,6 +8,7 @@ namespace TemporalCommunity.DurableObjects.Analyzers;
 public sealed class DurableObjectContractAnalyzer : DiagnosticAnalyzer
 {
     public const string InvalidContractMethodId = "DO0001";
+    // Reserved for the retired signal-not-supported diagnostic; never reuse this ID.
     public const string SignalNotSupportedId = "DO0002";
     public const string MissingWorkflowRunId = "DO0003";
     public const string InvalidTypedStateSignatureId = "DO0004";
@@ -16,15 +17,7 @@ public sealed class DurableObjectContractAnalyzer : DiagnosticAnalyzer
     private static readonly DiagnosticDescriptor s_invalidContractMethod = new(
         InvalidContractMethodId,
         "DurableObject contract method has an unsupported shape",
-        "Method '{0}' must be a Task-returning [WorkflowUpdate] or synchronous [WorkflowQuery]",
-        "Temporal.DurableObjects",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    private static readonly DiagnosticDescriptor s_signalNotSupported = new(
-        SignalNotSupportedId,
-        "DurableObjects do not support workflow signals",
-        "Method '{0}' uses [WorkflowSignal]; use [WorkflowUpdate] on DurableObjects",
+        "Method '{0}' must have exactly one handler attribute: Task-returning [WorkflowUpdate], synchronous [WorkflowQuery], or Task (not Task<T>)-returning named [WorkflowSignal]; dynamic signals are not supported",
         "Temporal.DurableObjects",
         DiagnosticSeverity.Error,
         isEnabledByDefault: true);
@@ -56,7 +49,6 @@ public sealed class DurableObjectContractAnalyzer : DiagnosticAnalyzer
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics =>
         ImmutableArray.Create(
             s_invalidContractMethod,
-            s_signalNotSupported,
             s_missingWorkflowRun,
             s_invalidTypedStateSignature,
             s_deactivateOverrideMissingWorkflowUpdate);
@@ -88,25 +80,29 @@ public sealed class DurableObjectContractAnalyzer : DiagnosticAnalyzer
             return;
         }
 
+        // Reject dynamic signals on abstract ancestors too, so inherited dynamic handlers
+        // cannot silently look supported on a concrete leaf.
+        var methods = type.GetMembers().OfType<IMethodSymbol>().ToArray();
+        foreach (var method in methods.Where(method =>
+            HasAttribute(method, "Temporalio.Workflows.WorkflowSignalAttribute")))
+        {
+            if ((!type.IsAbstract || IsDynamicSignal(method)) && !HasValidHandlerShape(method))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    s_invalidContractMethod, GetLocation(method), method.Name));
+            }
+        }
+
         // DO0007 must catch a bad DeactivateAsync override wherever it is declared in the
         // inheritance chain, including on abstract intermediate types that never get a
         // concrete-type analysis pass of their own. Abstract types intentionally skip the
-        // DO0001-DO0004 checks below (they may not yet have a WorkflowRun/typed-state
+        // remaining concrete-type checks below (they may not yet have a WorkflowRun/typed-state
         // signature - that is the concrete leaf's responsibility), so DO0007 is checked here
         // and we return before reaching those checks.
         if (type.IsAbstract)
         {
             AnalyzeDeactivateOverride(context, type);
             return;
-        }
-
-        var methods = type.GetMembers().OfType<IMethodSymbol>().ToArray();
-        foreach (var method in methods.Where(method => HasAttribute(method, "Temporalio.Workflows.WorkflowSignalAttribute")))
-        {
-            context.ReportDiagnostic(Diagnostic.Create(
-                s_signalNotSupported,
-                GetLocation(method),
-                method.Name));
         }
 
         if (!methods.Any(method => HasAttribute(method, "Temporalio.Workflows.WorkflowRunAttribute")))
@@ -174,20 +170,7 @@ public sealed class DurableObjectContractAnalyzer : DiagnosticAnalyzer
     {
         foreach (var method in type.GetMembers().OfType<IMethodSymbol>())
         {
-            if (HasAttribute(method, "Temporalio.Workflows.WorkflowSignalAttribute"))
-            {
-                context.ReportDiagnostic(Diagnostic.Create(
-                    s_signalNotSupported,
-                    GetLocation(method),
-                    method.Name));
-                continue;
-            }
-
-            var isTask = IsTask(method.ReturnType);
-            var valid = isTask
-                ? HasAttribute(method, "Temporalio.Workflows.WorkflowUpdateAttribute")
-                : HasAttribute(method, "Temporalio.Workflows.WorkflowQueryAttribute");
-            if (!valid)
+            if (!HasValidHandlerShape(method))
             {
                 context.ReportDiagnostic(Diagnostic.Create(
                     s_invalidContractMethod,
@@ -196,6 +179,28 @@ public sealed class DurableObjectContractAnalyzer : DiagnosticAnalyzer
             }
         }
     }
+
+    internal static bool HasValidHandlerShape(IMethodSymbol method)
+    {
+        var update = HasAttribute(method, "Temporalio.Workflows.WorkflowUpdateAttribute");
+        var query = HasAttribute(method, "Temporalio.Workflows.WorkflowQueryAttribute");
+        var signal = HasAttribute(method, "Temporalio.Workflows.WorkflowSignalAttribute");
+        var handlerCount = method.GetAttributes().Count(attribute =>
+            attribute.AttributeClass?.ToDisplayString() is
+                "Temporalio.Workflows.WorkflowUpdateAttribute" or
+                "Temporalio.Workflows.WorkflowQueryAttribute" or
+                "Temporalio.Workflows.WorkflowSignalAttribute");
+        return handlerCount == 1 &&
+            (update && IsTask(method.ReturnType) ||
+             query && !IsTask(method.ReturnType) ||
+             signal && !IsDynamicSignal(method) &&
+             method.ReturnType.ToDisplayString() == "System.Threading.Tasks.Task");
+    }
+
+    internal static bool IsDynamicSignal(IMethodSymbol method) =>
+        method.GetAttributes().Any(attribute =>
+            attribute.AttributeClass?.ToDisplayString() == "Temporalio.Workflows.WorkflowSignalAttribute" &&
+            attribute.NamedArguments.Any(argument => argument.Key == "Dynamic" && argument.Value.Value is true));
 
     private static bool HasValidTypedStateSignature(INamedTypeSymbol type, ITypeSymbol stateType)
     {
@@ -250,4 +255,3 @@ public sealed class DurableObjectContractAnalyzer : DiagnosticAnalyzer
     private static Location GetLocation(ISymbol symbol) =>
         symbol.Locations.FirstOrDefault(location => location.IsInSource) ?? Location.None;
 }
-

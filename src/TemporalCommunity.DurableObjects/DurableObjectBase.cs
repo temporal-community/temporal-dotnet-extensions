@@ -60,9 +60,8 @@ namespace TemporalCommunity.DurableObjects;
 /// </remarks>
 public abstract class DurableObjectBase : IDurableObject
 {
-    // Per-workflow static registry keyed by workflowId. Allows DurableObjectWorkerInterceptor
-    // to check IsDeactivating without a direct object reference. WeakReference prevents the
-    // dictionary from keeping instances alive after the workflow completes.
+    // Legacy registry retained for internal compatibility. Admission now uses Workflow.Instance
+    // so a first cold message does not depend on the run method populating this registry.
     private static readonly ConcurrentDictionary<string, WeakReference<DurableObjectBase>> s_registry = new();
 
     // Set by Deactivate() helper — self-initiated completion requested from inside a handler.
@@ -138,6 +137,8 @@ public abstract class DurableObjectBase : IDurableObject
     /// </summary>
     internal bool IsDeactivating => _deactivating;
 
+    internal bool IsSignalAdmissionClosed => _deactivating || _deactivated;
+
     /// <summary>
     /// Whether <see cref="OnActivateAsync"/> completed successfully for this execution.
     /// </summary>
@@ -148,10 +149,14 @@ public abstract class DurableObjectBase : IDurableObject
     /// </summary>
     internal bool IsContinuingAsNew => _continuingAsNew;
 
+    internal long SignalsAdmitted { get; private set; }
+
+    internal void SignalAdmitted() => SignalsAdmitted = unchecked(SignalsAdmitted + 1);
+
     /// <summary>
     /// Attempts to get the currently running <see cref="DurableObjectBase"/> for the given
-    /// workflow execution. Used by <c>DurableObjectWorkerInterceptor</c> to check
-    /// <see cref="IsDeactivating"/> without holding a direct object reference.
+    /// workflow execution. Admission must instead use the SDK's execution-local
+    /// <c>Workflow.Instance</c>, which is available before the run method starts.
     /// </summary>
     /// <param name="workflowId">The workflow ID of the target execution.</param>
     /// <param name="instance">
@@ -389,6 +394,8 @@ public abstract class DurableObjectBase : IDurableObject
     /// <c>OperationCanceledException</c>, the framework wraps it as a non-retryable
     /// <c>ApplicationFailureException(errorType: "ContinueAsNewFailure")</c>.
     /// Failure and cancellation exceptions retain the Temporal SDK's native terminal semantics.
+    /// Signals arriving during asynchronous preparation may cause this hook to run again.
+    /// Keep the hook and any Activity effects idempotent; sustained traffic can delay rollover.
     /// </remarks>
     protected virtual Task<IReadOnlyCollection<object?>> OnBeforeContinueAsNewAsync() =>
         Task.FromResult<IReadOnlyCollection<object?>>(Array.Empty<object?>());
@@ -452,26 +459,38 @@ public abstract class DurableObjectBase : IDurableObject
                     // are allowed to finish; all others are rejected by the interceptor.
                     _continuingAsNew = true;
 
-                    // Drain handlers before CAN so no update is left dangling.
-                    await Workflow.WaitConditionAsync(
-                        () => Workflow.AllHandlersFinished).ConfigureAwait(true);
-
                     IReadOnlyCollection<object?> carryArgs;
-                    try
+                    long seenSignals;
+                    do
                     {
-                        carryArgs = await OnBeforeContinueAsNewAsync().ConfigureAwait(true);
-                    }
-                    catch (Exception ex) when (ex is not FailureException && ex is not OperationCanceledException)
-                    {
+                        // Existing update-only runs take this same wait and snapshot once,
+                        // without any new commands or patch markers.
+                        await Workflow.WaitConditionAsync(
+                            () => Workflow.AllHandlersFinished).ConfigureAwait(true);
+                        seenSignals = SignalsAdmitted;
+                        try
+                        {
+                            carryArgs = await OnBeforeContinueAsNewAsync().ConfigureAwait(true);
+                        }
+                        catch (Exception ex) when (ex is not FailureException && ex is not OperationCanceledException)
+                        {
 #pragma warning disable CA1848 // Use LoggerMessage delegates for performance
-                        Workflow.Logger.LogError(
-                            ex, "OnBeforeContinueAsNewAsync failed for '{WorkflowId}'", workflowId);
+                            Workflow.Logger.LogError(
+                                ex, "OnBeforeContinueAsNewAsync failed for '{WorkflowId}'", workflowId);
 #pragma warning restore CA1848
-                        throw new ApplicationFailureException(
-                            $"DurableObject pre-CAN hook failed: {ex.Message}",
-                            ex,
-                            errorType: "ContinueAsNewFailure",
-                            nonRetryable: true);
+                            throw new ApplicationFailureException(
+                                $"DurableObject pre-CAN hook failed: {ex.Message}",
+                                ex,
+                                errorType: "ContinueAsNewFailure",
+                                nonRetryable: true);
+                        }
+                    }
+                    while (!_deactivating && !_deactivated &&
+                        (seenSignals != SignalsAdmitted || !Workflow.AllHandlersFinished));
+
+                    if (_deactivating || _deactivated)
+                    {
+                        break;
                     }
 
                     throw Workflow.CreateContinueAsNewException(Workflow.Info.WorkflowType, carryArgs);

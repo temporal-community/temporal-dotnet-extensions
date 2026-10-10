@@ -41,12 +41,10 @@ public sealed class ProxyAttributeGuardTests
         Assert.Contains("[WorkflowUpdate]", ex.Message, StringComparison.Ordinal);
     }
 
-    // [WorkflowSignal] method → InvalidOperationException (signals banned v1).
     [Fact]
-    public void SignalMethod_ThrowsInvalidOperation()
+    public void SignalMethod_IsAccepted()
     {
-        var ex = Assert.Throws<InvalidOperationException>(() => CreateProxy<IWithSignal>());
-        Assert.Contains("[WorkflowSignal]", ex.Message, StringComparison.Ordinal);
+        Assert.NotNull(CreateProxy<IWithSignal>());
     }
 
     // DeactivateAsync inherited from IDurableObject carries [WorkflowUpdate] — no throw.
@@ -87,7 +85,6 @@ public sealed class ProxyAttributeGuardTests
     [Workflow]
     private interface IWithSignal : IDurableObject
     {
-        // Signals banned in v1.
         [WorkflowSignal] Task SomeSignalAsync();
     }
 

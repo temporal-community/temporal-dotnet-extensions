@@ -16,7 +16,7 @@ public sealed class DurableObjectContractAnalyzerTests
             public sealed class WorkflowInitAttribute : System.Attribute { }
             public sealed class WorkflowUpdateAttribute : System.Attribute { }
             public sealed class WorkflowQueryAttribute : System.Attribute { }
-            public sealed class WorkflowSignalAttribute : System.Attribute { }
+            public sealed class WorkflowSignalAttribute : System.Attribute { public bool Dynamic { get; set; } }
         }
 
         namespace TemporalCommunity.DurableObjects
@@ -34,7 +34,7 @@ public sealed class DurableObjectContractAnalyzerTests
         """;
 
     [Fact]
-    public async Task ReportsInvalidContractShapeAndSignal()
+    public async Task ReportsInvalidContractShapeButAllowsSignal()
     {
         var diagnostics = await AnalyzeAsync("""
             using Temporalio.Workflows;
@@ -47,8 +47,73 @@ public sealed class DurableObjectContractAnalyzerTests
             }
             """);
 
-        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == DurableObjectContractAnalyzer.InvalidContractMethodId);
-        Assert.Contains(diagnostics, diagnostic => diagnostic.Id == DurableObjectContractAnalyzer.SignalNotSupportedId);
+        Assert.Equal(DurableObjectContractAnalyzer.InvalidContractMethodId, Assert.Single(diagnostics).Id);
+        Assert.DoesNotContain(new DurableObjectContractAnalyzer().SupportedDiagnostics,
+            diagnostic => diagnostic.Id == DurableObjectContractAnalyzer.SignalNotSupportedId);
+    }
+
+    [Theory]
+    [InlineData("[WorkflowSignal] int Wake();")]
+    [InlineData("[WorkflowSignal(Dynamic = true)] System.Threading.Tasks.Task WakeAsync();")]
+    [InlineData("[WorkflowSignal] void Wake();")]
+    [InlineData("[WorkflowSignal] System.Threading.Tasks.Task<int> WakeAsync();")]
+    [InlineData("[WorkflowSignal] System.Threading.Tasks.ValueTask WakeAsync();")]
+    [InlineData("[WorkflowSignal, WorkflowUpdate] System.Threading.Tasks.Task WakeAsync();")]
+    [InlineData("[WorkflowSignal, WorkflowQuery] int Wake();")]
+    [InlineData("[WorkflowUpdate, WorkflowQuery] System.Threading.Tasks.Task WakeAsync();")]
+    [InlineData("[WorkflowSignal, WorkflowUpdate, WorkflowQuery] System.Threading.Tasks.Task WakeAsync();")]
+    public async Task RejectsInvalidSignalReturnsAndMultipleHandlerAttributes(string member)
+    {
+        var diagnostics = await AnalyzeAsync($$"""
+            using Temporalio.Workflows;
+            public interface IBad : TemporalCommunity.DurableObjects.IDurableObject
+            {
+                {{member}}
+            }
+            """);
+
+        Assert.Equal(DurableObjectContractAnalyzer.InvalidContractMethodId, Assert.Single(diagnostics).Id);
+    }
+
+    [Fact]
+    public async Task AllowsSignalsOnConcreteAndAbstractObjects()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            using Temporalio.Workflows;
+            using TemporalCommunity.DurableObjects;
+            public abstract class Parent : DurableObjectBase
+            {
+                [WorkflowSignal] public System.Threading.Tasks.Task WakeAsync() =>
+                    System.Threading.Tasks.Task.CompletedTask;
+            }
+            public sealed class Child : Parent
+            {
+                [WorkflowRun] public System.Threading.Tasks.Task RunAsync() =>
+                    System.Threading.Tasks.Task.CompletedTask;
+                [WorkflowSignal] public System.Threading.Tasks.Task NotifyAsync() =>
+                    System.Threading.Tasks.Task.CompletedTask;
+            }
+            """);
+
+        Assert.Empty(diagnostics);
+    }
+
+    [Theory]
+    [InlineData("[WorkflowSignal] public int Bad() => 0;")]
+    [InlineData("[WorkflowSignal(Dynamic = true)] public System.Threading.Tasks.Task BadAsync() => System.Threading.Tasks.Task.CompletedTask;")]
+    [InlineData("[WorkflowSignal] public System.Threading.Tasks.Task<int> BadAsync() => System.Threading.Tasks.Task.FromResult(0);")]
+    [InlineData("[WorkflowSignal, WorkflowUpdate] public System.Threading.Tasks.Task BadAsync() => System.Threading.Tasks.Task.CompletedTask;")]
+    public async Task InvalidConcreteSignalReportsDO0001(string member)
+    {
+        var diagnostics = await AnalyzeAsync($$"""
+            using Temporalio.Workflows;
+            public sealed class BadObject : TemporalCommunity.DurableObjects.DurableObjectBase
+            {
+                [WorkflowRun] public System.Threading.Tasks.Task RunAsync() => System.Threading.Tasks.Task.CompletedTask;
+                {{member}}
+            }
+            """);
+        Assert.Equal(DurableObjectContractAnalyzer.InvalidContractMethodId, Assert.Single(diagnostics).Id);
     }
 
     [Fact]
@@ -60,6 +125,24 @@ public sealed class DurableObjectContractAnalyzerTests
             """);
 
         Assert.Single(diagnostics, diagnostic => diagnostic.Id == DurableObjectContractAnalyzer.MissingWorkflowRunId);
+    }
+
+    [Fact]
+    public async Task RejectsDynamicSignalDeclaredOnAbstractAncestor()
+    {
+        var diagnostics = await AnalyzeAsync("""
+            using Temporalio.Workflows;
+            public abstract class Parent : TemporalCommunity.DurableObjects.DurableObjectBase
+            {
+                [WorkflowSignal(Dynamic = true)]
+                public System.Threading.Tasks.Task CatchAllAsync() => System.Threading.Tasks.Task.CompletedTask;
+            }
+            public sealed class Child : Parent
+            {
+                [WorkflowRun] public System.Threading.Tasks.Task RunAsync() => System.Threading.Tasks.Task.CompletedTask;
+            }
+            """);
+        Assert.Equal(DurableObjectContractAnalyzer.InvalidContractMethodId, Assert.Single(diagnostics).Id);
     }
 
     [Fact]

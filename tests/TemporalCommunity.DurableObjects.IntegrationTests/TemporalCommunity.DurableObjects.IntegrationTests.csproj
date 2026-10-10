@@ -27,6 +27,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\..\docs\snippets\SignalInbox.cs" Link="Examples\SignalInbox.cs" />
     <None Include="TestData\*.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

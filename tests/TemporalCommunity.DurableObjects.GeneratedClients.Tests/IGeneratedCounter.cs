@@ -10,4 +10,10 @@ public interface IGeneratedCounter : IDurableObject
 
     [WorkflowQuery("read-value")]
     int GetValue();
+
+    [WorkflowSignal("set-value")]
+    Task SetValueAsync(int amount, string? label);
+
+    [WorkflowSignal]
+    Task WakeAsync();
 }

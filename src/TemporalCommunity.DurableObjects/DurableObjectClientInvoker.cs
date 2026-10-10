@@ -29,6 +29,26 @@ public sealed class DurableObjectClientInvoker
         _defaultCallOptions = defaultCallOptions ?? new DurableObjectCallOptions();
     }
 
+    /// <summary>
+    /// Records a signal, starting the object if needed. Completion acknowledges server receipt,
+    /// not activation, authorization, or handler completion.
+    /// </summary>
+    public async Task SignalAsync(
+        string signalName,
+        IReadOnlyCollection<object?> args,
+        DurableObjectCallOptions? callOptions = null)
+    {
+        await _client.StartWorkflowAsync(
+            _workflowType,
+            Array.Empty<object?>(),
+            new WorkflowOptions(_objectId, _taskQueue)
+            {
+                StartSignal = signalName,
+                StartSignalArgs = args,
+                Rpc = (callOptions ?? _defaultCallOptions).ToRpcOptions(),
+            }).ConfigureAwait(false);
+    }
+
     /// <summary>Starts the object when needed and submits the update without a read-then-start race.</summary>
     public async Task ExecuteUpdateAsync(
         string updateName,

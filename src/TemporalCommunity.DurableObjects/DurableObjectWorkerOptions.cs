@@ -11,8 +11,8 @@ namespace TemporalCommunity.DurableObjects;
 public sealed record DurableObjectWorkerOptions
 {
     /// <summary>
-    /// When <see langword="true"/> (default), update handlers run strictly turn-based
-    /// (non-reentrant): while one handler is between awaits, subsequent updates wait.
+    /// When <see langword="true"/> (default), update and signal handlers share one turn-based
+    /// gate (non-reentrant): while one handler is between awaits, subsequent handlers wait.
     /// Mirrors Orleans grain behavior. Set to <see langword="false"/> only if you need
     /// reentrant update handlers and are managing concurrency yourself.
     /// </summary>
@@ -53,4 +53,12 @@ public sealed record DurableObjectWorkerOptions
     /// </para>
     /// </remarks>
     public Func<HandleUpdateInput, bool>? Authorize { get; init; }
+
+    /// <summary>
+    /// Optional synchronous, deterministic signal authorization. Denials are dropped with a
+    /// Warning; callback errors are dropped with an Error. Neither is returned to the sender.
+    /// Required when <see cref="Authorize"/> is configured and registered objects declare signals.
+    /// No external I/O is permitted; inspect only already available arguments and headers.
+    /// </summary>
+    public Func<HandleSignalInput, bool>? AuthorizeSignal { get; init; }
 }

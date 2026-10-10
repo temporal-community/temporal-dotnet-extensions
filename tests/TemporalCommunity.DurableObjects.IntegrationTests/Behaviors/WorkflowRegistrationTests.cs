@@ -1,3 +1,5 @@
+using System.Reflection;
+using FakeItEasy;
 using TemporalCommunity.DurableObjects.IntegrationTests.Infrastructure;
 using TemporalCommunity.DurableObjects.IntegrationTests.Objects;
 using Xunit;
@@ -17,13 +19,17 @@ public sealed class WorkflowRegistrationTests : DurableObjectTestBase
     {
         var tq = UniqueTaskQueue();
 
-        // Use assembly scan on the IntegrationTests assembly — finds AuditedCounter and other
-        // concrete DurableObjectBase subclasses. Note: CounterWithSignal is in the UNIT test
-        // assembly, not here, so the scan in the integration tests is clean.
+        // Bound this positive scan to its fixtures: the full integration assembly also
+        // contains deliberately unsupported workflows used by signal-guard tests.
+        var assembly = A.Fake<Assembly>();
+        A.CallTo(() => assembly.GetTypes()).Returns(
+            [typeof(AuditedCounter), typeof(DurableObjectBase), typeof(AuditActivities)]);
         var options = new TemporalCommunity.DurableObjects.DurableObjectWorkerOptions();
         var workerOptions = new Temporalio.Worker.TemporalWorkerOptions(tq);
-        // Register by assembly scan of this test assembly (integration tests).
-        workerOptions.AddDurableObjectWorkflows(typeof(AuditedCounter).Assembly, options);
+        workerOptions.AddDurableObjectWorkflows(assembly, options);
+        Assert.Contains(workerOptions.Workflows, definition => definition.Type == typeof(AuditedCounter));
+        Assert.DoesNotContain(workerOptions.Workflows, definition => definition.Type == typeof(DurableObjectBase));
+        Assert.DoesNotContain(workerOptions.Workflows, definition => definition.Type == typeof(AuditActivities));
         workerOptions.AddAllActivities(new AuditActivities());
 
         using var worker = new Temporalio.Worker.TemporalWorker(Client, workerOptions);

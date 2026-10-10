@@ -4,11 +4,11 @@ using Temporalio.Client;
 namespace TemporalCommunity.DurableObjects;
 
 /// <summary>
-/// Per-call transport options for DurableObject queries and updates.
+/// Per-call transport options for DurableObject queries, updates, and signals.
 /// </summary>
 /// <remarks>
 /// These options affect only the client RPC. Cancelling an RPC does not cancel an update that the
-/// Temporal server has already accepted. Values are snapshotted when this instance is constructed,
+/// Temporal server has already accepted, or retract a recorded signal. Values are snapshotted when this instance is constructed,
 /// so later changes to caller-owned dictionaries or byte arrays are not observed.
 /// </remarks>
 public sealed class DurableObjectCallOptions

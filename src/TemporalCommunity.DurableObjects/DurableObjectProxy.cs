@@ -42,16 +42,21 @@ internal class DurableObjectProxy<T> : DispatchProxy
 
         var queryAttribute = targetMethod.GetCustomAttribute<WorkflowQueryAttribute>();
         var updateAttribute = targetMethod.GetCustomAttribute<WorkflowUpdateAttribute>();
+        var signalAttribute = targetMethod.GetCustomAttribute<WorkflowSignalAttribute>();
         var isQuery = queryAttribute is not null;
         var callArgs = args ?? Array.Empty<object?>();
 
         // The SDK trims a trailing "Async" from update names (WorkflowUpdateDefinition.cs:156-161)
         // but NOT from query names. Mirror that convention here.
-        var rpcName = isQuery ? queryAttribute!.Name : updateAttribute?.Name;
+        var rpcName = isQuery ? queryAttribute!.Name : signalAttribute?.Name ?? updateAttribute?.Name;
         rpcName ??= targetMethod.Name;
-        if (!isQuery && updateAttribute?.Name is null &&
+        if (!isQuery && updateAttribute?.Name is null && signalAttribute?.Name is null &&
             rpcName.EndsWith("Async", StringComparison.Ordinal))
             rpcName = rpcName[..^"Async".Length];
+
+        if (signalAttribute is not null)
+            return new DurableObjectClientInvoker(_client, _objectId, _workflowType, _taskQueue, _callOptions)
+                .SignalAsync(rpcName, callArgs);
 
         // Task (void update)
         if (targetMethod.ReturnType == typeof(Task))
@@ -168,7 +173,7 @@ internal class DurableObjectProxy<T> : DispatchProxy
     /// <returns>A typed proxy implementing <typeparamref name="T"/>.</returns>
     /// <exception cref="InvalidOperationException">
     /// Thrown when <typeparamref name="T"/> violates the DurableObject method attribute contract
-    /// (e.g., a signal method is present, or a Task-returning method lacks <c>[WorkflowUpdate]</c>).
+    /// (e.g., a Task-returning method lacks <c>[WorkflowUpdate]</c> or <c>[WorkflowSignal]</c>).
     /// </exception>
     internal static T Create(
         ITemporalClient client,
@@ -202,13 +207,11 @@ internal class DurableObjectProxy<T> : DispatchProxy
             var hasQuery = method.GetCustomAttribute<WorkflowQueryAttribute>() is not null;
             var hasSignal = method.GetCustomAttribute<WorkflowSignalAttribute>() is not null;
 
-            // Signals are unsupported; mutations use acknowledged updates.
-            if (hasSignal)
+            if ((hasSignal ? 1 : 0) + (hasQuery ? 1 : 0) + (hasUpdate ? 1 : 0) != 1)
             {
                 throw new InvalidOperationException(
-                    $"Method '{method.Name}' on '{interfaceType.Name}' carries [WorkflowSignal]. " +
-                    "Signals are not supported on DurableObjects in v1. Use [WorkflowUpdate] instead. " +
-                    "See docs/durable-objects.md for supported contract methods.");
+                    $"Method '{method.Name}' on '{interfaceType.Name}' must carry exactly one of " +
+                    "[WorkflowSignal], [WorkflowUpdate], or [WorkflowQuery].");
             }
 
             var returnsTask = method.ReturnType == typeof(Task);
@@ -220,12 +223,12 @@ internal class DurableObjectProxy<T> : DispatchProxy
             {
                 // Task-returning methods must be [WorkflowUpdate]. The SDK forbids Task-returning
                 // [WorkflowQuery] (WorkflowQueryDefinition.AssertValid throws "cannot return a Task").
-                if (!hasUpdate)
+                if (!hasUpdate && !(hasSignal && returnsTask))
                 {
                     throw new InvalidOperationException(
                         $"Method '{method.Name}' on '{interfaceType.Name}' returns " +
                         $"'{method.ReturnType.Name}' but does not carry [WorkflowUpdate]. " +
-                        "Task-returning DurableObject methods must be [WorkflowUpdate].");
+                        "Task-returning DurableObject methods must be [WorkflowUpdate], or Task [WorkflowSignal].");
                 }
             }
             else

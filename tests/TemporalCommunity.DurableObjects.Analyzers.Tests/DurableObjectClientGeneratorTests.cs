@@ -18,8 +18,14 @@ public sealed class DurableObjectClientGeneratorTests
 
             namespace GeneratedConsumer;
 
+            public interface INotifications
+            {
+                [WorkflowSignal("inherited-notify")]
+                System.Threading.Tasks.Task NotifyAsync(string? label);
+            }
+
             [Workflow]
-            public interface ICounter : IDurableObject
+            public interface ICounter : IDurableObject, INotifications
             {
                 [WorkflowUpdate]
                 System.Threading.Tasks.Task IncrementAsync(int amount);
@@ -32,6 +38,40 @@ public sealed class DurableObjectClientGeneratorTests
 
                 [WorkflowQuery("read-count")]
                 int GetCount(string scope);
+
+                [WorkflowSignal]
+                System.Threading.Tasks.Task WakeAsync();
+
+                [WorkflowSignal]
+                System.Threading.Tasks.Task WakeAsync(int amount);
+
+                [WorkflowSignal("send-\"message\"")]
+                System.Threading.Tasks.Task SendAsync(string? @event, int @params);
+
+                [WorkflowSignal]
+                System.Threading.Tasks.Task Notify(int value);
+
+                [WorkflowSignal]
+                System.Threading.Tasks.Task @event();
+            }
+
+            public static class Consumer
+            {
+                public static async System.Threading.Tasks.Task Use(
+                    CounterDurableObjectClient client, DurableObjectCallOptions options)
+                {
+                    await client.WakeAsync();
+                    await client.WakeAsync(options);
+                    await client.WakeAsync(2);
+                    await client.WakeAsync(2, options);
+                    await client.SendAsync(null, 3);
+                    await client.SendAsync(null, 3, options);
+                    await client.NotifyAsync(null);
+                    await client.NotifyAsync(null, options);
+                    await client.Notify(4, options);
+                    await client.@event(options);
+                    await ((ICounter)client).WakeAsync();
+                }
             }
             """);
         GeneratorDriver driver = CreateDriver();
@@ -50,6 +90,18 @@ public sealed class DurableObjectClientGeneratorTests
         Assert.Contains("ExecuteUpdateAsync<global::System.Int32>(\"add-value\"", generated, StringComparison.Ordinal);
         Assert.Contains("\"read-count\"", generated, StringComparison.Ordinal);
         Assert.Contains("DurableObjectGeneratedClientRegistry.Register", generated, StringComparison.Ordinal);
+        Assert.Contains("SignalAsync(\"Wake\", global::System.Array.Empty<object?>());", generated, StringComparison.Ordinal);
+        Assert.Contains("SignalAsync(\"Wake\", new object?[] { amount }, callOptions);", generated, StringComparison.Ordinal);
+        Assert.Contains("SignalAsync(\"send-\\\"message\\\"\", new object?[] { @event, @params }, callOptions);",
+            generated, StringComparison.Ordinal);
+        Assert.Contains("SignalAsync(\"inherited-notify\", new object?[] { label }, callOptions);",
+            generated, StringComparison.Ordinal);
+        Assert.Contains("SignalAsync(\"Notify\", new object?[] { value }, callOptions);",
+            generated, StringComparison.Ordinal);
+        Assert.Contains("public global::System.Threading.Tasks.Task @event(", generated, StringComparison.Ordinal);
+        using var assembly = new MemoryStream();
+        var emit = outputCompilation.Emit(assembly);
+        Assert.True(emit.Success, string.Join(Environment.NewLine, emit.Diagnostics));
     }
 
     [Fact]
@@ -115,6 +167,48 @@ public sealed class DurableObjectClientGeneratorTests
             "properties and events", StringComparison.Ordinal));
         Assert.Contains(diagnostics, diagnostic => diagnostic.GetMessage(CultureInfo.InvariantCulture).Contains(
             "call-options overload", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("[WorkflowSignal] System.Threading.Tasks.Task<int> WakeAsync();", "handler shape")]
+    [InlineData("[WorkflowSignal] System.Threading.Tasks.ValueTask WakeAsync();", "handler shape")]
+    [InlineData("[WorkflowSignal] void Wake();", "handler shape")]
+    [InlineData("[WorkflowSignal] int Wake();", "handler shape")]
+    [InlineData("[WorkflowSignal, WorkflowUpdate] System.Threading.Tasks.Task WakeAsync();", "handler shape")]
+    [InlineData("[WorkflowSignal, WorkflowQuery] System.Threading.Tasks.Task WakeAsync();", "handler shape")]
+    [InlineData("[WorkflowSignal(Dynamic = true)] System.Threading.Tasks.Task WakeAsync();", "dynamic handler")]
+    [InlineData("""
+        [WorkflowSignal] System.Threading.Tasks.Task NamedAsync();
+        [WorkflowSignal(Dynamic = true)] System.Threading.Tasks.Task CatchAllAsync(string name, Temporalio.Converters.IRawValue[] args);
+        """, "dynamic handler")]
+    [InlineData("[WorkflowSignal] System.Threading.Tasks.Task WakeAsync(int callOptions);", "parameter name")]
+    [InlineData("""
+        [WorkflowSignal] System.Threading.Tasks.Task WakeAsync(int value);
+        [WorkflowSignal] System.Threading.Tasks.Task WakeAsync(int value, DurableObjectCallOptions options);
+        """, "call-options overload")]
+    [InlineData("""
+        [WorkflowSignal] System.Threading.Tasks.Task ReadAsync();
+        [WorkflowQuery] int Read();
+        """, "generated method name")]
+    public void ReportsUnsupportedSignalShapesWithoutGeneratorFailure(string members, string reason)
+    {
+        var compilation = CreateCompilation($$"""
+            using Temporalio.Workflows;
+            using TemporalCommunity.DurableObjects;
+            public interface ISignals : IDurableObject
+            {
+                {{members}}
+            }
+            """);
+
+        var result = CreateDriver().RunGenerators(compilation).GetRunResult();
+        var diagnostic = Assert.Single(result.Diagnostics);
+
+        Assert.Equal(DurableObjectClientGenerator.UnsupportedContractId, diagnostic.Id);
+        Assert.Contains(reason, diagnostic.GetMessage(CultureInfo.InvariantCulture), StringComparison.Ordinal);
+        Assert.Null(Assert.Single(result.Results).Exception);
+        Assert.DoesNotContain(result.GeneratedTrees,
+            tree => tree.FilePath.EndsWith("ISignals.DurableObjectClient.g.cs", StringComparison.Ordinal));
     }
 
     private static CSharpCompilation CreateCompilation(string source)

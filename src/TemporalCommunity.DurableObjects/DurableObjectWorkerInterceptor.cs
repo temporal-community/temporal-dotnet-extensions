@@ -14,9 +14,9 @@ namespace TemporalCommunity.DurableObjects;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Lifecycle admission uses process-static state keyed by workflow ID. A supported dedicated
-/// Durable Object process connects to one Temporal namespace; multiple namespaces in one process
-/// are unsupported.
+/// Lifecycle admission uses the SDK's execution-local instance, including before the run method
+/// starts. The supported dedicated Durable Object topology remains one Temporal namespace per
+/// process; multiple namespaces in one process are unsupported.
 /// </para>
 /// <para>
 /// <b>Responsibilities (order matters inside <c>HandleUpdateAsync</c>):</b>
@@ -71,6 +71,7 @@ public sealed class DurableObjectWorkerInterceptor : IWorkerInterceptor
 {
     private readonly bool _serialize;
     private readonly Func<HandleUpdateInput, bool>? _authorize;
+    private readonly Func<HandleSignalInput, bool>? _authorizeSignal;
 
     /// <summary>
     /// Initializes a new <see cref="DurableObjectWorkerInterceptor"/> with the given settings.
@@ -89,9 +90,25 @@ public sealed class DurableObjectWorkerInterceptor : IWorkerInterceptor
     public DurableObjectWorkerInterceptor(
         bool serialize = true,
         Func<HandleUpdateInput, bool>? authorize = null)
+        : this(serialize, authorize, null)
+    {
+    }
+
+    /// <summary>Creates an interceptor with independent update and signal authorization.</summary>
+    /// <param name="serialize">Serialize updates and signals together across awaits.</param>
+    /// <param name="authorize">Existing synchronous update authorization.</param>
+    /// <param name="authorizeSignal">
+    /// Synchronous deterministic signal authorization. Denials and callback failures drop and log.
+    /// No external I/O is allowed.
+    /// </param>
+    public DurableObjectWorkerInterceptor(
+        bool serialize,
+        Func<HandleUpdateInput, bool>? authorize,
+        Func<HandleSignalInput, bool>? authorizeSignal)
     {
         _serialize = serialize;
         _authorize = authorize;
+        _authorizeSignal = authorizeSignal;
     }
 
     /// <summary>
@@ -118,7 +135,7 @@ public sealed class DurableObjectWorkerInterceptor : IWorkerInterceptor
 
     /// <inheritdoc/>
     public WorkflowInboundInterceptor InterceptWorkflow(WorkflowInboundInterceptor nextInterceptor) =>
-        new DurableObjectWorkflowInterceptor(nextInterceptor, _serialize, _authorize);
+        new DurableObjectWorkflowInterceptor(nextInterceptor, _serialize, _authorize, _authorizeSignal);
 
 #if !NETCOREAPP3_0_OR_GREATER
     /// <inheritdoc/>
@@ -137,24 +154,152 @@ public sealed class DurableObjectWorkerInterceptor : IWorkerInterceptor
     {
         private readonly bool _serialize;
         private readonly Func<HandleUpdateInput, bool>? _authorize;
+        private readonly Func<HandleSignalInput, bool>? _authorizeSignal;
         private bool _gate; // serialization gate — per-workflow-execution instance
 
         public DurableObjectWorkflowInterceptor(
             WorkflowInboundInterceptor next,
             bool serialize,
-            Func<HandleUpdateInput, bool>? authorize)
+            Func<HandleUpdateInput, bool>? authorize,
+            Func<HandleSignalInput, bool>? authorizeSignal)
             : base(next)
         {
             _serialize = serialize;
             _authorize = authorize;
+            _authorizeSignal = authorizeSignal;
+        }
+
+        public override async Task HandleSignalAsync(HandleSignalInput input)
+        {
+            if (Workflow.Instance is not DurableObjectBase instance)
+            {
+                await Next.HandleSignalAsync(input).ConfigureAwait(true);
+                return;
+            }
+
+            // Startup scanning can be bypassed by manual interceptors, late registration,
+            // or Workflow.DynamicSignal assignment. Check the actual SDK-selected handler.
+            if (input.Definition.Dynamic)
+            {
+                ReportSignalDrop(input.Signal, "DynamicSignalNotSupported", LogLevel.Error);
+                return;
+            }
+
+            if (_authorize is not null && _authorizeSignal is null)
+            {
+                ReportSignalDrop(input.Signal, "SignalAuthorizationNotConfigured", LogLevel.Error);
+                return;
+            }
+
+            if (!instance.IsActivated)
+            {
+                await Workflow.WaitConditionAsync(() => instance.IsActivated).ConfigureAwait(true);
+            }
+
+            if (instance.IsSignalAdmissionClosed)
+            {
+                ReportSignalDrop(input.Signal, "ObjectDeactivating", LogLevel.Warning);
+                return;
+            }
+
+            bool authorized;
+            try
+            {
+                authorized = _authorizeSignal?.Invoke(input) ?? true;
+            }
+#pragma warning disable CA1031 // Signal callback and handler failures must not wedge the object
+            catch (Exception ex) when (ShouldContainSignalException(ex))
+            {
+                ReportSignalDrop(input.Signal, "AuthorizationFailure", LogLevel.Error, ex.GetType().FullName);
+                return;
+            }
+#pragma warning restore CA1031
+
+            if (!authorized)
+            {
+                ReportSignalDrop(input.Signal, "Unauthorized", LogLevel.Warning);
+                return;
+            }
+
+            if (_serialize)
+            {
+                while (_gate)
+                {
+                    await Workflow.WaitConditionAsync(() => !_gate).ConfigureAwait(true);
+                }
+
+                _gate = true;
+            }
+
+            try
+            {
+                if (instance.IsSignalAdmissionClosed)
+                {
+                    ReportSignalDrop(input.Signal, "ObjectDeactivating", LogLevel.Warning);
+                    return;
+                }
+
+                // Accepted signals cannot be rejected during rollover. A new admission during
+                // an asynchronous snapshot requires draining and taking another snapshot.
+                instance.SignalAdmitted();
+                try
+                {
+                    await Next.HandleSignalAsync(input).ConfigureAwait(true);
+                }
+#pragma warning disable CA1031 // Intentional signal exception containment, without rollback
+                catch (Exception ex) when (ShouldContainSignalException(ex))
+                {
+                    ReportSignalDrop(input.Signal, "SignalHandlerFailure", LogLevel.Error, ex.GetType().FullName);
+                }
+#pragma warning restore CA1031
+            }
+            finally
+            {
+                if (_serialize)
+                {
+                    _gate = false;
+                }
+            }
+        }
+
+        private static bool ShouldContainSignalException(Exception exception) =>
+            exception is not ContinueAsNewException &&
+            !(exception is OperationCanceledException && Workflow.CancellationToken.IsCancellationRequested);
+
+        private static void ReportSignalDrop(
+            string signal, string category, LogLevel level, string? errorType = null)
+        {
+            // Only identifiers and type names: never attach exception objects, messages,
+            // payloads or headers. Workflow.Logger suppresses ordinary replay duplicates.
+#pragma warning disable CA1031 // A reporting failure must not defeat signal containment
+#pragma warning disable CA1848 // One stable structured event, not a hot-path diagnostic
+            try
+            {
+                var logger = Workflow.Logger;
+                if (!logger.IsEnabled(level))
+                {
+                    return;
+                }
+
+                logger.Log(
+                    level,
+                    new EventId(4101, "DurableObjectSignalDropped"),
+                    "DurableObject signal dropped: {Category}; Signal={Signal}; ErrorType={ErrorType}",
+                    category, signal, errorType);
+            }
+            catch (Exception)
+            {
+                // Best effort only. Never recursively report a broken logging provider.
+            }
+#pragma warning restore CA1848
+#pragma warning restore CA1031
         }
 
         public override async Task<object?> HandleUpdateAsync(HandleUpdateInput input)
         {
-            DurableObjectBase.TryGetCurrent(Workflow.Info.WorkflowId, out var instance);
-
-            // Updates preserve cold-write behavior, but cannot enter authorization, serialization,
-            // or user code until activation has completed.
+            var instance = Workflow.Instance as DurableObjectBase;
+            // Update-with-start can enter before RunAsync registers the object. Use the
+            // execution-local instance and wait before authorization, serialization, or user code.
             if (instance is not null && !instance.IsActivated)
             {
                 await Workflow.WaitConditionAsync(() => instance.IsActivated).ConfigureAwait(true);
@@ -218,12 +363,11 @@ public sealed class DurableObjectWorkerInterceptor : IWorkerInterceptor
 
             try
             {
-                // Lifecycle gates. Re-read the registry after waiting at the serialization gate:
-                // activation may have completed and rollover/deactivation may have started.
+                // Lifecycle gates. Rollover/deactivation may have started.
                 // MUST come after the serialization wait (see class-level remarks for the
                 // ordering rationale — checking before the gate allows a window where an update
                 // passes the drain check, waits, then executes after _deactivating is set).
-                if (DurableObjectBase.TryGetCurrent(Workflow.Info.WorkflowId, out instance))
+                if (instance is not null)
                 {
                     if (instance.IsContinuingAsNew)
                     {
@@ -279,8 +423,7 @@ public sealed class DurableObjectWorkerInterceptor : IWorkerInterceptor
 
         public override object? HandleQuery(HandleQueryInput input)
         {
-            if (DurableObjectBase.TryGetCurrent(Workflow.Info.WorkflowId, out var instance)
-                && !instance.IsActivated)
+            if (Workflow.Instance is DurableObjectBase instance && !instance.IsActivated)
             {
                 throw new ApplicationFailureException(
                     "Object is not ready: activation is incomplete.",

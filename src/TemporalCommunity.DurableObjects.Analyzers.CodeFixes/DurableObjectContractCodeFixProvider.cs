@@ -14,7 +14,6 @@ public sealed class DurableObjectContractCodeFixProvider : CodeFixProvider
 {
     public override ImmutableArray<string> FixableDiagnosticIds => ImmutableArray.Create(
         DurableObjectContractAnalyzer.InvalidContractMethodId,
-        DurableObjectContractAnalyzer.SignalNotSupportedId,
         DurableObjectContractAnalyzer.DeactivateOverrideMissingWorkflowUpdateId);
 
     public override FixAllProvider GetFixAllProvider() => WellKnownFixAllProviders.BatchFixer;
@@ -37,16 +36,23 @@ public sealed class DurableObjectContractCodeFixProvider : CodeFixProvider
                 continue;
             }
 
-            var title = diagnostic.Id == DurableObjectContractAnalyzer.SignalNotSupportedId
-                ? "Replace signal with workflow update"
-                : "Add the required workflow handler attribute";
+            if (diagnostic.Id == DurableObjectContractAnalyzer.InvalidContractMethodId)
+            {
+                var semanticModel = await context.Document.GetSemanticModelAsync(context.CancellationToken)
+                    .ConfigureAwait(false);
+                if (semanticModel is null || ResolveAttributes(method, semanticModel).Any(resolved =>
+                    resolved.AttributeType.ToDisplayString() == "Temporalio.Workflows.WorkflowSignalAttribute"))
+                {
+                    continue;
+                }
+            }
+
             context.RegisterCodeFix(
                 CodeAction.Create(
-                    title,
+                    "Add the required workflow handler attribute",
                     cancellationToken => ApplyFixAsync(
                         context.Document,
                         method,
-                        diagnostic.Id,
                         cancellationToken),
                     equivalenceKey: diagnostic.Id),
                 diagnostic);
@@ -56,7 +62,6 @@ public sealed class DurableObjectContractCodeFixProvider : CodeFixProvider
     private static async Task<Document> ApplyFixAsync(
         Document document,
         MethodDeclarationSyntax method,
-        string diagnosticId,
         CancellationToken cancellationToken)
     {
         var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
@@ -74,20 +79,8 @@ public sealed class DurableObjectContractCodeFixProvider : CodeFixProvider
             ? ("global::Temporalio.Workflows.WorkflowUpdate", "Temporalio.Workflows.WorkflowUpdateAttribute", "Temporalio.Workflows.WorkflowQueryAttribute")
             : ("global::Temporalio.Workflows.WorkflowQuery", "Temporalio.Workflows.WorkflowQueryAttribute", "Temporalio.Workflows.WorkflowUpdateAttribute");
 
-        // The diagnostic fires whenever the correct attribute is missing, not only when no
-        // handler attribute is present at all - a method can carry a conflicting or unsupported
-        // one (a signal, or the opposite update/query attribute, e.g. a Task-returning
-        // DeactivateAsync override mistakenly marked [WorkflowQuery]). Adding the correct
-        // attribute without removing a conflicting one would leave both on the method, which the
-        // SDK rejects. A method can also already carry both [WorkflowSignal] and the required
-        // attribute at once (DO0002 fires on the signal alone); in that case the required
-        // attribute must be kept, not duplicated. Attributes are matched by resolving through the
-        // semantic model rather than by spelling, so a `using Query = ...WorkflowQueryAttribute;`
-        // alias is still caught and an unrelated attribute that merely shares a name suffix is
-        // not removed.
-        var namesToRemove = diagnosticId == DurableObjectContractAnalyzer.SignalNotSupportedId
-            ? new[] { "Temporalio.Workflows.WorkflowSignalAttribute", conflictingMetadataName }
-            : new[] { conflictingMetadataName };
+        // Resolve attributes semantically so aliases are recognized and unrelated attributes kept.
+        var namesToRemove = new[] { conflictingMetadataName };
         var alreadyHasRequiredAttribute = ResolveAttributes(method, semanticModel)
             .Any(resolved => resolved.AttributeType.ToDisplayString() == requiredMetadataName);
         var updated = RemoveAttributesOfType(method, semanticModel, namesToRemove);
@@ -133,4 +126,3 @@ public sealed class DurableObjectContractCodeFixProvider : CodeFixProvider
         return method.WithAttributeLists(SyntaxFactory.List(keptLists));
     }
 }
-

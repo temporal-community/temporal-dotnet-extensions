@@ -2,7 +2,7 @@
 //
 // Design notes:
 //   - All mutating operations are [WorkflowUpdate] — callers get acknowledgement when
-//     the state change is durably recorded. [WorkflowSignal] is banned by this library.
+//     the handler completes. [WorkflowSignal] instead acknowledges server receipt, not completion.
 //   - Read operations are [WorkflowQuery] — read-only handlers; client calls still make a server RPC.
 //   - The interface extends IDurableObject so the factory can type-check and route RPCs.
 //   - [Workflow] on the interface is required by the Temporal .NET SDK; it is how the SDK

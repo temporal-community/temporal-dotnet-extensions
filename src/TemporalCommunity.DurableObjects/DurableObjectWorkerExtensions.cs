@@ -37,8 +37,8 @@ namespace TemporalCommunity.DurableObjects;
 ///     first execution).
 ///   </description></item>
 ///   <item><description>
-///     Rejects any scanned type that declares a <c>[WorkflowSignal]</c> method — signals are
-///     unsupported; use updates for acknowledged mutations.
+///     Rejects unsupported dynamic signals. Requires signal authorization when update authorization is configured and a registered
+///     DurableObject declares signals.
 ///   </description></item>
 ///   <item><description>
 ///     Registers each valid type as a workflow, plus <see cref="ReminderDispatcher"/> (always —
@@ -74,7 +74,8 @@ public static class DurableObjectWorkerExtensions
     /// Thrown when <paramref name="builder"/> or <paramref name="assembly"/> is <see langword="null"/>.
     /// </exception>
     /// <exception cref="InvalidOperationException">
-    /// Thrown when a scanned type carries a <c>[WorkflowSignal]</c> method (banned in v1) or
+    /// Thrown when a DurableObject declares an unsupported dynamic signal, configured update
+    /// authorization leaves declared signals unprotected, or
     /// when <c>WorkflowDefinition.Create(type)</c> fails validation.
     /// </exception>
     public static ITemporalWorkerServiceOptionsBuilder AddDurableObjectWorkflows(
@@ -104,7 +105,8 @@ public static class DurableObjectWorkerExtensions
     /// Thrown when <paramref name="workerOptions"/> or <paramref name="assembly"/> is <see langword="null"/>.
     /// </exception>
     /// <exception cref="InvalidOperationException">
-    /// Thrown when a scanned type carries a <c>[WorkflowSignal]</c> method (banned in v1) or
+    /// Thrown when a DurableObject declares an unsupported dynamic signal, configured update
+    /// authorization leaves declared signals unprotected, or
     /// when <c>WorkflowDefinition.Create(type)</c> fails validation.
     /// </exception>
     public static TemporalWorkerOptions AddDurableObjectWorkflows(
@@ -140,10 +142,6 @@ public static class DurableObjectWorkerExtensions
                 continue;
             }
 
-            // v1 policy: [WorkflowSignal] is banned on DurableObjects.
-            // Validate before WorkflowDefinition.Create so the error is clear.
-            RejectSignalMethods(type);
-
             // SDK-level validation: catches missing [WorkflowRun], bad signatures, etc.
             // WorkflowDefinition.Create throws ArgumentException on invalid types.
             workerOptions.AddWorkflow(type);
@@ -153,26 +151,31 @@ public static class DurableObjectWorkerExtensions
         // required for canonical-object reminders regardless of whether user types use them.
         workerOptions.AddWorkflow<ReminderDispatcher>();
 
+        // Dynamic handlers are stored separately from Signals by SDK 1.16.0.
+        // Include individually registered objects as well as this assembly's scanned objects.
+        if (workerOptions.Workflows.Any(definition =>
+                typeof(DurableObjectBase).IsAssignableFrom(definition.Type) &&
+                definition.DynamicSignal is not null))
+        {
+            throw new InvalidOperationException("DynamicSignal is not supported on DurableObjects.");
+        }
+
+        if (options.Authorize is not null && options.AuthorizeSignal is null &&
+            workerOptions.Workflows.Any(definition =>
+                typeof(DurableObjectBase).IsAssignableFrom(definition.Type) &&
+                definition.Signals.Count > 0))
+        {
+            throw new InvalidOperationException(
+                "AuthorizeSignal is required when Authorize is configured and DurableObjects declare signals.");
+        }
+
         // Auto-install DurableObjectWorkerInterceptor. Without this, the serialization gate,
         // drain-window gate, and exception safety net are all inert.
         // Preserve any interceptors already registered (e.g., OTel TracingInterceptor).
-        var interceptor = new DurableObjectWorkerInterceptor(options.Serialize, options.Authorize);
+        var interceptor = new DurableObjectWorkerInterceptor(
+            options.Serialize, options.Authorize, options.AuthorizeSignal);
         workerOptions.Interceptors = workerOptions.Interceptors is { } existing
             ? [.. existing, interceptor]
             : [interceptor];
-    }
-
-    private static void RejectSignalMethods(Type type)
-    {
-        foreach (var method in type.GetMethods())
-        {
-            if (method.IsDefined(typeof(WorkflowSignalAttribute), inherit: false))
-            {
-                throw new InvalidOperationException(
-                    $"DurableObject type '{type.FullName}' declares '{method.Name}' with " +
-                    $"[WorkflowSignal]. Signals are banned in v1 — all handlers must use " +
-                    $"[WorkflowUpdate] or [WorkflowQuery]. See docs/durable-objects.md for supported contract methods.");
-            }
-        }
     }
 }
