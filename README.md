@@ -55,7 +55,7 @@ dotnet add package TemporalCommunity.Extensions.Analyzers
 dotnet add package TemporalCommunity.DurableObjects.Analyzers
 ```
 
-> Requires Temporal Server v1.28.0 or later for Update-with-Start. The runtime targets .NET 10,
+> Requires Temporal Server v1.30.0 or later. The runtime targets .NET 10,
 > .NET 8, and .NET Standard 2.1. .NET Standard does not support visibility-listing APIs.
 
 ### Minimal example

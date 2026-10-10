@@ -47,6 +47,11 @@ This trades away Temporal's default fix-and-redeploy recovery: without the conve
 update completes once a fixed worker is deployed; with it, the update has already failed, and the
 caller must resend it after the fix. The conversion currently has no opt-out.
 
+A failed update is not rolled back. Workflow code has no transactions: `State` changes the
+handler made before throwing are kept, and activities it already ran have already had their
+effects. Validate inputs and finish any activity calls before the handler's first `State`
+assignment, and make activities idempotent so a resent update is safe.
+
 If the configured authorization predicate throws, the interceptor fails only that update with:
 
 ```
