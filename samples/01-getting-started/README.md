@@ -5,10 +5,12 @@ that tracks page views per URL slug.
 
 ## Why DurableObjects?
 
-Persistent state in distributed systems usually means a database row + a background worker +
-a polling loop. DurableObjects replace that pattern with a single addressable object that retains
-its state as long as it's needed, recovers after worker crashes, and records operations in Temporal
-workflow history. If you've used Orleans grains or
+Per-entity state in distributed systems is often kept in a database row and coordinated by a
+background worker and a polling loop. A DurableObject puts that state and its update logic in a
+single addressable object that retains its state as long as it's needed, recovers after worker
+crashes, and records operations in Temporal workflow history. It does not replace your database:
+in this sample, the count lives in the object, and an activity stands in for the write to a
+database or analytics service. If you've used Orleans grains or
 Akka.NET actors, DurableObjects are conceptually similar but backed by Temporal's durable
 execution engine instead of an in-process scheduler.
 

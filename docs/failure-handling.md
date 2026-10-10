@@ -34,14 +34,18 @@ the last row — see the note following the table.
 |-------------------------------|-----------------|
 | `ApplicationFailureException` (either `nonRetryable` value) | Update fails cleanly. Caller sees `WorkflowUpdateFailedException`. **Object stays alive.** |
 | `OperationCanceledException` | Update fails cleanly as cancellation. **Object stays alive.** |
-| Any other exception | Fails the **workflow task**, retried indefinitely. Update stays pending. **Object permanently wedged.** |
+| Any other exception | Fails the **workflow task**, which the server retries. The update stays pending, and later updates stall until a fixed worker is deployed. |
 
 **Framework safety net:** `DurableObjectWorkerInterceptor.HandleUpdateAsync` catches anything
 that is not `Temporalio.Exceptions.FailureException` (the SDK base type, of which
 `ApplicationFailureException` is the primary subclass) or `OperationCanceledException` and
 rethrows it as `ApplicationFailureException(errorType: "UnhandledUpdateException", nonRetryable: true)`.
-This converts the "permanently wedged" outcome into a clean caller-visible update failure. The
-caller sees `WorkflowUpdateFailedException`; the object stays alive.
+This converts the stalled workflow task into a clean caller-visible update failure. The
+caller sees `WorkflowUpdateFailedException`; the object stays alive and keeps accepting updates.
+
+This trades away Temporal's default fix-and-redeploy recovery: without the conversion, a pending
+update completes once a fixed worker is deployed; with it, the update has already failed, and the
+caller must resend it after the fix. The conversion currently has no opt-out.
 
 If the configured authorization predicate throws, the interceptor fails only that update with:
 

@@ -44,7 +44,8 @@ namespace TemporalCommunity.DurableObjects;
 ///   <item><description>
 ///     <b>Exception safety net</b> — converts arbitrary non-<c>FailureException</c> exceptions
 ///     into a non-retryable <c>ApplicationFailureException(errorType: "UnhandledUpdateException")</c>,
-///     preventing the workflow task from failing and the object from wedging permanently.
+///     preventing the workflow task from failing and later updates from stalling until a fixed
+///     worker is deployed.
 ///   </description></item>
 /// </list>
 /// </para>
@@ -240,8 +241,9 @@ public sealed class DurableObjectWorkerInterceptor : IWorkerInterceptor
 
                 // Exception safety net.
                 // Arbitrary exceptions from update handlers set currentActivationException in the
-                // SDK (WorkflowInstance.cs:1307, 1319), retrying the workflow task indefinitely
-                // and permanently wedging the object. Convert any such exception into a clean
+                // SDK (WorkflowInstance.cs:1307, 1319), failing the workflow task. The server retries
+                // it, so this and later updates stall until a fixed worker is deployed. Convert any
+                // such exception into a clean
                 // non-retryable ApplicationFailureException so the caller sees
                 // WorkflowUpdateFailedException and the object stays alive.
                 // FailureException and OperationCanceledException propagate unchanged.
