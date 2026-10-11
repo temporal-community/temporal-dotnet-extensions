@@ -87,6 +87,13 @@ dotnet new temporal-worker -n OrderProcessing.Worker
 | `--include-otel` | Adds Temporal tracing and an OTLP exporter; defaults to off. |
 | `--api` | Uses `WebApplication.CreateBuilder` and the Web SDK, with a root health/status endpoint; defaults to the Generic Host console setup. |
 
+The generated `Properties/launchSettings.json` follows the host mode: console mode has a
+`worker` profile, while `--api` has `http` and `https` localhost profiles. As with the stock
+ASP.NET Core templates, the HTTP and HTTPS ports are generated when the project is created
+(HTTP from 5000–5300, HTTPS from 7000–7300), so each generated project gets its own ports.
+These profiles set only the host's Development environment; configure Temporal connections
+and any OTLP exporter separately.
+
 The project includes `Program.cs`, a `TemporalWorkerConnection` helper, and a registered
 sample workflow/activity pair. It references `Temporalio`, `Temporalio.Extensions.Hosting`,
 and `TemporalCommunity.Extensions.Analyzers`.
@@ -131,10 +138,17 @@ When `-n` is omitted, the name is derived from the output/current directory.
 | Project | Purpose |
 |---|---|
 | `<Name>.Shared` | Workflow/activity types, connection configuration, and the analyzer reference, shared by Worker and Client. |
-| `<Name>.Worker` | Console host running the worker. |
-| `<Name>.Client` | One-shot console host that starts the sample workflow, prints its result, and exits. |
-| `<Name>.AppHost` *(Aspire only)* | Provisions the Temporal dev server and runs Worker and Client as resources. |
-| `<Name>.ServiceDefaults` *(Aspire only)* | Service discovery, HTTP resilience, and OpenTelemetry wiring for the console hosts. |
+| `<Name>.Worker` | Host running the worker. Console mode has a `worker` launch profile; `--api` generates `http` and `https` localhost profiles with ports generated at creation time. |
+| `<Name>.Client` | One-shot console host that starts the sample workflow, prints its result, and exits; has a `client` launch profile. |
+| `<Name>.AppHost` *(Aspire only)* | Provisions the Temporal dev server and runs Worker and Client as resources; has browser-launching `https` (default) and `http` profiles. The `http` profile sets `ASPIRE_ALLOW_UNSECURED_TRANSPORT=true` so the AppHost can run without TLS. |
+| `<Name>.ServiceDefaults` *(Aspire only)* | Service discovery, HTTP resilience, and OpenTelemetry (HTTP client and runtime instrumentation) for Worker and Client. With `--api`, it also adds ASP.NET Core instrumentation for the Worker and the default health checks behind the Worker's `/health` and `/alive` endpoints. |
+
+Launch profiles are developer conveniences. Worker and Client profiles set the Development
+environment; the AppHost profiles also set Aspire's dashboard, OTLP, and resource-service
+endpoints. Like the stock Aspire AppHost template, every web-facing port (Worker `--api` and all
+AppHost endpoints) is generated when the solution is created rather than fixed, which avoids
+collisions between solutions on the same machine. No profile configures Temporal connection or
+OpenTelemetry exporter environment variables.
 
 With `--api --aspire`, the Worker uses the ASP.NET Core health endpoint pattern: `/health`
 reports readiness and `/alive` reports liveness during development. The AppHost polls the Worker's

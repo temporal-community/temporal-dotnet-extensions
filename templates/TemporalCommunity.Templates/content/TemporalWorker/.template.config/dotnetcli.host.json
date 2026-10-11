@@ -8,6 +8,12 @@
       "longName": "include-otel",
       "shortName": ""
     },
+    "kestrelHttpPort": {
+      "isHidden": true
+    },
+    "kestrelHttpsPort": {
+      "isHidden": true
+    },
     "UseMinimalApi": {
       "longName": "api",
       "shortName": ""

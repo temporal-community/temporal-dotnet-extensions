@@ -53,6 +53,10 @@ public sealed class TemporalSolutionTemplateTests
             var workerProgramPath = Path.Combine(outputDirectory, $"{name}.Worker", "Program.cs");
             var clientProgramPath = Path.Combine(outputDirectory, $"{name}.Client", "Program.cs");
             var clientDemoServicePath = Path.Combine(outputDirectory, $"{name}.Client", "DemoService.cs");
+            var workerLaunchSettingsPath = Path.Combine(
+                outputDirectory, $"{name}.Worker", "Properties", "launchSettings.json");
+            var clientLaunchSettingsPath = Path.Combine(
+                outputDirectory, $"{name}.Client", "Properties", "launchSettings.json");
             var appHostDirectory = Path.Combine(outputDirectory, $"{name}.AppHost");
             var serviceDefaultsDirectory = Path.Combine(outputDirectory, $"{name}.ServiceDefaults");
 
@@ -68,6 +72,8 @@ public sealed class TemporalSolutionTemplateTests
             var workerProgramContent = await File.ReadAllTextAsync(workerProgramPath);
             var clientProgramContent = await File.ReadAllTextAsync(clientProgramPath);
             var clientDemoServiceContent = await File.ReadAllTextAsync(clientDemoServicePath);
+            var workerLaunchSettingsContent = await File.ReadAllTextAsync(workerLaunchSettingsPath);
+            var clientLaunchSettingsContent = await File.ReadAllTextAsync(clientLaunchSettingsPath);
 
             if (useMinimalApi)
             {
@@ -86,6 +92,16 @@ public sealed class TemporalSolutionTemplateTests
                 Assert.Contains("builder.Build().RunAsync()", workerProgramContent, StringComparison.Ordinal);
                 Assert.DoesNotContain("WebApplication.CreateBuilder(args)", workerProgramContent, StringComparison.Ordinal);
             }
+
+            if (useMinimalApi)
+            {
+                LaunchSettingsAssertions.AssertWebProfiles(workerLaunchSettingsContent);
+            }
+            else
+            {
+                LaunchSettingsAssertions.AssertDevelopmentProfile(workerLaunchSettingsContent, "worker");
+            }
+            LaunchSettingsAssertions.AssertDevelopmentProfile(clientLaunchSettingsContent, "client");
 
             Assert.Contains("Environment.ExitCode = 1;", clientDemoServiceContent, StringComparison.Ordinal);
             Assert.DoesNotContain("Temporal:TaskQueue", workerProgramContent, StringComparison.Ordinal);
@@ -112,6 +128,13 @@ public sealed class TemporalSolutionTemplateTests
                 var appHostCsprojPath = Path.Combine(appHostDirectory, $"{name}.AppHost.csproj");
                 var appHostCsprojContent = await File.ReadAllTextAsync(appHostCsprojPath);
                 var appHostContent = await File.ReadAllTextAsync(Path.Combine(appHostDirectory, "AppHost.cs"));
+                var appHostLaunchSettingsPath = Path.Combine(
+                    appHostDirectory, "Properties", "launchSettings.json");
+                Assert.True(
+                    File.Exists(appHostLaunchSettingsPath),
+                    $"Expected Aspire AppHost launch settings at '{appHostLaunchSettingsPath}'.");
+                var appHostLaunchSettingsContent = await File.ReadAllTextAsync(appHostLaunchSettingsPath);
+                LaunchSettingsAssertions.AssertAspireProfiles(appHostLaunchSettingsContent);
                 Assert.Contains("<AspireUseCliBundle>true</AspireUseCliBundle>", appHostCsprojContent, StringComparison.Ordinal);
                 AssertTargetFramework(appHostCsprojPath, framework);
                 AssertTargetFramework(

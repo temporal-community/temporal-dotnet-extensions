@@ -46,6 +46,56 @@
       "displayName": "Include OpenTelemetry tracing",
       "description": "Adds the Temporal SDK tracing sources, the client-side TracingInterceptor, and an OTLP exporter gated on the OTEL_EXPORTER_OTLP_ENDPOINT environment variable."
     },
+    "kestrelHttpPort": {
+      "type": "parameter",
+      "datatype": "integer",
+      "description": "Port number to use for the HTTP endpoint in launchSettings.json when --api is used."
+    },
+    "kestrelHttpPortGenerated": {
+      "type": "generated",
+      "generator": "port",
+      "parameters": {
+        "low": 5000,
+        "high": 5300
+      }
+    },
+    "kestrelHttpPortReplacer": {
+      "type": "generated",
+      "generator": "coalesce",
+      "parameters": {
+        "sourceVariableName": "kestrelHttpPort",
+        "fallbackVariableName": "kestrelHttpPortGenerated"
+      },
+      "replaces": "5000",
+      "onlyIf": [{
+        "after": "localhost:"
+      }]
+    },
+    "kestrelHttpsPort": {
+      "type": "parameter",
+      "datatype": "integer",
+      "description": "Port number to use for the HTTPS endpoint in launchSettings.json when --api is used."
+    },
+    "kestrelHttpsPortGenerated": {
+      "type": "generated",
+      "generator": "port",
+      "parameters": {
+        "low": 7000,
+        "high": 7300
+      }
+    },
+    "kestrelHttpsPortReplacer": {
+      "type": "generated",
+      "generator": "coalesce",
+      "parameters": {
+        "sourceVariableName": "kestrelHttpsPort",
+        "fallbackVariableName": "kestrelHttpsPortGenerated"
+      },
+      "replaces": "7000",
+      "onlyIf": [{
+        "after": "localhost:"
+      }]
+    },
     "UseMinimalApi": {
       "type": "parameter",
       "datatype": "bool",

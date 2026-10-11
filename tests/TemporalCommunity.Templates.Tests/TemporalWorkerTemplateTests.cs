@@ -62,6 +62,9 @@ public sealed class TemporalWorkerTemplateTests
             Assert.True(
                 File.Exists(assetsPath),
                 $"Template restore post-action did not create '{assetsPath}' before build.");
+            LaunchSettingsAssertions.AssertDevelopmentProfile(
+                await File.ReadAllTextAsync(Path.Combine(outputDirectory, "Properties", "launchSettings.json")),
+                "worker");
             await DotnetCli.RunAsync(outputDirectory, "build", "--no-restore", "--nologo");
         }
         finally
@@ -96,6 +99,9 @@ public sealed class TemporalWorkerTemplateTests
 
             var programContent = await File.ReadAllTextAsync(programPath);
             Assert.Equal("WorkerDefault-tq", ExtractQueueDefault(programContent));
+            LaunchSettingsAssertions.AssertDevelopmentProfile(
+                await File.ReadAllTextAsync(Path.Combine(outputDirectory, "Properties", "launchSettings.json")),
+                "worker");
             await DotnetCli.RunAsync(outputDirectory, "build", "--no-restore", "--nologo");
         }
         finally
@@ -128,11 +134,14 @@ public sealed class TemporalWorkerTemplateTests
 
             var csprojPath = Path.Combine(outputDirectory, $"{name}.csproj");
             var programPath = Path.Combine(outputDirectory, "Program.cs");
+            var launchSettingsPath = Path.Combine(outputDirectory, "Properties", "launchSettings.json");
             Assert.True(File.Exists(csprojPath), $"Expected generated csproj at '{csprojPath}'.");
             Assert.True(File.Exists(programPath), $"Expected generated Program.cs at '{programPath}'.");
+            Assert.True(File.Exists(launchSettingsPath), $"Expected launch settings at '{launchSettingsPath}'.");
 
             var csprojContent = await File.ReadAllTextAsync(csprojPath);
             var programContent = await File.ReadAllTextAsync(programPath);
+            var launchSettingsContent = await File.ReadAllTextAsync(launchSettingsPath);
 
             Assert.Contains($"<TargetFramework>{framework}</TargetFramework>", csprojContent, StringComparison.Ordinal);
             if (useMinimalApi)
@@ -154,6 +163,14 @@ public sealed class TemporalWorkerTemplateTests
             Assert.DoesNotContain("ResolveTaskQueue", programContent, StringComparison.Ordinal);
             Assert.Contains("builder.Services.AddHostedTemporalWorker(taskQueue)", programContent, StringComparison.Ordinal);
             Assert.Equal($"{name}-tq", ExtractQueueDefault(programContent));
+            if (useMinimalApi)
+            {
+                LaunchSettingsAssertions.AssertWebProfiles(launchSettingsContent);
+            }
+            else
+            {
+                LaunchSettingsAssertions.AssertDevelopmentProfile(launchSettingsContent, "worker");
+            }
             Assert.Contains(
                 $"{name}.TemporalWorkerConnection.Resolve(builder.Configuration);",
                 programContent, StringComparison.Ordinal);

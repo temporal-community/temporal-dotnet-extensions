@@ -536,9 +536,16 @@ _template-smoke-test-standalone: pack
     }
     echo "  ✓ standalone smoke test: client received the expected workflow result"
 
-# [unix] Aspire (IncludeAspire=true) runtime smoke test: AppHost auto-provisions the dev server.
+# [unix] Aspire (IncludeAspire=true) runtime smoke tests: AppHost auto-provisions the dev server.
+# Runs the console Worker variant and the `--api` (minimal API) Worker variant sequentially; each
+# variant owns its own scratch dir, hive, and AppHost cleanup.
 [unix]
-_template-smoke-test-aspire: pack
+_template-smoke-test-aspire: (_template-smoke-test-aspire-variant "SmokeAspire" "false") (_template-smoke-test-aspire-variant "SmokeAspireApi" "true")
+
+# [unix] One Aspire smoke-test variant. API=true generates with `--api`, which makes the AppHost
+# register the Worker with an HTTP /health check, so the Worker must reach `healthy` (not just `up`).
+[unix]
+_template-smoke-test-aspire-variant NAME API: pack
     #!/usr/bin/env bash
     set -euo pipefail
     APPHOST=
@@ -546,10 +553,22 @@ _template-smoke-test-aspire: pack
     HIVE_DIR=
     cleanup() {
         if [ -n "$APPHOST" ]; then (cd "$SCRATCH_DIR" && aspire stop --apphost "$APPHOST") >/dev/null 2>&1 || true; fi
+        # AddTemporalLocalDevServer's dev server outlives `aspire stop`; stop the one this run started.
+        if [ -n "$APPHOST" ]; then
+            for pid in $(lsof -nP -t -iTCP:7233 -sTCP:LISTEN 2>/dev/null || true); do
+                if ps -o command= -p "$pid" | grep -q 'temporal-sdk-dotnet'; then kill "$pid" 2>/dev/null || true; fi
+            done
+        fi
         if [ -n "$SCRATCH_DIR" ]; then rm -rf "$SCRATCH_DIR"; fi
         if [ -n "$HIVE_DIR" ]; then rm -rf "$HIVE_DIR"; fi
     }
     trap cleanup EXIT
+
+    # A pre-existing server on 7233 would make the `temporal` health check meaningless.
+    if lsof -nP -iTCP:7233 -sTCP:LISTEN >/dev/null 2>&1; then
+        echo "  ✗ ERROR: port 7233 is already in use; stop the existing Temporal server first" >&2
+        exit 1
+    fi
 
     # realpath: see the standalone recipe's comment — avoids a real, empirically-confirmed NuGet
     # restore collision ("project.assets.json already exists") from /tmp vs. /private/tmp path
@@ -558,7 +577,7 @@ _template-smoke-test-aspire: pack
     HIVE_DIR=$(realpath "$(mktemp -d /tmp/template-smoke-aspire-hive.XXXXXX)")
     export DOTNET_NOLOGO=1 DOTNET_CLI_TELEMETRY_OPTOUT=1
     DOTNET_CLI_HOME="$HIVE_DIR" dotnet new install "{{artifacts_dir}}/TemporalCommunity.Templates.{{version}}.nupkg"
-    (cd "$SCRATCH_DIR" && DOTNET_CLI_HOME="$HIVE_DIR" dotnet new temporal-solution -n SmokeAspire -o . --aspire)
+    (cd "$SCRATCH_DIR" && DOTNET_CLI_HOME="$HIVE_DIR" dotnet new temporal-solution -n "{{NAME}}" -o . --aspire --api "{{API}}")
 
     apphost_candidates=$(find "$SCRATCH_DIR" -maxdepth 2 -name '*.AppHost.csproj')
     if [ "$(printf '%s\n' "$apphost_candidates" | wc -l)" -ne 1 ] || [ -z "$apphost_candidates" ]; then
@@ -576,7 +595,11 @@ _template-smoke-test-aspire: pack
     dotnet build "$solution_file" --nologo -m:1
     (cd "$SCRATCH_DIR" && aspire start --apphost "$APPHOST" --non-interactive)
     (cd "$SCRATCH_DIR" && aspire wait temporal --apphost "$APPHOST" --status healthy)
-    (cd "$SCRATCH_DIR" && aspire wait worker --apphost "$APPHOST" --status up)
+    if [ "{{API}}" = "true" ]; then
+        (cd "$SCRATCH_DIR" && aspire wait worker --apphost "$APPHOST" --status healthy)
+    else
+        (cd "$SCRATCH_DIR" && aspire wait worker --apphost "$APPHOST" --status up)
+    fi
     (cd "$SCRATCH_DIR" && aspire wait client --apphost "$APPHOST" --status down)
     (cd "$SCRATCH_DIR" && aspire logs client --apphost "$APPHOST" --format Json) > "$SCRATCH_DIR/client-logs.json"
     grep -q 'Workflow result: Hello, world!' "$SCRATCH_DIR/client-logs.json" || {
@@ -584,7 +607,7 @@ _template-smoke-test-aspire: pack
         cat "$SCRATCH_DIR/client-logs.json" >&2
         exit 1
     }
-    echo "  ✓ aspire smoke test: client logs contain the expected workflow result"
+    echo "  ✓ aspire smoke test (api={{API}}): client logs contain the expected workflow result"
 
 # Runs both runtime smoke-test branches (each owns its own cleanup — see the comment above).
 template-smoke-test: _template-smoke-test-standalone _template-smoke-test-aspire
