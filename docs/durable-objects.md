@@ -51,6 +51,13 @@ queue for all callers. History growth and Continue-as-New are also tracked per o
 object rolls over more often and briefly rejects updates during each rollover (see
 [Activation and Continue-as-New Admission](failure-handling.md#activation-and-continue-as-new-admission)).
 
+DurableObjects does not guarantee a portable number of requests per second per object. Throughput
+depends on handler duration and awaited work, the serialization setting, payload size, history/replay
+and snapshot costs, and worker/server capacity. `MaxHistoryLength` triggers history rollover; it is
+not a request-rate limit. Load-test the hottest ID with a representative workload and monitor
+latency, missed arrivals, history growth, and rollover progress; see the
+[Temporal load-test instructions](../benchmarks/README.md#automated-load-runs).
+
 Operations that span objects, such as moving funds between two accounts, are not atomic. They go
 through activities and are at-least-once; see
 [Activities and object-to-object calls](#activities-and-object-to-object-calls).

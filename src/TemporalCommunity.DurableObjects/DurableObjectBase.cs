@@ -493,6 +493,32 @@ public abstract class DurableObjectBase : IDurableObject
                         break;
                     }
 
+                    // This is the stable decision point: preparation and handler draining are
+                    // complete, and deactivation did not win. Logging is observability only;
+                    // a host-provided logger must not prevent the rollover from being issued.
+                    try
+                    {
+                        if (Workflow.Logger.IsEnabled(LogLevel.Information))
+                        {
+#pragma warning disable CA1848 // Use LoggerMessage delegates for performance
+                            Workflow.Logger.LogInformation(
+                                new EventId(4102, "DurableObjectContinueAsNew"),
+                                "DurableObject Continue-As-New requested; WorkflowId={WorkflowId}; WorkflowType={WorkflowType}; HistoryLength={HistoryLength}; MaxHistoryLength={MaxHistoryLength} (configured threshold; SDK suggestion or override may have triggered)",
+                                workflowId,
+                                Workflow.Info.WorkflowType,
+                                Workflow.CurrentHistoryLength,
+                                _options.MaxHistoryLength);
+#pragma warning restore CA1848
+                        }
+                    }
+#pragma warning disable CA1031 // Host logger providers may throw arbitrary exceptions; logging cannot alter rollover.
+                    catch (Exception)
+                    {
+                        // ILogger providers are host code; their failures cannot change workflow
+                        // control flow at the final, already-selected Continue-As-New decision.
+                    }
+#pragma warning restore CA1031
+
                     throw Workflow.CreateContinueAsNewException(Workflow.Info.WorkflowType, carryArgs);
                 }
 
