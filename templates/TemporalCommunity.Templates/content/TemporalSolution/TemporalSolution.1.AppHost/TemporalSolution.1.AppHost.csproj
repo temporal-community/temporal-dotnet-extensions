@@ -9,7 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="TemporalCommunity.Aspire.Hosting" Version="0.5.0" />
+    <PackageReference Include="TemporalCommunity.Aspire.Hosting" Version="0.5.1" />
     <!-- Aspire integration accepts Temporalio >= 1.17.0; pin the AppHost graph to the same
          SDK as Worker/Client/Shared instead of resolving its transitive minimum. -->
     <PackageReference Include="Temporalio" Version="1.20.0" />
