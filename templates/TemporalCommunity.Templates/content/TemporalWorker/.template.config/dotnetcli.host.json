@@ -5,7 +5,7 @@
       "longName": "framework"
     },
     "IncludeOtel": {
-      "longName": "include-otel",
+      "longName": "otel",
       "shortName": ""
     },
     "kestrelHttpPort": {
@@ -20,7 +20,7 @@
     }
   },
   "usageExamples": [
-    "--include-otel",
+    "--otel",
     "--api",
     "--framework net8.0"
   ]

@@ -84,7 +84,7 @@ dotnet new temporal-worker -n OrderProcessing.Worker
 | Option | Behavior |
 |---|---|
 | `--framework <net8.0|net10.0>` | Target framework; defaults to `net10.0`. |
-| `--include-otel` | Adds Temporal tracing and an OTLP exporter; defaults to off. |
+| `--otel` | Adds Temporal tracing and an OTLP exporter; defaults to off. |
 | `--api` | Uses `WebApplication.CreateBuilder` and the Web SDK, with a root health/status endpoint; defaults to the Generic Host console setup. |
 
 The generated `Properties/launchSettings.json` follows the host mode: console mode has a
@@ -104,7 +104,7 @@ Update those references when upgrading an application; the analyzer version is h
 
 ### Configuring the OTLP exporter
 
-`--include-otel` registers the SDK tracing sources using `TracingInterceptor.ClientSource.Name`,
+`--otel` registers the SDK tracing sources using `TracingInterceptor.ClientSource.Name`,
 `WorkflowsSource.Name`, `ActivitiesSource.Name`, and `NexusSource.Name`, and adds the client-side
 `TracingInterceptor`.
 Spans are **exported only when `OTEL_EXPORTER_OTLP_ENDPOINT` is non-blank** at startup:

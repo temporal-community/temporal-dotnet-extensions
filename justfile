@@ -372,7 +372,7 @@ _pack-verify-output:
                 combo_dir="$templates_worker_scratch/${fw}-otel-${otel}-api-${minimal_api}"
                 mkdir -p "$combo_dir"
                 name="Worker_${fw//./}_${otel}_${minimal_api}"
-                (cd "$combo_dir" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-worker -n "$name" -o . --framework "$fw" --include-otel "$otel" --api "$minimal_api")
+                (cd "$combo_dir" && DOTNET_CLI_HOME="$templates_hive" dotnet new temporal-worker -n "$name" -o . --framework "$fw" --otel "$otel" --api "$minimal_api")
                 [ -f "$combo_dir/$name.csproj" ] || { echo "  ✗ ERROR: temporal-worker (framework=$fw, include-otel=$otel, api=$minimal_api) did not generate $name.csproj" >&2; exit 1; }
                 [ -f "$combo_dir/obj/project.assets.json" ] || { echo "  ✗ ERROR: temporal-worker restore post-action did not produce assets" >&2; exit 1; }
                 (cd "$combo_dir" && dotnet build --no-restore --nologo)

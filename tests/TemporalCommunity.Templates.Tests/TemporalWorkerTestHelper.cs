@@ -40,7 +40,7 @@ internal static class TemporalWorkerTestHelper
                 "-n", name,
                 "-o", ".",
                 "--framework", framework,
-                "--include-otel", includeOtel ? "true" : "false",
+                "--otel", includeOtel ? "true" : "false",
                 "--api", useMinimalApi ? "true" : "false",
             },
             // Matches no file — see class remarks. This template's tests assert on content and
